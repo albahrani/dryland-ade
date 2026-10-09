@@ -36,6 +36,18 @@ _Avoid_: Agent API, SDK
 One running Agent CLI process in a worktree.
 _Avoid_: Chat, run
 
+**ADE tracker**:
+The ticket-management mode in which all ticket and map-index changes go through the ADE's own command-line tool, which delegates to local-markdown, GitHub or GitLab.
+_Avoid_: Custom tracker, wrapper
+
+**Main checkout**:
+The repo's primary working tree, where local-markdown tracker state lives so every session and the ADE see the same thing.
+_Avoid_: Root, master copy
+
 **Linked worktree**:
 A git worktree or branch tied to a ticket by naming convention or commit trailer.
 _Avoid_: Ticket branch
+
+**Agent adapter**:
+The per-Agent-CLI description the ADE uses to launch a session, pre-type a skill command and observe its status.
+_Avoid_: Driver, plugin

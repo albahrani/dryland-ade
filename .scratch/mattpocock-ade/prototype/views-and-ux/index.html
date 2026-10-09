@@ -1,0 +1,428 @@
+<!doctype html>
+<!-- PROTOTYPE (throwaway): "Views and UX" round 5. Layout A (VS Code style) is the base; the three variants differ only in how the left side handles ticket overload, map stats and sub-categories.
+     ?variant=A|B|C, bottom bar or arrow keys. REAL data + SAMPLE data (scenarios.js). In-memory state only. -->
+<html lang="en"><head><meta charset="utf-8"><title>ADE IDE prototype</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.4 "Segoe UI",system-ui,sans-serif;background:#1e1e1e;color:#ccc;height:100vh;overflow:hidden;display:flex;flex-direction:column;user-select:none}
+code,.mono{font-family:Consolas,monospace}
+.dim{color:#7a7a7a}.ok{color:#89d185}.no{color:#6b6b6b}.warn{color:#e2c08d}.bad{color:#f48771}
+.pill{display:inline-block;padding:0 7px;border-radius:9px;font-size:11px;background:#3a3d41;color:#bbb;white-space:nowrap}
+.t-research{background:#1d3b4f;color:#7cc4f0}.t-grilling{background:#4a2f55;color:#d79cf2}.t-prototype{background:#4a3a1c;color:#f0c46c}.t-task{background:#2c3f2c;color:#8fd58f}
+.unl{border:1px dashed #999;color:#bbb;background:none}.map-pill{background:#243449;color:#7fb0e8}
+.star{color:#f0c46c}
+.ic{display:inline-flex;vertical-align:middle;align-items:center}.si{width:12px;height:12px}
+@keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin 1.6s linear infinite}
+/* top bar */
+#menu{height:36px;background:#2b2d30;display:flex;align-items:center;padding:0 8px;gap:4px;flex:none;border-bottom:1px solid #1a1a1a}
+#menu .logo{font-weight:800;color:#fff;background:#0e639c;border-radius:5px;padding:1px 6px;margin-right:6px}
+.proj{display:flex;align-items:center;gap:8px;padding:3px 10px 3px 4px;border-radius:6px;cursor:pointer;font-size:15px;font-weight:700;color:#fff}
+.proj:hover,.proj.on{background:#3c3f41}.proj .av{width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#21d789,#087cfa);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+.bw{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;cursor:pointer;color:#ccc}.bw:hover,.bw.on{background:#3c3f41}
+.sepv{width:1px;height:18px;background:#454545;margin:0 6px}
+.mw{position:relative}.m{padding:4px 9px;border-radius:4px;cursor:pointer}.m:hover,.m.on{background:#4a4d50}
+.dd{position:absolute;top:30px;left:0;background:#252526;border:1px solid #454545;box-shadow:0 4px 14px #000a;min-width:250px;z-index:20;padding:4px 0;font-size:13px;font-weight:400;color:#ccc}
+.dd>div{padding:4px 22px;display:flex;justify-content:space-between;gap:30px;cursor:pointer}.dd>div:hover{background:#04395e}.dd hr{border:0;border-top:1px solid #454545;margin:4px 0}.dd .k{color:#888}
+/* shell */
+#main{flex:1;display:flex;min-height:0}
+.side{background:#252526;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.sh{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#bbb;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;flex:none}
+.body{overflow:auto;flex:1;min-height:0}
+.tabs{display:flex;background:#2d2d2d;flex:none;overflow:hidden}
+.tab{padding:6px 10px;cursor:pointer;color:#999;border-top:1px solid transparent;display:flex;gap:6px;align-items:center;white-space:nowrap;border-right:1px solid #252526;max-width:240px}
+.tab .tl{overflow:hidden;text-overflow:ellipsis}.tab.on{background:#1e1e1e;color:#fff;border-top-color:#007acc}.tab .x{color:#777;padding:0 3px;border-radius:3px}.tab .x:hover{background:#444;color:#fff}
+.stab{padding:7px 12px;cursor:pointer;color:#999;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid transparent}.stab.on{color:#fff;border-bottom-color:#007acc}
+#act{width:48px;background:#333;display:flex;flex-direction:column;align-items:center;padding-top:4px;flex:none}
+#act div{width:48px;height:46px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#888;cursor:pointer;border-left:2px solid transparent;position:relative}
+#act div.on{color:#fff;border-left-color:#fff}#act .badge{position:absolute;right:6px;bottom:6px;background:#007acc;color:#fff;font-size:10px;border-radius:8px;padding:0 4px;line-height:15px}
+.stripe{width:26px;background:#2b2b2b;display:flex;flex-direction:column;align-items:center;padding-top:6px;gap:4px;flex:none}
+.stripe div{writing-mode:vertical-rl;padding:8px 4px;cursor:pointer;color:#999;font-size:12px;border-radius:3px}.stripe div:hover{background:#3a3a3a}.stripe div.on{background:#094771;color:#fff}
+.row{padding:2px 8px;display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;overflow:hidden}
+.row .lbl{overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0}.row:hover{background:#2a2d2e}.row.sel{background:#37373d}
+.row.next{box-shadow:inset 3px 0 0 #f0c46c;background:#2b2619}.row.next.sel{background:#3a3220}
+.grp{font-weight:600;color:#ddd}.child{padding-left:24px}
+button{background:#3a3d41;color:#ddd;border:1px solid #4a4d51;border-radius:3px;padding:3px 10px;cursor:pointer;font:inherit}
+button:hover{background:#45494e}button.pri{background:#0e639c;border-color:#1177bb;color:#fff}button.pri:hover{background:#1177bb}
+select,textarea{background:#3c3c3c;color:#ddd;border:1px solid #555;border-radius:3px;padding:3px;font:inherit;user-select:text}
+.legend{margin:8px;padding:8px 10px;border:1px solid #3a3a3a;border-radius:6px;background:#202123;font-size:12px}
+.legend .lh{display:flex;justify-content:space-between;color:#bbb;font-weight:600;margin-bottom:4px}.legend .lh span:last-child{cursor:pointer}
+.legend div.li{display:flex;gap:8px;align-items:center;color:#aaa;line-height:1.7}.legend .ic{width:16px;justify-content:center}
+/* editor */
+#ed{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;background:#1e1e1e}
+.hdr{background:#252526;border-bottom:1px solid #333;flex:none}
+.hl{display:flex;gap:10px;align-items:center;padding:6px 10px;white-space:nowrap;overflow:hidden}
+.hl .chev{cursor:pointer;width:14px;color:#aaa;flex:none}.hl .title{font-weight:600;color:#fff;font-size:14px;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:60px}.hl .chip{display:inline-flex;gap:4px;align-items:center;flex:none}
+.hb{padding:2px 12px 10px 32px;max-height:210px;overflow:auto;user-select:text}.hb.cols{display:flex;gap:24px}.hb.cols>div{flex:1}
+.why{border-left:3px solid #f0c46c;background:#2b2619;padding:4px 10px;margin:6px 0}.why ul{list-style:none;margin:3px 0;padding:0}
+.term{flex:1;background:#101010;padding:10px;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;overflow:auto;min-height:0;user-select:text}
+.term .u{color:#89d185}.term .a{color:#d4d4d4}.term .t{color:#6b6b6b}.term .ty{color:#fff;background:#264f78;padding:0 2px}.term .d{color:#6b6b6b}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;background:#181818}
+.empty .box{background:#252526;border:1px solid #3a3a3a;border-radius:6px;padding:20px 26px;max-width:500px}
+#evp{background:#1e1e1e;border-top:1px solid #333;flex:none}
+.evh{display:flex;gap:10px;align-items:center;padding:3px 10px;background:#252526;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#bbb;white-space:nowrap;overflow:hidden}
+.evh .sp{flex:1}.evh .ib{cursor:pointer;padding:0 6px;border-radius:3px;text-transform:none}.evh .ib:hover{background:#444}
+.ev{font:12px Consolas,monospace;padding:4px 10px;overflow:auto;height:110px;user-select:text;white-space:nowrap}.ev .tm{color:#6b6b6b}.ev .k{color:#7cc4f0}
+#st{height:22px;background:#007acc;color:#fff;display:flex;align-items:center;padding:0 10px;gap:16px;font-size:12px;flex:none;white-space:nowrap;overflow:hidden}
+#st .sp{flex:1}#st .it{cursor:pointer;padding:0 4px}#st .it:hover{background:#ffffff30}
+.tr{padding:1px 6px;display:flex;gap:5px;align-items:center;cursor:pointer;white-space:nowrap}.tr:hover{background:#2a2d2e}.tr .ch{width:12px;color:#999;font-size:10px;text-align:center;flex:none}
+.M{color:#e2c08d}.A{color:#73c991}.D{color:#c74e39}
+.scm .grp2{font-size:11px;font-weight:700;text-transform:uppercase;padding:4px 10px;background:#2b2b2b;display:flex;justify-content:space-between;margin-top:4px}
+.scm .fr{display:flex;gap:6px;padding:1px 10px;align-items:baseline;overflow:hidden;white-space:nowrap}.scm .fr:hover{background:#2a2d2e}.scm .fr .dir{overflow:hidden;text-overflow:ellipsis;min-width:0}.scm .fr .st{margin-left:auto;font-weight:700;flex:none}
+.gl{display:flex;align-items:center;gap:6px;padding:0 10px;height:24px;font-size:12px;white-space:nowrap;overflow:hidden}
+.sec{border-top:1px solid #333}.sech{display:flex;gap:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;background:#2b2b2b}
+#bar{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#fff;color:#111;border-radius:20px;padding:4px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 4px 18px #000a;z-index:50}
+#bar button{background:#eee;color:#111;border-color:#ccc;border-radius:50%;width:26px;height:26px;padding:0}
+#modal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;z-index:40}
+#modal .m2{background:#252526;border:1px solid #454545;border-radius:6px;padding:18px 24px;min-width:340px}
+/* round 5: VS Code-like thin overlay scrollbars */
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-thumb{background:#79797966;border:2px solid transparent;background-clip:padding-box;border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:#646464b3;background-clip:padding-box}::-webkit-scrollbar-thumb:active{background:#bfbfbf66;background-clip:padding-box}
+@supports not selector(::-webkit-scrollbar){*{scrollbar-width:thin;scrollbar-color:#79797966 transparent}}
+/* agent icons with a tiny state badge */
+.ag{position:relative;margin-right:3px;flex:none}.ag .ai{width:14px;height:14px}.ag.off .ai{opacity:.45}
+.ag .so{position:absolute;right:-4px;bottom:-3px;width:9px;height:9px;background:#252526;border-radius:50%;padding:0}
+.sub{padding:1px 8px 1px 22px;display:flex;gap:5px;align-items:center;cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#8a8a8a;white-space:nowrap}
+.sub:hover{background:#2a2d2e}.sub .n{margin-left:auto;color:#6b6b6b}.sub .chv{width:10px;font-size:9px}
+.child2{padding-left:40px}.ghost{font-style:italic;color:#8a8f98}
+.mbar{display:flex;height:4px;border-radius:2px;overflow:hidden;background:#333;flex:none}.mbar i{display:block;height:100%}
+.tl2{font:10px Consolas,monospace;width:11px;text-align:center;flex:none;opacity:.8}
+.chips{display:flex;gap:4px;padding:5px 8px;flex-wrap:wrap;border-bottom:1px solid #333}
+.fc{padding:0 7px;border-radius:9px;border:1px solid #444;color:#888;cursor:pointer;font-size:11px;display:inline-flex;gap:4px;align-items:center}.fc.on{background:#2f3a47;color:#ddd;border-color:#4b6a8a}
+.mt{display:grid;grid-template-columns:1fr repeat(5,26px);gap:0;align-items:center;font-size:12px}.mt .r{display:contents;cursor:pointer}.mt .r>*{padding:3px 2px;border-bottom:1px solid #2c2c2c}.mt .r:hover>*{background:#2a2d2e}.mt .r.sel>*{background:#37373d}
+.mt .h>*{color:#888;text-align:center;font-size:11px;cursor:default}.mt .c{text-align:center;font-family:Consolas,monospace}
+.mc{display:inline-block;padding:0 4px;border-radius:3px;font:600 9px Consolas,monospace;flex:none}
+.card{margin:2px 8px 6px 22px;padding:6px 8px;border:1px solid #333;border-radius:5px;background:#202123;font-size:12px}
+.card .g{display:grid;grid-template-columns:repeat(3,1fr);gap:3px 8px}
+.acts{display:flex;align-items:center;gap:1px;text-transform:none;letter-spacing:0}
+.ib2{cursor:pointer;padding:0 5px;border-radius:3px;color:#aaa;font-size:14px;line-height:18px;display:inline-block}.ib2:hover,.ib2.on{background:#3c3f41;color:#fff}
+.dd.vm{left:auto;right:0;top:22px;min-width:230px;text-transform:none;letter-spacing:0;font-weight:400;z-index:30}.dd.vm.up{top:auto;bottom:22px}.dd.vm>div{justify-content:flex-start;gap:6px;padding:4px 12px}
+.evh{overflow:visible}.scm .fr{cursor:pointer}.tr .ch+span{flex:none}
+.code{flex:1;overflow:auto;background:#1e1e1e;font:12px/1.55 Consolas,monospace;user-select:text;padding:4px 0;min-height:0}
+.ln{display:flex;white-space:pre}.ln .gn{width:38px;text-align:right;color:#6b6b6b;padding-right:8px;flex:none}.ln.add{background:#1f3a24}.ln.del{background:#4a2326}.ln.hunk{color:#7cc4f0;background:#232b33}
+#tip{position:fixed;z-index:60;background:#3c3c3c;color:#eee;border:1px solid #555;border-radius:4px;padding:5px 9px;font-size:12px;white-space:pre-line;max-width:420px;pointer-events:none;display:none;box-shadow:0 3px 10px #000a}
+</style></head><body>
+<div id="root" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
+<div id="bar"><button id="prev">&lsaquo;</button><span id="vlabel"></span><button id="next">&rsaquo;</button></div>
+<div id="tip"></div>
+<script src="data.js"></script><script src="scenarios.js"></script>
+<script>
+// ================= data (REAL snapshot + optional simulation) =================
+const MAPS=REAL.maps;
+const T=REAL.tickets.map(t=>({...t,sim:false}));
+const SIMT=[
+ {id:"x1",map:"m1",title:"Packaging, auto-update and distribution",type:"grilling",status:"open",blocked:[],gist:"(simulated: graduated from fog)",sim:true},
+ {id:"x2",map:"m1",title:"Testing strategy for rule engine and adapters",type:"grilling",status:"open",blocked:[],gist:"(simulated: graduated from fog)",sim:true},
+ {id:"x3",map:"m1",title:"Settings and non-default skill setups",type:"grilling",status:"open",blocked:["11"],gist:"(simulated: graduated from fog)",sim:true}];
+let simOn=false;const allT=()=>simOn?T.concat(SIMT):T;
+const WT={main:{branch:REAL.branch,files:REAL.files,commits:REAL.commits}};
+const SESS=REAL.sessions;SESS.forEach(s=>{const w=REAL.wt&&REAL.wt[s.id];WT[s.id]=w?{...w,newWt:true}:WT.main});
+const AGENTS=["GitHub Copilot","Claude Code","Codex CLI","Gemini CLI","OpenCode"];
+const REPO=REAL.project;
+// ================= state =================
+let tabs=[{k:"ticket",i:"11"},{k:"map",i:"m1"},{k:"session",i:"6502aa71"}],act=0;
+let leftSel="tickets",rightSel="files",evMode="full",menuOpen=null,modal=null,msg="",agentSel="GitHub Copilot",legendOpen=true;
+const collapsed={},mapCollapsed={},dirState={},acc={files:true,git:true,sess:true};
+let leftHidden=false,rightHidden=false;
+// ================= helpers =================
+const byId=id=>allT().find(t=>t.id===id),mapOf=id=>MAPS.find(m=>m.id===id);
+const sessT=id=>SESS.find(s=>s.ticket===id&&s.state!=="ended")||SESS.filter(s=>s.ticket===id).at(-1);
+const sessM=id=>SESS.filter(s=>s.map===id).at(-1);
+const live=()=>SESS.filter(s=>s.state!=="ended");
+const blocked=t=>t.blocked.some(b=>byId(b).status!=="resolved");
+const frontier=m=>allT().filter(t=>t.map===m&&t.status==="open"&&!blocked(t)&&!(sessT(t.id)&&sessT(t.id).state!=="ended"));
+function nextSet(){const s=new Set();MAPS.forEach(m=>{const f=frontier(m.id);if(f.length)s.add(f[0].id);else if(m.fog.length)s.add("map:"+m.id)});return s}
+const cmdT=t=>`/wayfinder continue on ${mapOf(t.map).title} map`;
+const cmdM=m=>`/wayfinder continue on ${m.title} map`;
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const tip=s=>` data-tip="${String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/\n/g,"&#10;")}"`;
+const SVG=(p,c,extra="")=>`<svg class="si ${extra}" viewBox="0 0 12 12" fill="none" stroke="${c}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+const SPATH={
+ working:[`<path d="M6 1.5a4.5 4.5 0 1 1-4.5 4.5"/>`,"#6fa8dc","spin"],
+ waiting:[`<path d="M1.5 2h9v6h-5l-2.5 2.2V8h-1.5z"/>`,"#d6b36a",""],
+ idle:[`<path d="M2.5 6h7"/>`,"#8a8a8a",""],
+ ended:[`<rect x="3" y="3" width="6" height="6" rx="1"/>`,"#707070",""]};
+const STXT={working:"working",waiting:"waiting for you",idle:"idle",ended:"ended (read-only transcript)"};
+const AG={"Claude Code":["#d97757",`<path d="M7 1.5v11M1.5 7h11M3.1 3.1l7.8 7.8M10.9 3.1 3.1 10.9"/>`],
+ "GitHub Copilot":["#b8c0cc",`<rect x="2" y="4" width="10" height="7.5" rx="3"/><path d="M5 7.5v1M9 7.5v1M7 4V2"/>`],
+ "Codex CLI":["#74aa9c",`<path d="M7 1.5l4.8 2.75v5.5L7 12.5 2.2 9.75v-5.5z"/><path d="M5.3 6l1.6 1-1.6 1"/>`],
+ "Gemini CLI":["#7fa3f5",`<path d="M7 1.5C7.4 5 9 6.6 12.5 7 9 7.4 7.4 9 7 12.5 6.6 9 5 7.4 1.5 7 5 6.6 6.6 5 7 1.5z"/>`],
+ "OpenCode":["#9a9a9a",`<path d="M4.5 2.5h-2v9h2M9.5 2.5h2v9h-2"/>`]};
+const aSvg=a=>{const [c,p]=AG[a]||AG.OpenCode;return `<svg class="ai" viewBox="0 0 14 14" fill="none" stroke="${c}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`};
+function sIcon(s){const [p,c,x]=SPATH[s.state];return `<span class="ic ag ${s.state==="ended"?"off":""}"${tip(s.agent+" "+STXT[s.state])}>${aSvg(s.agent)}${SVG(p,c,"so "+x)}</span>`}
+const FOG=`<svg class="si" viewBox="0 0 12 12" fill="none" stroke="#7f93a8" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="1.7 1.3"><path d="M3.5 9.5h5a2 2 0 0 0 .3-4 3 3 0 0 0-5.7.8 1.7 1.7 0 0 0 .4 3.2z"/></svg>`;
+const fogIc=`<span class="ic"${tip("Fog: decision not yet specified")}>${FOG}</span>`;
+// two independent axes: CATS = static kind (from the Matt Pocock workflow), STS = ticket status (the icon)
+const CATS=[["fog","Fog","decisions not yet specified, no ticket yet","#7f93a8"],["planning","Planning","grilling, research and prototype tickets","#c792ea"],["impl","Implementation","tickets that build the thing","#82c07a"]];
+const STS=[["active","In progress","a session has claimed it","#d6b36a"],["ready","Ready","startable","#7fbf7a"],["blocked","Blocked","waits for an unresolved ticket","#d98a7a"],["done","Done","resolved","#5b7a66"]];
+const axOf=t=>t.type==="task"?"impl":"planning";
+const stOf=t=>t.status==="resolved"?"done":t.status==="claimed"?"active":(blocked(t)||t.status==="blocked")?"blocked":"ready";
+function mstats(m){const ts=allT().filter(t=>t.map===m.id),n={active:0,ready:0,blocked:0,done:0};ts.forEach(t=>n[stOf(t)]++);n.fog=m.fog.length;n.total=ts.length;
+ n.live=SESS.filter(s=>s.state!=="ended"&&(s.map===m.id||ts.some(t=>t.id===s.ticket))).length;return n}
+const mbar=n=>`<span class="mbar" style="width:100%">${[["done","#4d6b57"],["active","#d6b36a"],["ready","#7fbf7a"],["blocked","#a8665a"]].map(([k,c])=>n[k]?`<i style="width:${100*n[k]/(n.total||1)}%;background:${c}"></i>`:"").join("")}</span>`;
+const mcode=m=>m.title.split(/\s+/).map(w=>w[0]).join("").slice(0,3).toUpperCase();
+const MCOL=["#7fb0e8","#d79cf2","#8fd58f","#f0c46c"],mcol=m=>MCOL[MAPS.indexOf(m)%4];
+const catTip=(n)=>`${n.done} done · ${n.active} in progress · ${n.ready} ready · ${n.blocked} blocked · ${n.fog} fog · ${n.live} live sessions`;
+function sIconRaw(state){const [p,c,x]=SPATH[state];return `<span class="ic">${SVG(p,c,x)}</span>`}
+const TPATH={
+ open:[`<path d="M6 1.5 10.5 6 6 10.5 1.5 6z"/>`,"#7fbf7a","open: not started"],
+ claimed:[`<path d="M6 1.5 10.5 6 6 10.5 1.5 6z" fill="#d6b36a"/>`,"#d6b36a","claimed: a session works on it"],
+ resolved:[`<path d="M2 6.5 5 9l5-6"/>`,"#707070","resolved"],
+ blocked:[`<circle cx="6" cy="6" r="4.2"/><path d="M3 9l6-6"/>`,"#d98a7a","blocked by an unresolved ticket"]};
+const tIcon=k=>{const [p,c,t]=TPATH[k];return `<span class="ic"${tip(t)}>${SVG(p,c)}</span>`};
+function agoOf(){return ""}
+// tooltips
+function ticketTip(t){const s=sessT(t.id),nx=nextSet().has(t.id);
+ return t.title+"\n"+t.type+" ticket, "+t.status+(t.demo?" (sample data)":"")+(t.blocked.length?"\nblocked by: "+t.blocked.map(b=>byId(b).title+(byId(b).status==="resolved"?" (done)":"")).join(", "):"")+(s?"\nsession: "+s.agent+" "+STXT[s.state]:"\nno session")+(nx?"\n★ next-up candidate":"")}
+function sessTip(s){return s.name+"\n"+s.agent+(s.model?" ("+s.model+")":"")+"\nstate: "+STXT[s.state]+"\n"+s.started+" – "+s.last+" · "+s.events+" events\nran in: "+(WT[s.id].newWt?"worktree "+WT[s.id].branch:"main checkout (no worktree)")+"\nlinked to: "+(s.ticket?"ticket "+byId(s.ticket).title:s.map?"map "+mapOf(s.map).title:"nothing (unlinked)")}
+const tabTitle={file:i=>i.split("|")[1].split("/").pop(),diff:i=>i.split("|")[1].split("/").pop()+" (changes)",ticket:i=>byId(i).title,session:i=>SESS.find(s=>s.id===i).name,map:i=>mapOf(i).title};
+function baseCtx(tab){
+ if(tab.k==="ticket"){const t=byId(tab.i);return{tab,t,s:sessT(t.id),m:mapOf(t.map),title:t.title}}
+ if(tab.k==="session"){const s=SESS.find(x=>x.id===tab.i);return{tab,t:null,s,m:null,title:s.name}}
+ const m=mapOf(tab.i);return{tab,t:null,s:sessM(m.id),m,title:m.title,isMap:true}}
+function openTab(k,i){let ix=tabs.findIndex(t=>t.k===k&&t.i===i);if(ix<0){tabs.push({k,i});ix=tabs.length-1}act=ix}
+function openSession(){const c=ctx(),id="n"+(SESS.length+1);const cmd=c.t?cmdT(c.t):cmdM(c.m);const now=new Date().toTimeString().slice(0,8);
+ const br="mattpocock-ade/"+(c.t?c.t.id+"-"+c.t.title.toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,28):"map-"+c.m.id);
+ SESS.push({id,name:(c.t?c.t.title:c.m.title)+" ("+agentSel+")",agent:agentSel,model:"",ticket:c.t?c.t.id:null,map:c.isMap?c.m.id:null,state:"idle",started:now,last:now,events:1,log:[["t","worktree created: "+br],["t","$ "+agentSel.split(" ")[0].toLowerCase()]],typed:cmd,ev:[[now,"session.start",agentSel+" in new worktree"]]});
+ WT[id]={branch:br,files:REAL.files.map(f=>[f[0],"",0]),commits:[REAL.commits[0]],newWt:true};
+ msg="Worktree created, command pre-typed (not submitted)"}
+const wtKey=c=>c&&c.s?c.s.id:"main";
+// ================= menu / top bar =================
+const MENUS={File:[["New Map...","Ctrl+Shift+M","toast:New map"],["New Ticket...","Ctrl+N","toast:New ticket"],["Open Repository...","Ctrl+O","toast:Open repo"],["Open Recent >","","toast:Recent"],"-",["Close Tab","Ctrl+W","closeTab"],["Settings","Ctrl+,","settings"],"-",["Exit","","toast:Exit"]],
+ Edit:[["Undo","Ctrl+Z","toast:Undo"],["Copy","Ctrl+C","toast:Copy"],["Paste","Ctrl+V","toast:Paste"],["Find","Ctrl+F","toast:Find"]],
+ View:[["Toggle Left Side Bar","Ctrl+B","toggleLeft"],["Toggle Right Side Bar","Ctrl+Alt+B","toggleRight"],"-",["Events: Expanded","","ev:full"],["Events: One Line","","ev:line"],["Events: Hidden","","ev:hidden"]],
+ Go:[["Go to Next-Up","Ctrl+K N","gotoNext"],["Go to Ticket...","Ctrl+P","toast:Quick open"]],
+ Session:[["New Agent Terminal","Ctrl+Shift+`","toast:Use the picker in the editor"],["Pre-type Recommended Command","","toast:Pre-type"],["Stop Session","","toast:Stop"]],
+ Help:[["Show Icon Legend","","legend"],["Documentation","","toast:Docs"],["Doctor (ade doctor)","","toast:Doctor"],"-",["About ADE","","about"]]};
+const ddHtml=(items)=>`<div class="dd">${items.map(i=>i==="-"?"<hr>":`<div data-act="${i[2]}"><span>${i[0]}</span><span class="k">${i[1]}</span></div>`).join("")}</div>`;
+function menuBar(){const c=ctx();
+ const projItems=[[REPO+"  (current)","","toast:Already open"],["C:\\...\\other-project","","toast:Switch project (stub)"],"-",["Open Repository...","Ctrl+O","toast:Open repo"],["Project Settings","","settings"]];
+ return `<div id="menu"><span class="logo">ADE</span>
+  <span class="mw"><span class="proj ${menuOpen==="@proj"?'on':''}" data-menu="@proj"${tip("Project: "+REPO+"\n<repo>\\"+REPO+"\ntracker: local-markdown")}><span class="av">MI</span>${REPO}<span class="dim" style="font-size:10px">&#9662;</span></span>${menuOpen==="@proj"?ddHtml(projItems):""}</span>
+  <span class="sepv"></span>
+  ${Object.keys(MENUS).map(n=>`<span class="mw"><span class="m ${menuOpen===n?'on':''}" data-menu="${n}">${n}</span>${menuOpen===n?ddHtml(MENUS[n]):""}</span>`).join("")}
+  <span style="flex:1"></span>${trackerWidget()}</div>`}
+// ================= left views =================
+const STAR='<span class="star">&#9733;</span>',catCol={},flt={active:1,ready:1,blocked:1,fog:1,done:0},fogOpen={};mapCollapsed.m3=true;
+function legend(){if(!legendOpen)return "";
+ return `<div class="legend"><div class="lh"><span>Legend</span><span data-act="legend" ${tip("Dismiss (Help > Show Icon Legend)")}>&times;</span></div>
+ <div class="li"><span class="ic star">&#9733;</span>next-up candidate</div>
+ <div class="li dim">kind: Fog &middot; Planning (grilling, research, prototype) &middot; Implementation</div>
+ <div class="li">${tIcon("open")}ready ${tIcon("claimed")}in progress ${tIcon("resolved")}done ${tIcon("blocked")}blocked ${fogIc}fog</div>
+ <div class="li">${Object.keys(AG).map(a=>`<span class="ic ag"${tip(a)}>${aSvg(a)}</span>`).join("")}<span>Claude &middot; Copilot &middot; Codex &middot; Gemini &middot; OpenCode</span></div>
+ <div class="li">${sIconRaw("working")}working ${sIconRaw("waiting")}waiting ${sIconRaw("idle")}idle ${sIconRaw("ended")}ended <span class="dim">(badge on the agent icon)</span></div></div>`}
+function mapTip(m,n){const nx=nextSet().has("map:"+m.id);return "Map: "+m.title+"\n"+catTip(n)+(nx?"\n★ next-up: no ticket on the frontier, fog remains: continue the map":"")}
+function mapRow(m){const c=ctx(),n=mstats(m),open=!mapCollapsed[m.id],isNx=nextSet().has("map:"+m.id),s=sessM(m.id);
+ return `<div class="row grp ${isNx?'next':''} ${c&&c.isMap&&c.m.id===m.id?'sel':''}" data-openmap="${m.id}"${tip(mapTip(m,n))}><span data-mg="${m.id}" style="width:12px">${open?"&#9662;":"&#9656;"}</span>${isNx?STAR:''}<span class="lbl">${esc(m.title)}</span>${s?sIcon(s):""}<span class="dim" style="margin-left:auto">${n.done}/${n.total}</span><span style="width:44px;flex:none">${mbar(n)}</span></div>`}
+function rowT(t,o={}){const c=ctx(),on=c&&c.t&&c.t.id===t.id,s=sessT(t.id),ni=nextSet().has(t.id),st=blocked(t)?"blocked":t.status,m=mapOf(t.map);
+ return `<div class="row ${o.cls||'child2'} ${ni?'next':''} ${on?'sel':''}" data-openticket="${t.id}"${tip(ticketTip(t))}>${o.type?`<span class="tl2 t-${t.type}" style="background:none">${t.type[0].toUpperCase()}</span>`:""}${tIcon(st)}${ni?STAR:''}<span class="lbl">${esc(t.title)}</span><span style="margin-left:auto"></span>${o.tag?`<span class="mc" data-openmap="${m.id}" style="background:${mcol(m)}26;color:${mcol(m)}"${tip("Map: "+m.title)}>${mcode(m)}</span>`:""}${s?sIcon(s):''}</div>`}
+const ghostRow=(m,f,cls)=>`<div class="row ${cls} ghost" data-openmap="${m.id}"${tip("Fog: "+f+"\nNot yet specified. Click to continue the map and clear it.")}>${fogIc}<span class="lbl">${esc(f)}</span></div>`;
+// ---- round 6: view settings, "..." menus, session grouping, file/diff tabs, tracker menu
+const VS={tkSort:"default",showDone:false,showFog:true,onlyAct:false,sessGroup:"map",showEnded:true,onlyChanged:false,mapSort:"default",showFinished:true,evFilter:"all"};
+let tracker="local-markdown";const closed=[],sessGrp={};
+const ICB=(act,sym,t)=>`<span class="ib2" data-act="${act}"${tip(t)}>${sym}</span>`;
+const VM={
+ tickets:()=>[["Expand All","exp"],["Collapse All","col"],"-",["Show Done Tickets","tog:showDone",VS.showDone],["Show Fog","tog:showFog",VS.showFog],["Only Ready / In Progress","tog:onlyAct",VS.onlyAct],"-",
+  ["Sort by: Default","set:tkSort=default",VS.tkSort==="default"],["Sort by: Status","set:tkSort=status",VS.tkSort==="status"],["Sort by: Type","set:tkSort=type",VS.tkSort==="type"],["Sort by: Title","set:tkSort=title",VS.tkSort==="title"],"-",
+  ["Show Legend","legend",legendOpen],["Refresh from Tracker","toast:Refresh"],["New Ticket...","toast:New ticket"]],
+ maps:()=>[["Sort by: Default","set:mapSort=default",VS.mapSort==="default"],["Sort by: Name","set:mapSort=name",VS.mapSort==="name"],["Sort by: Progress","set:mapSort=progress",VS.mapSort==="progress"],["Sort by: Fog","set:mapSort=fog",VS.mapSort==="fog"],"-",
+  ["Show Finished Maps","tog:showFinished",VS.showFinished],"-",["New Map...","toast:New map"],["Refresh from Tracker","toast:Refresh"]],
+ sessions:()=>[["Group by: Map","set:sessGroup=map",VS.sessGroup==="map"],["Group by: Agent","set:sessGroup=agent",VS.sessGroup==="agent"],["Group by: State","set:sessGroup=state",VS.sessGroup==="state"],["Group by: None","set:sessGroup=none",VS.sessGroup==="none"],"-",
+  ["Show Ended Sessions","tog:showEnded",VS.showEnded],["Expand All Groups","sgexp"],["Collapse All Groups","sgcol"],"-",["Close Ended Sessions","toast:Close ended sessions"],["New Session...","toast:New session"]],
+ files:()=>[["Collapse All Folders","fcol"],["Expand All Folders","fexp"],["Show Only Changed Files","tog:onlyChanged",VS.onlyChanged],"-",["Reveal Worktree in File Explorer","toast:Would open the worktree in the OS file explorer"],["Open Worktree in VS Code","toast:Would run: code <worktree>"],["Refresh","toast:Refresh"]],
+ git:()=>[["Refresh","toast:Refresh"],["Stage All Changes","stageAll"],["Unstage All Changes","unstageAll"],["Discard All Changes...","toast:Discard"],"-",["Pull","toast:Pull"],["Push","toast:Push"],["Fetch","toast:Fetch"],"-",["Open Worktree in VS Code","toast:Would run: code <worktree>"],["Copy Branch Name","toast:Branch name copied"]],
+ tabs:()=>[["Close","closeTab"],["Close Others","closeOthers"],["Close to the Right","closeRight"],["Close All","closeAll"],"-",["Reopen Closed Tab","reopen"],"-",["Collapse All Ticket Details","hdrcol"],["Expand All Ticket Details","hdrexp"]],
+ events:()=>[["Show All Events","set:evFilter=all",VS.evFilter==="all"],["Tool Calls Only","set:evFilter=tool",VS.evFilter==="tool"],["Prompts Only","set:evFilter=prompt",VS.evFilter==="prompt"],["Skills and Sub-agents","set:evFilter=skill",VS.evFilter==="skill"],"-",["Clear","toast:Clear events"],["Copy All","toast:Events copied"]]};
+const vmDd=(items,up)=>`<div class="dd vm ${up?"up":""}">${items.map(i=>i==="-"?"<hr>":`<div data-act="${i[1]}"><span style="width:12px;flex:none">${i[2]?"&#10003;":""}</span><span>${i[0]}</span></div>`).join("")}</div>`;
+const vmBtn=(id,up)=>`<span class="mw"><span class="ib2 ${menuOpen==="vm:"+id?"on":""}" data-menu="vm:${id}"${tip("More actions...")}>&#8943;</span>${menuOpen==="vm:"+id?vmDd(VM[id](),up):""}</span>`;
+// tracker widget (top right)
+const TRK={"local-markdown":{lab:"local-markdown",ic:"&#128193;",tip:"Tracker: local-markdown\n.scratch\\mattpocock-ade\\issues",items:[["Reveal Issues Folder in File Explorer","toast:Would open .scratch\\mattpocock-ade\\issues in the OS file explorer"],["Open Issues Folder in VS Code","toast:Would run: code .scratch\\mattpocock-ade"],["Open map.md in Editor","toast:Would open map.md in the default editor"],["Copy Folder Path","toast:Path copied"]]},
+ github:{lab:"GitHub",ic:"&#128025;",tip:"Tracker: GitHub issues",items:[["Open Issues in Browser","toast:Would open https://github.com/OWNER/mattpocock-ide/issues"],["Open Map Issue in Browser","toast:Would open the map issue"],["Copy Issues URL","toast:URL copied"]]},
+ gitlab:{lab:"GitLab",ic:"&#129418;",tip:"Tracker: GitLab issues",items:[["Open Issues in Browser","toast:Would open https://gitlab.com/OWNER/mattpocock-ide/-/issues"],["Open Map Issue in Browser","toast:Would open the map issue"],["Copy Issues URL","toast:URL copied"]]}};
+function trackerWidget(){const T=TRK[tracker],on=menuOpen==="@trk";
+ return `<span class="mw"><span class="bw ${on?'on':''}" data-menu="@trk"${tip(T.tip+"\nClick for tracker actions")}>${T.ic} ${T.lab} <span class="dim" style="font-size:10px">&#9662;</span></span>${on?`<div class="dd" style="left:auto;right:0">${T.items.map(i=>`<div data-act="${i[1]}"><span>${i[0]}</span></div>`).join("")}<hr><div class="dim" style="cursor:default;font-size:11px">Prototype: pretend the tracker is</div>${Object.keys(TRK).map(k=>`<div data-act="set:tracker=${k}"><span>${k===tracker?"&#10003; ":"&nbsp;&nbsp;&nbsp;"}${TRK[k].lab}</span></div>`).join("")}</div>`:""}</span>`}
+// ---- tickets tree (map > Fog / Planning / Implementation), honours view settings
+const SORTS={status:(a,b)=>STS.findIndex(x=>x[0]===stOf(a))-STS.findIndex(x=>x[0]===stOf(b)),type:(a,b)=>a.type.localeCompare(b.type),title:(a,b)=>a.title.localeCompare(b.title)};
+const sortT=l=>VS.tkSort==="default"?l:l.slice().sort(SORTS[VS.tkSort]);
+function bucket(items,key,cls){const op=items.filter(t=>t.status!=="resolved"),dn=VS.onlyAct?[]:items.filter(t=>t.status==="resolved");let o=op.map(t=>rowT(t)).join("");
+ if(dn.length){const cl=catCol[key]===undefined?!VS.showDone:catCol[key];o+=`<div class="row ${cls} dim" data-cat="${key}" data-def="${VS.showDone?0:1}"${tip(dn.length+" resolved ticket(s). Click to show/hide")}><span class="chv" style="width:10px;font-size:9px">${cl?"&#9656;":"&#9662;"}</span>${tIcon("resolved")}<span class="lbl">${dn.length} done</span></div>`;if(!cl)o+=dn.map(t=>rowT(t)).join("")}return o}
+function treeA(){return MAPS.map(m=>{let o=mapRow(m);if(mapCollapsed[m.id])return o;const ts=allT().filter(t=>t.map===m.id);
+ CATS.forEach(([k,lab,d,col])=>{let items=k==="fog"?m.fog:sortT(ts.filter(t=>axOf(t)===k));if(k==="fog"&&!VS.showFog)return;
+  if(k!=="fog"&&VS.onlyAct)items=items.filter(t=>["active","ready"].includes(stOf(t)));if(!items.length)return;
+  const key=m.id+k,cl=catCol[key]===undefined?false:catCol[key],cnt=k==="fog"?items.length:items.filter(t=>t.status!=="resolved").length;
+  o+=`<div class="sub" data-cat="${key}" data-def="0"${tip(lab+": "+d)}><span class="chv">${cl?"&#9656;":"&#9662;"}</span><span style="color:${col}">${lab}</span><span class="n">${cnt}</span></div>`;
+  if(!cl)o+=k==="fog"?items.map(f=>ghostRow(m,f,"child2")).join(""):bucket(items,m.id+"d"+k,"child2")});return o}).join("")+legend()}
+const treeView=treeA;
+// ---- maps list with sorting / filtering
+function mapList(){let l=MAPS.slice();if(!VS.showFinished)l=l.filter(m=>{const n=mstats(m);return n.done<n.total||n.fog});
+ const pr=m=>{const n=mstats(m);return n.done/(n.total||1)};
+ if(VS.mapSort==="name")l.sort((a,b)=>a.title.localeCompare(b.title));if(VS.mapSort==="progress")l.sort((a,b)=>pr(b)-pr(a));if(VS.mapSort==="fog")l.sort((a,b)=>b.fog.length-a.fog.length);return l}
+const mapsView=mapsA;
+// ---- sessions grouped by map (or agent / state / none)
+const mapOfS=s=>s.map||(s.ticket&&byId(s.ticket)?byId(s.ticket).map:null);
+const SRANK={working:0,waiting:1,idle:2,ended:3};
+function sessGroups(){let l=SESS.slice().reverse().sort((a,b)=>SRANK[a.state]-SRANK[b.state]);if(!VS.showEnded)l=l.filter(s=>s.state!=="ended");
+ const g=VS.sessGroup;if(g==="none")return [{key:"none:all",label:"",items:l}];
+ const keyOf=s=>g==="map"?(mapOfS(s)||"-"):g==="agent"?s.agent:s.state;
+ const order=g==="map"?MAPS.map(m=>m.id).concat("-"):g==="agent"?AGENTS:["working","waiting","idle","ended"];
+ const lab=k=>g==="map"?(k==="-"?"Unlinked (no map)":mapOf(k).title):g==="state"?({working:"Working",waiting:"Waiting for you",idle:"Idle",ended:"Ended"})[k]:k;
+ return order.map(k=>({key:g+":"+k,label:lab(k),items:l.filter(s=>keyOf(s)===k)})).filter(x=>x.items.length)}
+function sessView(){const c=ctx(),grouped=VS.sessGroup!=="none";
+ return sessGroups().map(gr=>{const cl=sessGrp[gr.key],lv=gr.items.filter(s=>s.state!=="ended").length;
+  const hd=grouped?`<div class="row grp" data-sg="${gr.key}"${tip(gr.label+"\n"+gr.items.length+" sessions, "+lv+" live")}><span style="width:12px">${cl?"&#9656;":"&#9662;"}</span><span class="lbl">${esc(gr.label)}</span><span class="dim" style="margin-left:auto">${lv?lv+" live &middot; ":""}${gr.items.length}</span></div>`:"";
+  return hd+(cl?"":gr.items.map(s=>{const on=c&&c.s&&c.s.id===s.id;return `<div class="row ${grouped?'child':''} ${on?'sel':''}" data-opensess="${s.id}"${tip(sessTip(s))}>${sIcon(s)}<span class="lbl">${esc(s.name)}</span><span class="dim" style="margin-left:auto"${tip(s.ticket?"linked to ticket: "+byId(s.ticket).title:s.map?"linked to a map":"unlinked: no ticket or map")}>${s.ticket?"#"+s.ticket:s.map?"&#128506;":"&#8960;"}</span></div>`}).join(""))}).join("")||'<div class="dim" style="padding:10px">No sessions</div>'}
+// ---- file / diff tabs (context stays that of the ticket or session they were opened from)
+function ctx(){const tab=tabs[act];if(!tab)return null;
+ if(tab.k==="file"||tab.k==="diff"){const b=baseCtx(tab.from),[wk,path]=tab.i.split("|");return{...b,tab,fileTab:true,path,wk,title:path.split("/").pop()}}
+ return baseCtx(tab)}
+function openFile(k,i){const cur=tabs[act],from=cur?(cur.from||{k:cur.k,i:cur.i}):{k:"ticket",i:"11"};let ix=tabs.findIndex(t=>t.k===k&&t.i===i);if(ix<0){tabs.push({k,i,from});ix=tabs.length-1}act=ix}
+function contentOf(p){return REAL.content&&REAL.content[p]!=null?REAL.content[p].split("\n"):["// sample file: the prototype has no real content for this path",p,"","export {}"]}
+function diffOf(p,st){if(REAL.diffs&&REAL.diffs[p])return REAL.diffs[p];const L=contentOf(p);
+ if(st==="A")return ["@@ -0,0 +1,"+L.length+" @@"].concat(L.map(x=>"+"+x));
+ return ["@@ -1,3 +1,4 @@"," "+(L[0]||"")," "+(L[1]||""),"-"+(L[2]||"old line"),"+"+(L[2]||"line")+" (changed)","+// added in this worktree"]}
+function fileHeader(c){const w=WT[c.wk]||WT.main,f=w.files.find(x=>x[0]===c.path),st=f?f[1]:"",isD=c.tab.k==="diff";
+ return `<div class="hdr"><div class="hl"><span class="mono dim" style="overflow:hidden;text-overflow:ellipsis">${c.path.split("/").map(esc).join(" &rsaquo; ")}</span><span class="pill">${isD?"changes vs. HEAD":"file"}</span>${st?`<span class="pill ${st}">${st==="M"?"modified":"new / untracked"}</span>`:""}<span style="flex:1"></span>${isD?`<button data-openfile="${c.tab.i}">Open File</button>`:st?`<button data-opendiff="${c.tab.i}">Open Changes</button>`:""}<button data-act="toast:Would open this file in VS Code">Open in VS Code</button></div></div>`}
+function fileBody(c){const p=c.path,w=WT[c.wk]||WT.main,f=w.files.find(x=>x[0]===p),st=f?f[1]:"";
+ if(c.tab.k==="file")return `<div class="code">${contentOf(p).map((l,i)=>`<div class="ln"><span class="gn">${i+1}</span><span>${esc(l)||" "}</span></div>`).join("")}</div>`;
+ let o=0,n=0;return `<div class="code">${diffOf(p,st).map(l=>{if(l.startsWith("@@")){const m=l.match(/-(\d+)\D+\+(\d+)/);o=m?+m[1]:1;n=m?+m[2]:1;return `<div class="ln hunk"><span class="gn"></span><span class="gn"></span><span>${esc(l)}</span></div>`}
+  const ch=l[0];let a="",b="";if(ch==="+")b=n++;else if(ch==="-")a=o++;else{a=o++;b=n++}
+  return `<div class="ln ${ch==="+"?'add':ch==="-"?'del':''}"><span class="gn">${a}</span><span class="gn">${b}</span><span>${esc(l.slice(1))||" "}</span></div>`}).join("")}</div>`}
+const EVF={tool:["tool"],prompt:["user.prompt"],skill:["skill","subagent"]};
+const evs=s=>VS.evFilter==="all"?s.ev:s.ev.filter(e=>EVF[VS.evFilter].includes(e[1]));
+function dirKeys(n,path,key,out){Object.keys(n.d).forEach(d=>{const pp=path+d+"/";out.push(key+pp);dirKeys(n.d[d],pp,key,out)});return out}
+function action2(a){
+ if(a.startsWith("tog:")){const k=a.slice(4);VS[k]=!VS[k];return true}
+ if(a.startsWith("set:")){const [k,v]=a.slice(4).split("=");if(k==="tracker")tracker=v;else VS[k]=v;return true}
+ if(a==="exp"){MAPS.forEach(m=>{mapCollapsed[m.id]=false;CATS.forEach(([k])=>{catCol[m.id+k]=false;catCol[m.id+"d"+k]=false})});return true}
+ if(a==="col"){MAPS.forEach(m=>mapCollapsed[m.id]=true);return true}
+ if(a==="sgcol"||a==="sgexp"){sessGroups().forEach(g=>sessGrp[g.key]=a==="sgcol");return true}
+ if(a==="fcol"||a==="fexp"){const k=wtKey(ctx());dirKeys(buildTree(WT[k].files),"",k+"|",[]).forEach(x=>dirState[x]=a==="fexp");return true}
+ if(a==="closeTab"){if(tabs.length){closed.push(tabs.splice(act,1)[0]);act=Math.max(0,act-1)}return true}
+ if(a==="closeOthers"){const t=tabs[act];tabs.forEach(x=>{if(x!==t)closed.push(x)});tabs=t?[t]:[];act=0;return true}
+ if(a==="closeRight"){closed.push(...tabs.splice(act+1));return true}
+ if(a==="closeAll"){closed.push(...tabs);tabs=[];act=0;return true}
+ if(a==="reopen"){const t=closed.pop();if(t){tabs.push(t);act=tabs.length-1}else msg="No recently closed tabs";return true}
+ if(a==="hdrcol"||a==="hdrexp"){MAPS.forEach(m=>collapsed["map:"+m.id]=a==="hdrcol");allT().forEach(t=>collapsed["ticket:"+t.id]=a==="hdrcol");return true}
+ if(a==="stageAll"||a==="unstageAll"){const f=WT[wtKey(ctx())].files.filter(x=>x[1]);f.forEach(x=>x[2]=a==="stageAll"?1:0);msg=(a==="stageAll"?"Staged ":"Unstaged ")+f.length+" file(s)";return true}
+ return false}
+// ---- Maps tab: compact, with stats
+function mapsA(){const c=ctx();return mapList().map(m=>{const n=mstats(m),sel=c&&c.isMap&&c.m.id===m.id,nx=nextSet().has("map:"+m.id),s=sessM(m.id);
+ return `<div class="row grp ${nx?'next':''} ${sel?'sel':''}" data-openmap="${m.id}"${tip(mapTip(m,n))} style="flex-direction:column;align-items:stretch;gap:3px;padding:5px 8px"><div style="display:flex;gap:6px;align-items:center">${nx?STAR:''}<span class="lbl">${esc(m.title)}</span>${s?sIcon(s):''}<span class="dim" style="margin-left:auto">${n.done}/${n.total}</span></div>${mbar(n)}</div>`+
+ (sel?`<div class="card"><div class="g"><span${tip("done")}>${tIcon("resolved")} ${n.done}</span><span${tip("in progress")}>${tIcon("claimed")} ${n.active}</span><span${tip("ready")}>${tIcon("open")} ${n.ready}</span><span${tip("blocked")}>${tIcon("blocked")} ${n.blocked}</span><span${tip("fog items")}>${fogIc} ${n.fog}</span><span${tip("live sessions on this map")}>&#9654; ${n.live}</span></div><button class="pri" style="margin-top:6px" data-openmap="${m.id}">&#9654; Continue map</button></div>`:"")}).join("")}
+const leftView=w=>w==="maps"?mapsView():w==="sessions"?sessView():treeView();
+// ================= right views =================
+function buildTree(files){const root={d:{},f:[]};files.forEach(([p,st])=>{const parts=p.split("/");let n=root;parts.slice(0,-1).forEach(d=>{n.d[d]=n.d[d]||{d:{},f:[],ch:false};n=n.d[d];if(st)n.ch=true});n.f.push({name:parts.pop(),st})});return root}
+function renderTree(n,depth,path,key){let o="";
+ Object.keys(n.d).sort().forEach(d=>{const pp=path+d+"/",k=key+pp,sub=n.d[d],open=dirState[k]===undefined?sub.ch:dirState[k];
+  o+=`<div class="tr ${sub.ch?'M':''}" style="padding-left:${6+depth*14}px" data-dir="${k}" data-def="${sub.ch?1:0}"><span class="ch">${open?"&#9662;":"&#9656;"}</span>&#128193; ${esc(d)}${sub.ch?'<span style="margin-left:auto;font-size:9px">&#9679;</span>':''}</div>`;if(open)o+=renderTree(sub,depth+1,pp,key)});
+ n.f.sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{o+=`<div class="tr ${f.st}" style="padding-left:${6+depth*14+14}px" data-openfile="${key}${path}${f.name}"><span>&#128196;</span><span>${esc(f.name)}</span>${f.st?`<span style="margin-left:auto;font-weight:700"${tip(f.st==="M"?"Modified":"Untracked/new")}>${f.st==="A"?"U":f.st}</span>`:""}</div>`});return o}
+function filesView(){const c=ctx(),w=WT[wtKey(c)];return `<div class="gl dim">${w.newWt?"WORKTREE":"MAIN CHECKOUT"} &middot; <code>${esc(w.branch)}</code></div>${renderTree(buildTree(VS.onlyChanged?w.files.filter(f=>f[1]):w.files),0,"",wtKey(c)+"|")}`}
+function gitView(){const c=ctx(),w=WT[wtKey(c)],ch=w.files.filter(f=>f[1]),stg=ch.filter(f=>f[2]),uns=ch.filter(f=>!f[2]);
+ const row=f=>{const p=f[0].split("/"),n=p.pop();return `<div class="fr" data-opendiff="${wtKey(c)}|${f[0]}"${tip(f[0]+"\n"+(f[1]==="M"?"Modified":"Untracked/new")+(f[2]?", staged":""))}><span>&#128196;</span><span class="${f[1]}">${esc(n)}</span><span class="dim dir">${esc(p.join("/"))}</span><span class="st ${f[1]}">${f[1]==="A"?"U":f[1]}</span></div>`};
+ const lane=l=>l?"#e2c08d":"#4fa6ed";
+ const cm=(ch.length?[["*","Uncommitted changes ("+ch.length+")",1,"now"]]:[]).concat(w.commits);
+ const graph=cm.map(([h,m,l,ago],i)=>{const nl=cm[i+1]?cm[i+1][2]:l;return `<div class="gl"${tip(h+" "+m+"\n"+ago+(h==="*"?"":" ago"))}><svg width="34" height="24"><line x1="${6+l*14}" y1="12" x2="${6+nl*14}" y2="30" stroke="${lane(l)}" stroke-width="2"/>${i>0?`<line x1="${6+l*14}" y1="0" x2="${6+l*14}" y2="12" stroke="${lane(l)}" stroke-width="2"/>`:""}<circle cx="${6+l*14}" cy="12" r="4" ${h==="*"?`fill="#252526" stroke="${lane(l)}" stroke-width="2"`:`fill="${lane(l)}"`}/></svg><span style="overflow:hidden;text-overflow:ellipsis">${esc(m)}</span><span class="dim" style="margin-left:auto;flex:none">${h==="*"?"":h+" &middot; "}${esc(ago)}</span></div>`}).join("");
+ return `<div class="scm"><div class="gl">&#9095; <b>${esc(w.branch)}</b><span class="dim">&uarr;0 &darr;0</span>${c&&c.t?`<span class="pill t-${c.t.type}" style="overflow:hidden;text-overflow:ellipsis"${tip("Linked ticket: "+c.t.title)}>${esc(c.t.title)}</span>`:c&&c.s?'<span class="pill unl">unlinked</span>':'<span class="pill">no ticket</span>'}</div>
+ <div style="padding:4px 10px"><textarea rows="2" style="width:100%;resize:none" placeholder="Message (Ctrl+Enter to commit)"></textarea><button class="pri" style="width:100%;margin-top:4px" data-act="toast:Commit (stub)">&#10003; Commit</button></div>
+ <div class="grp2"><span>Staged Changes</span><span>${stg.length}</span></div>${stg.map(row).join("")||'<div class="dim" style="padding:2px 10px">none</div>'}
+ <div class="grp2"><span>Changes</span><span>${uns.length}</span></div>${uns.map(row).join("")||'<div class="dim" style="padding:2px 10px">none</div>'}
+ <div class="grp2"><span>Commits</span><span>${w.commits.length}</span></div>${graph}</div>`}
+// ================= editor =================
+function whyBox(c){const nx=nextSet();
+ if(c.isMap){const m=c.m,f=frontier(m.id),s=sessM(m.id);return nx.has("map:"+m.id)?`<div class="why"><b>&#9733; Why this next?</b><ul>${[[!f.length,"no open, unblocked, unclaimed ticket on the frontier"],[m.fog.length>0,"fog remains ("+m.fog.length+" items): graduate it into tickets"],[!s||s.state==="ended","no live session on this map"]].map(([o,x])=>`<li class="${o?'ok':'no'}">${o?'&#10004;':'&#10008;'} ${x}</li>`).join("")}</ul></div>`:""}
+ if(!nx.has(c.t.id))return "";const f=frontier(c.t.map)[0];
+ return `<div class="why"><b>&#9733; Why this next?</b><ul>${[[c.t.status==="open","open"],[!blocked(c.t),"all Blocked-by resolved"],[!c.s||c.s.state==="ended","no live session or claim"],[f&&f.id===c.t.id,"first on this map's frontier"]].map(([o,x])=>`<li class="${o?'ok':'no'}">${o?'&#10004;':'&#10008;'} ${x}</li>`).join("")}</ul></div>`}
+function header(c,v){const key=c.tab.k+":"+c.tab.i,col=collapsed[key]===undefined?v==="B":collapsed[key],nx=nextSet();
+ if(!c.t&&!c.isMap)return `<div class="hdr"><div class="hl"><span class="title">${esc(c.title)}</span><span class="pill unl"${tip("This session is not linked to a ticket or map")}>unlinked</span><span class="chip">${sIcon(c.s)}<span class="dim">${c.s.agent} &middot; ${STXT[c.s.state]}</span></span><span class="dim">${c.s.started}&ndash;${c.s.last} &middot; ${c.s.events} events</span></div></div>`;
+ const sess=c.s?`<span class="chip">${sIcon(c.s)}<span class="dim">${c.s.agent}</span></span>`:`<span class="dim"${tip("No terminal yet: pick an agent below")}>no terminal</span>`;
+ const isNx=c.isMap?nx.has("map:"+c.m.id):nx.has(c.t.id);
+ const chips=c.t?`<span class="pill t-${c.t.type}"${tip("Ticket type: "+c.t.type)}>${c.t.type}</span><span class="chip">${tIcon(blocked(c.t)?"blocked":c.t.status)}<span class="dim">${blocked(c.t)?"blocked":c.t.status}</span></span>${isNx?'<span class="star"'+tip("Next-up candidate")+'>&#9733; next up</span>':''}<span class="pill map-pill"${tip("Map: "+c.m.title)}>${esc(c.m.title)}</span>${sess}`
+  :`<span class="pill map-pill">map</span>${isNx?'<span class="star">&#9733; next up</span>':''}<span class="pill map-pill"${tip("Fog of war: decisions not yet specified")}>fog ${c.m.fog.length}</span>${sess}`;
+ let body="";
+ if(!col){const d=c.t?`<div>${esc(c.t.gist||"")}</div>${c.t.blocked.length?`<div class="bad">blocked by: ${c.t.blocked.map(b=>esc(byId(b).title)).join(", ")}</div>`:""}`:`<div>${esc(c.m.dest)}</div><div style="margin-top:4px"><b>Fog</b>${c.m.fog.map(f=>`<div class="dim">&middot; ${esc(f)}</div>`).join("")}</div>`;
+  const why=whyBox(c);body=`<div class="hb ${v==="C"?'cols':''}">${v==="C"?`<div>${d}</div><div>${why||'<span class="dim">not a next-up candidate</span>'}</div>`:d+why}</div>`}
+ return `<div class="hdr"><div class="hl"><span class="chev" data-col="${key}">${col?"&#9656;":"&#9662;"}</span><span class="title">${c.isMap?"&#128506; ":""}${esc(c.title)}</span>${chips}</div>${body}</div>`}
+function terminal(c){
+ if(c.s){const s=c.s,end=s.state==="ended";
+  return `<div class="term">${s.log.map(([k,x])=>k==="u"?`<span class="u">&#10095; ${esc(x)}</span>`:k==="a"?`<span class="a">${esc(x)}</span>`:`<span class="t">  &#9679; ${esc(x)}</span>`).join("\n")}${s.typed?`\n<span class="u">&#10095;</span> <span class="ty">${esc(s.typed)}</span><span class="d">_   (pre-typed, NOT submitted &mdash; press Enter)</span>`:""}${end?`\n\n<span class="d">&mdash; session ended, read-only transcript &mdash; </span>`:""}</div>`}
+ const cmd=c.t?cmdT(c.t):cmdM(c.m);
+ return `<div class="empty"><div class="box"><div style="font-size:15px;color:#fff;margin-bottom:6px">No agent terminal yet</div><div class="dim">Opens a new worktree and a terminal with the recommended command pre-typed (not submitted).</div>
+ <div style="margin:12px 0"><label class="dim">Agent CLI&nbsp;</label><select data-agent>${AGENTS.map(a=>`<option ${a===agentSel?'selected':''}>${a}</option>`).join("")}</select></div>
+ <div class="mono" style="background:#101010;padding:6px 8px;border-radius:3px;margin-bottom:12px">&#10095; ${esc(cmd)}</div>
+ <button class="pri" data-opensession="1">&#9654; Open terminal</button></div></div>`}
+function editor(v){const c=ctx();
+ const tabIc=t=>{if(t.k==="file")return '<span class="ic dim">&#128196;</span>';if(t.k==="diff")return '<span class="ic warn" style="font-weight:700">&#177;</span>';
+  const s=t.k==="ticket"?sessT(t.i):t.k==="session"?SESS.find(x=>x.id===t.i):sessM(t.i);return (t.k==="map"?"&#128506;":"")+(s?sIcon(s):'<span class="ic dim">&#9675;</span>')};
+ const tabbar=`<div style="display:flex;background:#2d2d2d;flex:none"><div class="tabs" style="flex:1;min-width:0">${tabs.map((t,i)=>{const nm=tabTitle[t.k](t.i);
+  return `<div class="tab ${i===act?'on':''}" data-tabix="${i}"${tip(t.k==="file"||t.k==="diff"?t.i.split("|")[1]+(t.k==="diff"?"\nchanges vs. HEAD":""):nm+(t.k==="session"?"\n(unlinked session)":""))}>${tabIc(t)}<span class="tl">${esc(nm)}</span>${t.k==="session"?'<span class="dim" style="font-size:11px">&#8960;</span>':''}<span class="x" data-closeix="${i}">&times;</span></div>`}).join("")}</div><div style="padding:4px 6px;flex:none">${vmBtn("tabs")}</div></div>`;
+ if(!c)return `<div id="ed">${tabbar}<div class="empty"><div class="dim">Select a ticket, map or session</div></div></div>`;
+ return `<div id="ed">${tabbar}${c.fileTab?fileHeader(c)+fileBody(c):header(c,v)+terminal(c)}${evPanel(c)}</div>`}
+function evPanel(c){if(evMode==="hidden")return "";const s=c.s,l=s&&s.ev.at(-1);
+ const hdr=`<div class="evh"><span>Live events ${s?"&middot; "+s.agent+" ":""}</span>${s?sIcon(s):""}${evMode==="line"&&l?`<span class="mono" style="text-transform:none;overflow:hidden;text-overflow:ellipsis"><span class="dim">${l[0]}</span> ${l[1]} ${esc(l[2])}</span>`:""}<span class="sp"></span>${vmBtn("events",true)}<span class="ib" data-ev="${evMode==="full"?"line":"full"}"${tip(evMode==="full"?"Collapse to one line":"Expand")}>${evMode==="full"?"&#9662; line":"&#9652; expand"}</span><span class="ib" data-ev="hidden"${tip("Hide (the status bar keeps an indicator)")}>&times; hide</span></div>`;
+ return `<div id="evp">${hdr}${evMode==="full"?`<div class="ev">${s?evs(s).map(([a,b,x])=>`<div><span class="tm">${a}</span> <span class="k">${b}</span> ${esc(x)}</div>`).join(""):'<span class="dim">No agent for this selection.</span>'}</div>`:""}</div>`}
+function statusBar(c){const s=c&&c.s,w=WT[wtKey(c)],lv=live().length;
+ return `<div id="st"><span class="it" data-act="toggleLeft"${tip("Toggle left side bar")}>&#9776;</span><span${tip("Branch of the selected worktree")}>&#9095; ${esc(w.branch)}</span><span${tip("Uncommitted changes in this worktree")}>${w.files.filter(f=>f[1]).length} changed</span>${c&&c.t?`<span${tip("Selected ticket")}>&#9873; ${esc(c.t.title)}</span>`:""}<span class="sp"></span>
+  <span class="it" data-act="cycleEv"${tip("Live events: "+evMode+"\nClick to cycle expanded / one line / hidden"+(s?"\nLast event: "+s.ev.at(-1)[1]+" "+s.ev.at(-1)[2]:""))}>${s?sIcon(s)+" "+esc(s.agent)+" "+STXT[s.state].split(" (")[0]+" &middot; "+esc(s.ev.at(-1)[1]):"no agent"}${evMode==="hidden"?" (events hidden)":""}</span>${msg?`<span>${esc(msg)}</span>`:""}<span${tip("Live sessions / all known sessions of this repo")}>${lv} live / ${SESS.length} sessions</span></div>`}
+// ================= variants =================
+function VA(){const c=ctx(),L={maps:"Maps",tickets:"Tickets",sessions:"Sessions"};
+ const a=`<div id="act">${[["tickets","&#9776;"],["maps","&#128506;"],["sessions","&#9654;"]].map(([k,i])=>`<div class="${leftSel===k&&!leftHidden?'on':''}" data-left="${k}"${tip(L[k])}>${i}${k==="sessions"?`<span class="badge">${live().length}</span>`:""}</div>`).join("")}</div>`;
+ const leftActs={tickets:ICB("toast:New ticket","+","New ticket")+ICB("exp","&#8862;","Expand all")+ICB("col","&#8863;","Collapse all"),maps:ICB("toast:New map","+","New map"),sessions:ICB("sgexp","&#8862;","Expand all groups")+ICB("sgcol","&#8863;","Collapse all groups")}[leftSel];
+ const rightActs=rightSel==="git"?ICB("toast:Commit (stub)","&#10003;","Commit")+ICB("toast:Refresh","&#10227;","Refresh"):ICB("fcol","&#8863;","Collapse all folders")+ICB("toast:Refresh","&#10227;","Refresh");
+ return `${a}${leftHidden?"":`<div class="side" style="width:290px"><div class="sh"><span>${L[leftSel]}</span><span class="acts">${leftActs}${vmBtn(leftSel)}</span></div><div class="body">${leftView(leftSel)}</div></div>`}${editor("A")}
+  ${rightHidden?"":`<div class="side" style="width:330px"><div style="display:flex;align-items:center;border-bottom:1px solid #333">${[["files","Explorer"],["git","Source Control"]].map(([k,n])=>`<div class="stab ${rightSel===k?'on':''}" data-right="${k}">${n}${k==="git"?` <span class="pill">${WT[wtKey(c)].files.filter(f=>f[1]).length}</span>`:""}</div>`).join("")}<span class="acts" style="margin-left:auto;padding-right:6px">${rightActs}${vmBtn(rightSel==="git"?"git":"files")}</span></div><div class="body">${rightSel==="git"?gitView():filesView()}</div></div>`}`}
+const V={A:["VS Code style (round 6)",VA]},keys=Object.keys(V);
+const cur=()=>new URLSearchParams(location.search).get("variant")||"A";
+function render(){const v=cur(),c=ctx();hideTip();
+ document.getElementById("root").innerHTML=menuBar()+`<div id="main">${V[v][1]()}</div>`+statusBar(c)
+  +(modal?`<div id="modal" data-closemodal="1"><div class="m2" onclick="event.stopPropagation()">${modal==="about"?"<h3 style='margin:0 0 6px'>ADE (working name)</h3><div class='dim'>Agent development environment for Matt Pocock skills.<br>Prototype build &mdash; throwaway.</div>":"<h3 style='margin:0 0 6px'>Settings</h3><div class='dim'>Tracker: local-markdown<br>Default agent CLI: "+agentSel+"<br>Auto-submit pre-typed command: off</div>"}<div style="margin-top:12px;text-align:right"><button data-closemodal="1">Close</button></div></div></div>`:"");
+ document.getElementById("bar").style.display=keys.length>1?"":"none";document.getElementById("vlabel").textContent=v+" ("+V[v][0]+")";
+ document.querySelectorAll(".term,.ev").forEach(e=>e.scrollTop=e.scrollHeight)}
+function go(d){const i=(keys.indexOf(cur())+d+keys.length)%keys.length;try{history.replaceState(null,"","?variant="+keys[i])}catch(e){location.search="?variant="+keys[i];return}msg="";render()}
+document.getElementById("prev").onclick=()=>go(-1);document.getElementById("next").onclick=()=>go(1);
+addEventListener("keydown",e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==="ArrowLeft")go(-1);if(e.key==="ArrowRight")go(1)});
+function action(a){msg="";if(action2(a))return;
+ if(a.startsWith("toast:"))msg=a.slice(6)+" (stub)";
+ else if(a.startsWith("ev:"))evMode=a.slice(3);
+ else if(a==="about"||a==="settings")modal=a;
+ else if(a==="legend")legendOpen=!legendOpen;
+ else if(a==="sim"){simOn=!simOn;msg=simOn?"Simulating fog graduated to 3 tickets":"Real data only"}
+ else if(a==="closeTab"&&tabs.length){tabs.splice(act,1);act=Math.max(0,act-1)}
+ else if(a==="toggleLeft")leftHidden=!leftHidden;
+ else if(a==="toggleRight")rightHidden=!rightHidden;
+ else if(a==="cycleEv")evMode={full:"line",line:"hidden",hidden:"full"}[evMode];
+ else if(a==="next"){go(1);return}
+ else if(a==="gotoNext"){const n=[...nextSet()][0];n.startsWith("map:")?openTab("map",n.slice(4)):openTab("ticket",n)}}
+document.addEventListener("click",e=>{const q=s=>e.target.closest(s);let x;
+ if(x=q("[data-menu]")){menuOpen=menuOpen===x.dataset.menu?null:x.dataset.menu;render();return}
+ if(x=q("[data-act]")){action(x.dataset.act);menuOpen=null;render();return}
+ if(menuOpen&&!q(".dd")){menuOpen=null;render()}
+ if(x=q("[data-closemodal]")){modal=null;render();return}
+ if(x=q("[data-closeix]")){const i=+x.dataset.closeix;closed.push(tabs.splice(i,1)[0]);if(act>=i)act=Math.max(0,act-1);render();return}
+ if(x=q("[data-tabix]")){act=+x.dataset.tabix;render();return}
+ if(x=q("[data-mg]")){mapCollapsed[x.dataset.mg]=!mapCollapsed[x.dataset.mg];render();return}
+ if(x=q("[data-openmap]")){openTab("map",x.dataset.openmap);render();return}
+ if(x=q("[data-openticket]")){openTab("ticket",x.dataset.openticket);render();return}
+ if(x=q("[data-opensess]")){const s=SESS.find(z=>z.id===x.dataset.opensess);s.ticket?openTab("ticket",s.ticket):s.map?openTab("map",s.map):openTab("session",s.id);render();return}
+ if(x=q("[data-opensession]")){openSession();render();return}
+ if(x=q("[data-col]")){const k=x.dataset.col,def=false;collapsed[k]=!(collapsed[k]===undefined?def:collapsed[k]);render();return}
+ if(x=q("[data-left]")){const k=x.dataset.left;if(x.dataset.toggle&&leftSel===k&&!leftHidden)leftHidden=true;else{leftSel=k;leftHidden=false}render();return}
+ if(x=q("[data-right]")){const k=x.dataset.right;if(x.dataset.toggle&&rightSel===k&&!rightHidden)rightHidden=true;else{rightSel=k;rightHidden=false}render();return}
+ if(x=q("[data-openfile]")){openFile("file",x.dataset.openfile);render();return}
+ if(x=q("[data-opendiff]")){openFile("diff",x.dataset.opendiff);render();return}
+ if(x=q("[data-sg]")){sessGrp[x.dataset.sg]=!sessGrp[x.dataset.sg];render();return}
+ if(x=q("[data-cat]")){const k=x.dataset.cat,cu=catCol[k]===undefined?x.dataset.def==="1":catCol[k];catCol[k]=!cu;render();return}
+ if(x=q("[data-flt]")){flt[x.dataset.flt]=flt[x.dataset.flt]?0:1;render();return}
+ if(x=q("[data-fog]")){fogOpen[x.dataset.fog]=!fogOpen[x.dataset.fog];render();return}
+ if(x=q("[data-dir]")){const k=x.dataset.dir,cu=dirState[k]===undefined?x.dataset.def==="1":dirState[k];dirState[k]=!cu;render();return}
+ if(x=q("[data-acc]")){acc[x.dataset.acc]=!acc[x.dataset.acc];render();return}
+ if(x=q("[data-ev]")){evMode=x.dataset.ev;render();return}});
+document.addEventListener("change",e=>{if(e.target.matches("[data-agent]"))agentSel=e.target.value});
+// tooltips: hover any element with data-tip
+const tipEl=document.getElementById("tip");
+function hideTip(){tipEl.style.display="none"}
+document.addEventListener("mouseover",e=>{const x=e.target.closest("[data-tip]");if(!x){hideTip();return}tipEl.textContent=x.dataset.tip;tipEl.style.display="block"});
+document.addEventListener("mousemove",e=>{if(tipEl.style.display==="none")return;const w=tipEl.offsetWidth,h=tipEl.offsetHeight;tipEl.style.left=Math.min(e.clientX+14,innerWidth-w-8)+"px";tipEl.style.top=Math.min(e.clientY+16,innerHeight-h-8)+"px"});
+render();
+</script></body></html>
+
+
