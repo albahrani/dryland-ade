@@ -105,7 +105,7 @@ select,textarea{background:#3c3c3c;color:#ddd;border:1px solid #555;border-radiu
 <div id="root" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
 <div id="bar"><button id="prev">&lsaquo;</button><span id="vlabel"></span><button id="next">&rsaquo;</button></div>
 <div id="tip"></div>
-<script src="data.js"></script><script src="scenarios.js"></script>
+<script src="data.js"></script><script src="scenarios.js"></script><script src="screens.js"></script>
 <script>
 // ================= data (REAL snapshot + optional simulation) =================
 const MAPS=REAL.maps;
@@ -118,7 +118,7 @@ let simOn=false;const allT=()=>simOn?T.concat(SIMT):T;
 const WT={main:{branch:REAL.branch,files:REAL.files,commits:REAL.commits}};
 const SESS=REAL.sessions;SESS.forEach(s=>{const w=REAL.wt&&REAL.wt[s.id];WT[s.id]=w?{...w,newWt:true}:WT.main});
 const AGENTS=["GitHub Copilot","Claude Code","Codex CLI","Gemini CLI","OpenCode"];
-const REPO=REAL.project;
+let REPO=REAL.project;
 // ================= state =================
 let tabs=[{k:"ticket",i:"11"},{k:"map",i:"m1"},{k:"session",i:"6502aa71"}],act=0;
 let leftSel="tickets",rightSel="files",evMode="full",menuOpen=null,modal=null,msg="",agentSel="GitHub Copilot",legendOpen=true;
@@ -196,7 +196,7 @@ const MENUS={File:[["New Map...","Ctrl+Shift+M","toast:New map"],["New Ticket...
  Help:[["Show Icon Legend","","legend"],["Documentation","","toast:Docs"],["Doctor (ade doctor)","","toast:Doctor"],"-",["About ADE","","about"]]};
 const ddHtml=(items)=>`<div class="dd">${items.map(i=>i==="-"?"<hr>":`<div data-act="${i[2]}"><span>${i[0]}</span><span class="k">${i[1]}</span></div>`).join("")}</div>`;
 function menuBar(){const c=ctx();
- const projItems=[[REPO+"  (current)","","toast:Already open"],["C:\\...\\other-project","","toast:Switch project (stub)"],"-",["Open Repository...","Ctrl+O","toast:Open repo"],["Project Settings","","settings"]];
+ const projItems=S.projects.map((p,i)=>[(i===S.cur?"&#10003; ":"")+p.name+(p.live?"  ("+p.live+" live)":""),p.tracker,"projsw:"+i]).concat(["-",["All Projects...","","toast:Open repo"],["Open Repository...","Ctrl+O","toast:Open repo"],["Project Settings","","settings"]]);
  return `<div id="menu"><span class="logo">ADE</span>
   <span class="mw"><span class="proj ${menuOpen==="@proj"?'on':''}" data-menu="@proj"${tip("Project: "+REPO+"\n<repo>\\"+REPO+"\ntracker: local-markdown")}><span class="av">MI</span>${REPO}<span class="dim" style="font-size:10px">&#9662;</span></span>${menuOpen==="@proj"?ddHtml(projItems):""}</span>
   <span class="sepv"></span>
@@ -326,6 +326,7 @@ function gitView(){const c=ctx(),w=WT[wtKey(c)],ch=w.files.filter(f=>f[1]),stg=c
  <div style="padding:4px 10px"><textarea rows="2" style="width:100%;resize:none" placeholder="Message (Ctrl+Enter to commit)"></textarea><button class="pri" style="width:100%;margin-top:4px" data-act="toast:Commit (stub)">&#10003; Commit</button></div>
  <div class="grp2"><span>Staged Changes</span><span>${stg.length}</span></div>${stg.map(row).join("")||'<div class="dim" style="padding:2px 10px">none</div>'}
  <div class="grp2"><span>Changes</span><span>${uns.length}</span></div>${uns.map(row).join("")||'<div class="dim" style="padding:2px 10px">none</div>'}
+ ${prSection(c)}
  <div class="grp2"><span>Commits</span><span>${w.commits.length}</span></div>${graph}</div>`}
 // ================= editor =================
 function whyBox(c){const nx=nextSet();
@@ -374,13 +375,13 @@ const V={A:["VS Code style (round 6)",VA]},keys=Object.keys(V);
 const cur=()=>new URLSearchParams(location.search).get("variant")||"A";
 function render(){const v=cur(),c=ctx();hideTip();
  document.getElementById("root").innerHTML=menuBar()+`<div id="main">${V[v][1]()}</div>`+statusBar(c)
-  +(modal?`<div id="modal" data-closemodal="1"><div class="m2" onclick="event.stopPropagation()">${modal==="about"?"<h3 style='margin:0 0 6px'>ADE (working name)</h3><div class='dim'>Agent development environment for Matt Pocock skills.<br>Prototype build &mdash; throwaway.</div>":"<h3 style='margin:0 0 6px'>Settings</h3><div class='dim'>Tracker: local-markdown<br>Default agent CLI: "+agentSel+"<br>Auto-submit pre-typed command: off</div>"}<div style="margin-top:12px;text-align:right"><button data-closemodal="1">Close</button></div></div></div>`:"");
+  +(modal?`<div id="modal" data-closemodal="1">${modalHtml()}</div>`:"");
  document.getElementById("bar").style.display=keys.length>1?"":"none";document.getElementById("vlabel").textContent=v+" ("+V[v][0]+")";
  document.querySelectorAll(".term,.ev").forEach(e=>e.scrollTop=e.scrollHeight)}
 function go(d){const i=(keys.indexOf(cur())+d+keys.length)%keys.length;try{history.replaceState(null,"","?variant="+keys[i])}catch(e){location.search="?variant="+keys[i];return}msg="";render()}
 document.getElementById("prev").onclick=()=>go(-1);document.getElementById("next").onclick=()=>go(1);
 addEventListener("keydown",e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==="ArrowLeft")go(-1);if(e.key==="ArrowRight")go(1)});
-function action(a){msg="";if(action2(a))return;
+function action(a){msg="";if(screenAction(a))return;if(action2(a))return;
  if(a.startsWith("toast:"))msg=a.slice(6)+" (stub)";
  else if(a.startsWith("ev:"))evMode=a.slice(3);
  else if(a==="about"||a==="settings")modal=a;
@@ -396,7 +397,7 @@ document.addEventListener("click",e=>{const q=s=>e.target.closest(s);let x;
  if(x=q("[data-menu]")){menuOpen=menuOpen===x.dataset.menu?null:x.dataset.menu;render();return}
  if(x=q("[data-act]")){action(x.dataset.act);menuOpen=null;render();return}
  if(menuOpen&&!q(".dd")){menuOpen=null;render()}
- if(x=q("[data-closemodal]")){modal=null;render();return}
+ if(x=q("[data-closemodal]")){if(x.id==="modal"&&e.target!==x)return;modal=null;render();return}
  if(x=q("[data-closeix]")){const i=+x.dataset.closeix;closed.push(tabs.splice(i,1)[0]);if(act>=i)act=Math.max(0,act-1);render();return}
  if(x=q("[data-tabix]")){act=+x.dataset.tabix;render();return}
  if(x=q("[data-mg]")){mapCollapsed[x.dataset.mg]=!mapCollapsed[x.dataset.mg];render();return}

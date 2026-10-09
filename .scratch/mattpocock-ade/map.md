@@ -51,6 +51,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Packaging, distribution and testing](issues/14-packaging-and-testing.md): electron-builder, unsigned GitHub Releases, electron-updater latest/beta channels (macOS notify-only), ade launcher in install dir, 2s shutdown budget, Vitest-based test layers; see ADR 0004.
 
+- [Remaining screens](issues/15-remaining-screens.md): Settings (6 tabs), New map (agent choice only, pre-types `/wayfinder`), New ticket (`ade ticket create` behind confirm), Merge/PR in Source Control (dry-run checks, local merge or `gh`/`glab` PR, conflicts handed to the agent), project switcher with live-session counts; prototype in `prototype/views-and-ux/screens.js`.
+
 ## Not yet specified
 
 - Spec/ADR authoring itself (the final deliverable) once the route is clear.
