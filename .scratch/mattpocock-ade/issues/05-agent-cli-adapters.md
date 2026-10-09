@@ -18,3 +18,6 @@ Which Agent CLIs are v1 first-class (Claude Code, GitHub Copilot CLI) and which 
 - **Session-to-ticket link**: ADE records session, worktree and ticket at spawn; sessions later started by hand in an ADE-created worktree link by cwd; branches not created via the ADE show as unlinked (commit trailer fallback).
 - **Orca reuse** (MIT, attributed): CLI config-table pattern, Windows ConPTY handling, worktree slug logic. Not reused: UI, structured `claude --print` stream-json mode (out of v1).
 - **Risks/follow-ups**: Copilot worktree hook resolution to verify.
+## Amendment (2026-10-09)
+
+The 'never user-level config' rule in Status observation is relaxed for v1: narrow ADE-owned, env-gated, reversible user-config writes are allowed when they make hooks/trust more reliable. See the map Notes exception.

@@ -22,6 +22,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 - Vocabulary: see root `GLOSSARY.md`. Consult skills `grilling`, `domain-modeling`, `research`, `prototype` as ticket types require.
 - Research capture: repo has no commits/remote yet, so research findings go in `.scratch/mattpocock-ade/research/<name>.md` instead of throwaway branches.
 
+- **Exception to no-user-config (v1, decided):** reliability beats purity. The ADE may make narrow, ADE-owned, reversible writes to user-level agent config when that makes status hooks and first-launch trust work reliably: e.g. a dedicated `~/.copilot/hooks/<ade>.json` (or the equivalent per CLI) gated by env vars set only on ADE PTYs so it is inert elsewhere, and appending ADE worktrees to Copilot's `trustedFolders`. Never rewrite unrelated keys; skip on unparseable files; provide install/status/remove in `ade doctor`. Supersedes the 'never user-level config' lines in the adapter and hook-management decisions; applies to other agent CLIs too where it simplifies hooks. Prior art: Orca (see research/hook-status-mapping.md addendum).
+
 ## Decisions so far
 
 - Skills artifact/workflow inventory done: `ask-matt` is the authoritative workflow-order map (`grill-with-docs` → `to-spec` → `to-tickets` → `implement`/`implement-spec` → `pr` → `retro`); local-markdown tracker state (`Status:`/`Type:`/`Blocked by:`/`## Comments`/`## Answer`/map Decisions-so-far) is fully file-derivable, claim races and session/process state are not — see `.scratch/mattpocock-ade/research/skills-inventory.md`.
@@ -34,7 +36,7 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [How multi-agent tools manage per-CLI status hooks](issues/08-multi-agent-hook-management.md): most peers write hooks into the user's `~/.claude/settings.json` (rejected for the ADE) or avoid hooks via headless stream-json / tmux scraping; Claude Code's `--settings` flag injects hooks per launch with no user-config write, while Copilot CLI has no hooks-only flag/env (only whole-root `COPILOT_HOME`) so a `.github/hooks/*.json` inside the worktree is the no-user-config path (worktree resolution unconfirmed) — see `.scratch/mattpocock-ade/research/multi-agent-hooks.md`.
 
-- [Supported Agent CLIs and adapter seam](issues/05-agent-cli-adapters.md): Claude Code + Copilot CLI first-class, others best-effort; declarative adapter entries; PTY launch with pre-typed (not submitted) skill command; status via per-launch/worktree-local hooks (never user-level config), fire-and-forget to `ade`; session-ticket link via ADE-created worktree; selective Orca reuse, no structured mode.
+- [Supported Agent CLIs and adapter seam](issues/05-agent-cli-adapters.md): Claude Code + Copilot CLI first-class, others best-effort; declarative adapter entries; PTY launch with pre-typed (not submitted) skill command; status via hooks (per-launch/worktree-local preferred; narrow ADE-owned user-config writes allowed, see Notes exception), fire-and-forget to `ade`; session-ticket link via ADE-created worktree; selective Orca reuse, no structured mode.
 
 - [Upstream skill catalog and workflow routing](issues/09-upstream-skill-catalog.md): local install is an exact 1:1 mirror of upstream (38 skills, `to-prd`/`to-issues` renamed `to-spec`/`to-tickets`); only ~6 skills have mechanical artifact triggers — see `.scratch/mattpocock-ade/research/skills-catalog.md`.
 - [Next-step rule engine](issues/07-next-step-rule-engine.md): pure, ordered, explainable rules over a normalized snapshot (incl. live session state); routes only the mechanically triggerable skills (setup, triage, wayfinder, to-spec, to-tickets, implement/implement-spec, pr, retro); fixed priority with waiting sessions first; stale claims flagged not auto-released.
@@ -43,15 +45,12 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Views and UX](issues/11-views-and-ux.md): VS Code-style IDE shell (activity bar Tickets/Maps/Sessions, editor tabs with ticket/session + terminal + file/diff tabs, right Explorer + Source Control scoped to the selected worktree, collapsible live-events panel, status bar); tickets tree groups by map, then kind (Fog / Planning / Implementation) with status as icon only; next-up marked by gold bar + star; recommended command pre-typed, never auto-submitted; prototype kept in .scratch/mattpocock-ade/prototype/views-and-ux/.
 
+- [Hook-event-to-status mapping and Copilot worktree hooks](issues/12-hook-status-mapping.md): Claude and Copilot both expose notification-type (waiting/idle), stop (idle) and session-end (ended) events, so Copilot does have a waiting signal; worktree-local Copilot hooks unconfirmed (folder trust blocked headless test), follow-up is the verify-copilot-worktree-hooks ticket - see `.scratch/mattpocock-ade/research/hook-status-mapping.md`.
+
+- [ADE write policy and non-default skill setups](issues/13-write-policy-and-skill-setup.md): ADE writes tracker metadata via `ade` (confirm click except ticket-started actions, per-type don't-ask-again, git log = audit); prose only as minimal marked, skill-ignorable ADE-owned annotations (none in v1); fingerprint-based skill setup state on every startup, modified setups get a dialog (run compat check / skip / accept) and an agent-written compatibility verdict that toggles features; detect-warn-degrade, never refuse or auto-repair; see ADR 0003.
+
 ## Not yet specified
 
-- Product name and branding ("ADE" is a working name).
-- ADE write policy specifics (which edits, how presented) once the artifact inventory is known.
-- Per-CLI hook-event-to-status mapping and verification (Copilot worktree hook resolution).
-- Settings surface and handling of non-default skill setups (detect and warn?).
-- Packaging, auto-update, distribution (`ade` shim install, signing); testing strategy for the rule engine and adapters.
-- Shutdown-time cleanup details (what runs within the OS shutdown limit) once the session model is known.
-- Screens not yet designed: Settings, new map/ticket dialogs, merge/PR flow in Source Control, project switching.
 - Spec/ADR authoring itself (the final deliverable) once the route is clear.
 
 ## Out of scope
@@ -60,4 +59,4 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 - Teams, remote or cloud sessions, multi-user collaboration.
 - Using Claude API / Agent SDK; forking Orca.
 - Actually building the ADE.
-
+- Updating Matt Pocock skills from the ADE (v1 only reports differences; decided in [write policy ticket](issues/13-write-policy-and-skill-setup.md)).

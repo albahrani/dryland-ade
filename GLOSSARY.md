@@ -51,3 +51,15 @@ _Avoid_: Ticket branch
 **Agent adapter**:
 The per-Agent-CLI description the ADE uses to launch a session, pre-type a skill command and observe its status.
 _Avoid_: Driver, plugin
+
+**Skill setup state**:
+How the repo's installed skills and `docs/agents` files compare to the known default setup: default, default with extras, or modified.
+_Avoid_: Skill version, config drift
+
+**Compatibility verdict**:
+An agent-written judgement, per ADE feature, of whether a modified skill setup still works with the ADE.
+_Avoid_: Validation, lint result
+
+**ADE-owned annotation**:
+A clearly marked addition the ADE writes into a prose artifact for its own benefit, which the skills can ignore.
+_Avoid_: Metadata block, tag
