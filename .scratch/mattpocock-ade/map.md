@@ -49,6 +49,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [ADE write policy and non-default skill setups](issues/13-write-policy-and-skill-setup.md): ADE writes tracker metadata via `ade` (confirm click except ticket-started actions, per-type don't-ask-again, git log = audit); prose only as minimal marked, skill-ignorable ADE-owned annotations (none in v1); fingerprint-based skill setup state on every startup, modified setups get a dialog (run compat check / skip / accept) and an agent-written compatibility verdict that toggles features; detect-warn-degrade, never refuse or auto-repair; see ADR 0003.
 
+- [Packaging, distribution and testing](issues/14-packaging-and-testing.md): electron-builder, unsigned GitHub Releases, electron-updater latest/beta channels (macOS notify-only), ade launcher in install dir, 2s shutdown budget, Vitest-based test layers; see ADR 0004.
+
 ## Not yet specified
 
 - Spec/ADR authoring itself (the final deliverable) once the route is clear.
