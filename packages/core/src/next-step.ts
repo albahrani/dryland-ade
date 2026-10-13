@@ -10,8 +10,8 @@ export interface EffortSnapshot {
 }
 
 /**
- * Everything the rules read, already normalized: no file or process is touched to evaluate it. The
- * placeholder fields are filled by later rules (git state, live sessions, skill setup and compatibility).
+ * Everything the rules read, already normalized: no file or process is touched to evaluate it. `git` is read
+ * from the Linked worktrees; `sessions` and `skillSetup` stay `null` (unknown) until their sources are fed in.
  */
 export interface RepoSnapshot {
   /** Whether the repo carries the setup the skills wrote, i.e. its issue-tracker doc. */

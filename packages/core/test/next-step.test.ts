@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -683,6 +683,35 @@ describe("readRepoSnapshot git state", () => {
     const snapshot = await read(root);
 
     expect(snapshot.git?.worktrees[0]).toMatchObject({ aheadOfDefault: false, merged: false });
+  });
+
+  it("folds the worktrees of one ticket, ignoring one that is gone from disk", async () => {
+    const root = repoWithResolvedTicket();
+    const holder = mkdtempSync(join(tmpdir(), "dryland-wt-"));
+    const gone = join(holder, "gone");
+    git(root, "worktree", "add", "-q", "-b", "m/01-a", gone);
+    writeFileSync(join(gone, "work.txt"), "x");
+    git(gone, "add", "-A");
+    git(gone, "commit", "-q", "-m", "work");
+    const kept = join(holder, "kept");
+    git(root, "worktree", "add", "-q", "-b", "m/01-a-2", kept);
+    rmSync(gone, { recursive: true, force: true });
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git?.worktrees).toEqual([
+      { map: "m", id: "01", exists: true, aheadOfDefault: false, merged: false, prExists: null },
+    ]);
+  });
+
+  it("leaves git unknown when the repo has no default branch to compare against", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dryland-snapshot-nobase-"));
+    git(root, "init", "-q", "-b", "trunk");
+    mkdirSync(join(root, ".scratch/m/issues"), { recursive: true });
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git).toBeNull();
   });
 
   it("leaves git unknown outside a git repo, and sessions and skill setup unknown", async () => {

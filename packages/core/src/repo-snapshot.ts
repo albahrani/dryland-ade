@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { exists } from "./env-fs.ts";
-import type { EffortSnapshot, GitState, RepoSnapshot, WorktreeGitState } from "./next-step.ts";
+import type { EffortSnapshot, GitState, RepoSnapshot } from "./next-step.ts";
 import { parseMap } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
@@ -36,8 +36,8 @@ export async function readRepoSnapshot(
     hasGlossary: await exists(join(mainCheckout, "GLOSSARY.md")),
     adrCount: adrs.filter((file) => file.endsWith(".md")).length,
     git: await readGitState(runner, mainCheckout, tickets),
-    // Not fed yet: the live session list (tickets 35 to 38) and skill-setup state (53, 54) are not in. `null`
-    // means unknown, so no claim is called stale and no rule is disabled meanwhile.
+    // Not fed yet: live sessions are ticket 65 and skill setup with the Compatibility verdict is ticket 66.
+    // `null` means unknown, so no claim is called stale and no rule is disabled meanwhile.
     sessions: null,
     skillSetup: null,
   };
@@ -46,19 +46,6 @@ export async function readRepoSnapshot(
 async function readGitState(runner: ProcessRunner, mainCheckout: string, tickets: Ticket[]): Promise<GitState | null> {
   const states = await readTicketWorktreeStates(runner, mainCheckout, tickets);
   if (states === null) return null;
-  const worktrees: WorktreeGitState[] = [];
-  for (const state of states) {
-    const found = tickets.find((t) => `${t.map}/${t.id}` === state.ticket);
-    if (found === undefined) continue;
-    // No forge backend is read yet, so whether a PR exists is unknown, which the rules treat as "no PR".
-    worktrees.push({
-      map: found.map,
-      id: found.id,
-      exists: state.exists,
-      aheadOfDefault: state.aheadOfDefault,
-      merged: state.merged,
-      prExists: null,
-    });
-  }
-  return { worktrees };
+  // No forge backend is read yet, so whether a PR exists is unknown, which the rules treat as "no PR".
+  return { worktrees: states.map((state) => ({ ...state, prExists: null })) };
 }

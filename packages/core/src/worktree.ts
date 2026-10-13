@@ -3,6 +3,7 @@ import { exists } from "./env-fs.ts";
 import { DrylandError, requireOneLine } from "./errors.ts";
 import { ticketFile } from "./local-markdown.ts";
 import { findMainCheckout } from "./main-checkout.ts";
+import type { WorktreeGitState } from "./next-step.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
 import { findTicket, parseTicketReference, readTickets } from "./tickets.ts";
@@ -242,13 +243,7 @@ export async function listWorktrees(runner: ProcessRunner, cwd: string): Promise
 }
 
 /** What git says about one ticket's Linked worktrees, folded into one entry per ticket. */
-export interface TicketWorktreeState {
-  /** `<map>/<NN>`. */
-  ticket: string;
-  exists: boolean;
-  aheadOfDefault: boolean;
-  merged: boolean;
-}
+export type TicketWorktreeState = Omit<WorktreeGitState, "prExists">;
 
 async function revision(runner: ProcessRunner, cwd: string, ref: string): Promise<string | null> {
   const result = await runner.run("git", ["rev-parse", "--verify", "--quiet", ref], { cwd });
@@ -294,8 +289,10 @@ export async function readTicketWorktreeStates(
       merged = tip !== null && createdAt !== "" && tip !== createdAt;
     }
     const previous = byTicket.get(entry.link.ticket);
+    const [map = "", id = ""] = entry.link.ticket.split("/");
     byTicket.set(entry.link.ticket, {
-      ticket: entry.link.ticket,
+      map,
+      id,
       exists: true,
       aheadOfDefault: (previous?.aheadOfDefault ?? false) || ahead,
       merged: previous === undefined ? merged : previous.merged && merged,
