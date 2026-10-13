@@ -41,8 +41,12 @@ jobs:
       - run: pnpm test
 
   e2e:
-    name: e2e (windows-latest)
-    runs-on: windows-latest
+    name: e2e (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,4 +60,12 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @dryland/desktop test:e2e
+
+      - if: runner.os == 'Windows'
+        run: pnpm --filter @dryland/desktop test:e2e
+
+      # Linux has no display: Xvfb provides one. The runner's user cannot set up Chromium's sandbox.
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a pnpm --filter @dryland/desktop test:e2e
+        env:
+          ELECTRON_DISABLE_SANDBOX: "1"

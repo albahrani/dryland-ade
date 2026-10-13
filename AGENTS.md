@@ -26,3 +26,9 @@ The ticket is closed when its `Status:` is `resolved`, it holds an `## Answer`, 
 ## Testing on Windows
 
 CI runs Linux, macOS and Windows, but a Windows machine hides POSIX-only failures (executable bits, hooks, `#!/bin/sh` stubs). On Windows with Docker running, run the full suite twice before committing: `pnpm test`, then `pnpm test:linux` (the suite in a throwaway `node` container on a copy of the working tree). Fix failures from either run. Without Docker, say so and leave the Linux run to CI.
+
+After a change that touches the desktop app (`packages/desktop`), also run the Playwright tests: `pnpm --filter @dryland/desktop test:e2e` natively, then `pnpm test:e2e:linux` (Electron under Xvfb in a throwaway container).
+
+## Editing files
+
+Create files with the Write tool and change them with the Edit tool. For a batch of replacements across files, or a regex replacement, Write a JSON spec and run `node scripts/edit.mjs <spec.json> [--dry-run]`; the spec format is in the script's header. For any other one-off script, Write it to the scratchpad and run `node <file>`. Verify a scripted change with Grep.
