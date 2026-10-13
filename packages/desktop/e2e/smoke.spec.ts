@@ -132,12 +132,17 @@ test("shows maps with progress, opens tickets and maps in tabs, follows disk edi
 test("runs terminal sessions in tabs: input, output, resize, independence, and no process left behind", async () => {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
-  // A stub shell: node prints a banner with its pid, echoes each input line, and reports when its terminal width changes.
-  const stub = join(mkdtempSync(join(tmpdir(), "dryland-e2e-shell-")), "stub-shell.mjs");
+  // A stub shell: node prints a banner with its pid and a child's, echoes each input line, and reports width changes.
+  const stub = join(mkdtempSync(join(tmpdir(), "dryland-e2e-shell-")), "stub-shell.cjs");
   writeFileSync(
     stub,
     [
-      "console.log(`stub-shell-ready pid=${process.pid} cwd=${process.cwd()}`);",
+      "const { spawn } = require('node:child_process');",
+      "const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
+      "const cwd = require('node:path').basename(process.cwd());",
+      "for (const line of ['stub-shell-ready', `pid=${process.pid}`, `grandchild=${grandchild.pid}`, `cwd=${cwd}`]) {",
+      "  console.log(line);",
+      "}",
       "process.stdin.on('data', (d) => console.log(`got: ${d.toString().trim()}`));",
       "let cols = process.stdout.columns;",
       "setInterval(() => {",
@@ -161,10 +166,12 @@ test("runs terminal sessions in tabs: input, output, resize, independence, and n
   await window.getByRole("button", { name: "New terminal" }).click();
   await expect(window.getByRole("tab", { name: "Terminal 1" })).toHaveAttribute("aria-selected", "true");
   const screen = window.locator(".xterm-rows:visible");
-  await expect(screen).toContainText("stub-shell-ready");
+  // The banner's last line is the working directory, so everything before it has been printed.
   await expect(screen).toContainText(basename(repo));
   const firstPid = /pid=(\d+)/.exec(await screen.innerText())?.[1];
   expect(firstPid).toBeDefined();
+  const firstGrandchild = /grandchild=(\d+)/.exec(await screen.innerText())?.[1];
+  expect(firstGrandchild).toBeDefined();
 
   // Typed input reaches the process and its answer comes back.
   await window.locator(".xterm:visible").click();
@@ -179,16 +186,18 @@ test("runs terminal sessions in tabs: input, output, resize, independence, and n
   // A second session is independent of the first.
   await window.getByRole("button", { name: "New terminal" }).click();
   await expect(window.getByRole("tab", { name: "Terminal 2" })).toHaveAttribute("aria-selected", "true");
-  await expect(screen).toContainText("stub-shell-ready");
+  await expect(screen).toContainText(basename(repo));
   await expect(screen).not.toContainText("got: hello");
   const secondPid = /pid=(\d+)/.exec(await screen.innerText())?.[1];
   expect(secondPid).not.toBe(firstPid);
+  const secondGrandchild = /grandchild=(\d+)/.exec(await screen.innerText())?.[1];
+  expect(secondGrandchild).toBeDefined();
   await window.getByRole("tab", { name: "Terminal 1" }).click();
   await expect(screen).toContainText("got: hello");
 
-  // Closing the app leaves no process behind.
+  // Closing the app leaves no process behind: not the shells, and not what they started.
   await app.close();
-  for (const pid of [firstPid, secondPid]) {
+  for (const pid of [firstPid, secondPid, firstGrandchild, secondGrandchild]) {
     await expect
       .poll(() => {
         try {
@@ -200,4 +209,75 @@ test("runs terminal sessions in tabs: input, output, resize, independence, and n
       })
       .toBe("gone");
   }
+});
+
+test("a full-screen program fills the terminal and redraws to the new size after a resize", async ({}, testInfo) => {
+  const repo = fixtureRepo();
+  const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
+  // A stub full-screen program: on the alternate screen it draws a border around the whole terminal, with the
+  // terminal's size on the middle row, and redraws whenever that size changes, as vim or less would.
+  const stub = join(mkdtempSync(join(tmpdir(), "dryland-e2e-tui-")), "stub-tui.cjs");
+  writeFileSync(
+    stub,
+    [
+      "const out = process.stdout;",
+      "let drawn = '';",
+      "function draw() {",
+      "  out._refreshSize();",
+      "  const { columns: c, rows: r } = out;",
+      "  if (drawn === c + 'x' + r) return;",
+      "  drawn = c + 'x' + r;",
+      "  let frame = '\x1b[2J';",
+      "  for (let row = 1; row <= r; row++) {",
+      "    const edge = row === 1 || row === r;",
+      "    const label = ' size=' + c + 'x' + r + ' ';",
+      "    const middle = row === Math.ceil(r / 2) ? label.padEnd(c - 2, ' ') : ' '.repeat(c - 2);",
+      "    frame += '\x1b[' + row + ';1H' + (edge ? '+' + '-'.repeat(c - 2) + '+' : '|' + middle + '|');",
+      "  }",
+      "  out.write(frame);",
+      "}",
+      "out.write('\x1b[?1049h');",
+      "setInterval(draw, 50);",
+    ].join(String.fromCharCode(10)),
+  );
+  const app = await electron.launch({
+    args: [".", `--user-data-dir=${userData}`],
+    env: { ...process.env, DRYLAND_SHELL: process.execPath, DRYLAND_SHELL_ARGS: JSON.stringify([stub]) },
+  });
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+  }, repo);
+  const window = await app.firstWindow();
+  await window.getByRole("button", { name: "Open project..." }).click();
+  await window.getByRole("button", { name: "New terminal" }).click();
+
+  // Reads the terminal's screen and returns its size when the program has drawn a complete frame for it.
+  const rows = window.locator(".xterm-rows:visible > div");
+  async function drawnSize(): Promise<string | null> {
+    const lines = await rows.allInnerTexts();
+    const size = /size=(\d+)x(\d+)/.exec(lines.join(" "));
+    if (size === null) return null;
+    const [cols, height] = [Number(size[1]), Number(size[2])];
+    const border = `+${"-".repeat(cols - 2)}+`;
+    const filled = lines.length === height && lines[0] === border && lines.at(-1) === border;
+    return filled ? `${cols}x${height}` : null;
+  }
+
+  await expect.poll(drawnSize).not.toBeNull();
+  const before = await drawnSize();
+  await window.screenshot({ path: testInfo.outputPath("tui-before-resize.png") });
+
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 600));
+  await expect
+    .poll(async () => {
+      const size = await drawnSize();
+      return size !== null && size !== before;
+    })
+    .toBe(true);
+  await window.screenshot({ path: testInfo.outputPath("tui-after-resize.png") });
+
+  // And back to a larger window: the frame follows in both directions.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1280, 800));
+  await expect.poll(drawnSize).toBe(before);
+  await app.close();
 });

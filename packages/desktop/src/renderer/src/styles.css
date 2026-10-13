@@ -111,6 +111,13 @@ ul {
   height: 100%;
 }
 
+/* The fitted rows rarely use the container's last few pixels; keep that strip the editor's colour, not black. */
+.terminal .xterm-viewport {
+  background-color: var(--bg) !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
 .right-side {
   grid-area: right;
   background: var(--bg-side);

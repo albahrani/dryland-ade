@@ -2,12 +2,24 @@ import { describe, expect, it } from "vitest";
 import { resolveShell } from "../src/main/shell.ts";
 
 describe("resolveShell", () => {
-  it("uses COMSPEC on Windows, falling back to cmd.exe", () => {
-    expect(resolveShell("win32", { COMSPEC: "C:\\Windows\\System32\\cmd.exe" })).toEqual({
-      file: "C:\\Windows\\System32\\cmd.exe",
-      args: [],
+  describe("on Windows", () => {
+    const env = { PATH: "C:\\Tools;C:\\Windows\\System32\\WindowsPowerShell\\v1.0", COMSPEC: "C:\\Windows\\cmd.exe" };
+    const installed =
+      (...files: string[]) =>
+      (path: string) =>
+        files.includes(path);
+
+    it("prefers PowerShell 7 on PATH", () => {
+      const exists = installed("C:\\Tools\\pwsh.exe", "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+      expect(resolveShell("win32", env, exists)).toEqual({ file: "C:\\Tools\\pwsh.exe", args: [] });
     });
-    expect(resolveShell("win32", {})).toEqual({ file: "cmd.exe", args: [] });
+
+    it("falls back to Windows PowerShell, then COMSPEC, then cmd.exe", () => {
+      const powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+      expect(resolveShell("win32", env, installed(powershell))).toEqual({ file: powershell, args: [] });
+      expect(resolveShell("win32", env, installed())).toEqual({ file: "C:\\Windows\\cmd.exe", args: [] });
+      expect(resolveShell("win32", {}, installed())).toEqual({ file: "cmd.exe", args: [] });
+    });
   });
 
   it("uses SHELL elsewhere, falling back to /bin/sh", () => {

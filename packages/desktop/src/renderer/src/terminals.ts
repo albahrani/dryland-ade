@@ -1,4 +1,5 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { Terminal } from "@xterm/xterm";
 
 interface TerminalEntry {
@@ -22,10 +23,14 @@ export function getOrCreateTerminal(id: string): TerminalEntry {
     fontFamily: 'Consolas, "Cascadia Mono", Menlo, monospace',
     fontSize: 13,
     scrollback: 5000,
+    allowProposedApi: true, // The Unicode addon needs it.
     theme: { background: "#1e1e1e", foreground: "#cccccc" },
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  // Unicode 11 widths, so emoji and CJK text take the cells the programs running in the shell expect.
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
   term.onData((data) => window.dryland.writeTerminal(id, data));
   term.onResize(({ cols, rows }) => window.dryland.resizeTerminal(id, cols, rows));
   term.attachCustomKeyEventHandler((event) => {
