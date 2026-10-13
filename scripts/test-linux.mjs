@@ -15,7 +15,7 @@ const script = [
   "mkdir /work && tar -C /src --exclude=node_modules --exclude=dist --exclude=.git -cf - . | tar -C /work -xf -",
   "cd /work && git init -q --initial-branch=main",
   `npm i -g ${packageManager} >/dev/null 2>&1`,
-  "pnpm install --frozen-lockfile >/dev/null",
+  "ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile >/dev/null",
   `pnpm test ${args}`,
 ].join("\n");
 

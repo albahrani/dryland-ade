@@ -1,7 +1,17 @@
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", ".scratch/**", ".agents/**", ".claude/**", "**/fixtures/**"] },
+  {
+    ignores: [
+      "**/dist/**",
+      "**/out/**",
+      "**/node_modules/**",
+      ".scratch/**",
+      ".agents/**",
+      ".claude/**",
+      "**/fixtures/**",
+    ],
+  },
   ...tseslint.configs.recommended,
   {
     files: ["packages/core/**/*.ts"],

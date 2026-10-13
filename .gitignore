@@ -4,3 +4,7 @@
 node_modules/
 dist/
 .vitest/
+
+out/
+test-results/
+playwright-report/

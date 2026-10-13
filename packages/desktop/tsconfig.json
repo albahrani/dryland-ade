@@ -1,1 +1,5 @@
-{ "extends": "../../tsconfig.base.json", "include": ["src"] }
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "lib": ["ES2023", "DOM", "DOM.Iterable"], "jsx": "react-jsx" },
+  "include": ["src", "test", "e2e", "electron.vite.config.ts", "playwright.config.ts"]
+}

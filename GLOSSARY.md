@@ -27,6 +27,10 @@ _Avoid_: Task, card
 Where a map's item sits in the skill workflow: Fog (not yet specified on the map), Planning (grilling, research or prototype tickets) or Implementation (task tickets). Derived, never stored.
 _Avoid_: Phase, stage, category
 
+**Ticket status**:
+What a ticket's icon shows: ready (open, unblocked, unclaimed), in progress (claimed), blocked (open with an unresolved or unknown blocker) or done (resolved). Derived from state and blockers, never stored.
+_Avoid_: Ticket state (that is open, claimed, resolved)
+
 **Frontier**:
 The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
