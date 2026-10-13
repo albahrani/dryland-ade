@@ -19,12 +19,12 @@ These are the only map and ticket edits Dryland makes. Skill-authored prose in t
 
 ## Acceptance criteria
 
-- [ ] Adding a blocker removes the ticket from the frontier; removing it puts it back
-- [ ] A comment is appended under `## Comments`, creating the heading if needed, and earlier comments are untouched
-- [ ] A triage change writes the role string defined in the repo's triage labels doc, and an unknown role is rejected with the valid ones listed
-- [ ] `map index` appends one entry to Decisions-so-far and leaves every other line of the map byte-identical
-- [ ] Each command commits only its own tracker paths with a descriptive message
-- [ ] Failures exit non-zero and state the next action
+- [x] Adding a blocker removes the ticket from the frontier; removing it puts it back
+- [x] A comment is appended under `## Comments`, creating the heading if needed, and earlier comments are untouched
+- [x] A triage change writes the role string defined in the repo's triage labels doc, and an unknown role is rejected with the valid ones listed
+- [x] `map index` appends one entry to Decisions-so-far and leaves every other line of the map byte-identical
+- [x] Each command commits only its own tracker paths with a descriptive message
+- [x] Failures exit non-zero and state the next action
 
 ## Answer
 
