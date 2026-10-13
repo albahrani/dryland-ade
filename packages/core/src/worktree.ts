@@ -256,10 +256,12 @@ async function revision(runner: ProcessRunner, cwd: string, ref: string): Promis
 }
 
 /**
- * The git state of every ticket-linked worktree. A branch counts as merged when it carries no commits the
- * default branch lacks and its tip is neither the default branch's tip nor the commit it was created at, i.e.
- * it once had work and that work is now in. Squash merges are not seen. Returns `null` when git cannot say
- * (not a repo), so callers treat the state as unknown rather than empty.
+ * The git state of every ticket-linked worktree that is still on disk, folded to one entry per ticket. A
+ * branch counts as merged when it carries no commits the default branch lacks and its tip is not the commit
+ * the branch was created at (the oldest reflog entry), i.e. it once had work and that work is now in. Squash
+ * merges are not seen, and a branch reset backwards reads as merged. Returns `null` when git cannot say (not a
+ * repo, no default branch to compare against, a failed comparison), so callers treat the state as unknown
+ * rather than empty.
  */
 export async function readTicketWorktreeStates(
   runner: ProcessRunner,
@@ -274,27 +276,27 @@ export async function readTicketWorktreeStates(
     throw error;
   }
   const { entries, base } = snapshot;
-  const baseTip = await revision(runner, mainCheckout, base);
+  // `HEAD` is the fallback when the repo has no default branch; comparing against it would call nothing ahead.
+  if (base === "HEAD") return null;
   const byTicket = new Map<string, TicketWorktreeState>();
   for (const entry of entries) {
     if (entry.main || entry.branch === null || entry.link.ticket === null) continue;
-    const present = await exists(entry.path);
-    const count = await runner.run("git", ["rev-list", "--count", `${base}..${entry.branch}`], { cwd: mainCheckout });
-    if (count.exitCode !== 0) continue;
+    if (!(await exists(entry.path))) continue;
+    const ref = `refs/heads/${entry.branch}`;
+    const count = await runner.run("git", ["rev-list", "--count", `${base}..${ref}`], { cwd: mainCheckout });
+    if (count.exitCode !== 0) return null;
     const ahead = Number(count.stdout.trim()) > 0;
     let merged = false;
     if (!ahead) {
-      const tip = await revision(runner, mainCheckout, `refs/heads/${entry.branch}`);
-      const reflog = await runner.run("git", ["reflog", "show", "--format=%H", `refs/heads/${entry.branch}`], {
-        cwd: mainCheckout,
-      });
-      const created = reflog.exitCode === 0 ? (reflog.stdout.trim().split(/\r?\n/).at(-1) ?? "") : "";
-      merged = tip !== null && tip !== baseTip && created !== "" && tip !== created;
+      const tip = await revision(runner, mainCheckout, ref);
+      const reflog = await runner.run("git", ["reflog", "show", "--format=%H", ref], { cwd: mainCheckout });
+      const createdAt = reflog.exitCode === 0 ? (reflog.stdout.trim().split(/\r?\n/).at(-1) ?? "") : "";
+      merged = tip !== null && createdAt !== "" && tip !== createdAt;
     }
     const previous = byTicket.get(entry.link.ticket);
     byTicket.set(entry.link.ticket, {
       ticket: entry.link.ticket,
-      exists: (previous?.exists ?? false) || present,
+      exists: true,
       aheadOfDefault: (previous?.aheadOfDefault ?? false) || ahead,
       merged: previous === undefined ? merged : previous.merged && merged,
     });

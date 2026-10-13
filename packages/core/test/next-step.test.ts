@@ -658,6 +658,20 @@ describe("readRepoSnapshot git state", () => {
     expect(nextSteps(snapshot).map((s) => s.ruleId)).toContain("retro");
   });
 
+  it("calls a fast-forward-merged branch merged even before the default branch moves on", async () => {
+    const root = repoWithResolvedTicket();
+    const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
+    git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
+    writeFileSync(join(tree, "work.txt"), "x");
+    git(tree, "add", "-A");
+    git(tree, "commit", "-q", "-m", "work");
+    git(root, "merge", "-q", "--ff-only", "m/01-a");
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git?.worktrees[0]).toMatchObject({ aheadOfDefault: false, merged: true });
+  });
+
   it("does not call a fresh empty branch merged", async () => {
     const root = repoWithResolvedTicket();
     const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
