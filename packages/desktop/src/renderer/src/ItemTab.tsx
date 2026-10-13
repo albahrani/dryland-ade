@@ -2,8 +2,9 @@ import type { TicketDetail } from "@dryland/core";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import type { ItemContent, ProjectView } from "../../shared/api.ts";
+import { formatBlockers } from "../../shared/blockers.ts";
 import type { ItemRef } from "../../shared/tabs.ts";
-import { ProgressBar } from "./MapsView.tsx";
+import { ProgressBar } from "./ProgressBar.tsx";
 import { StatusIcon } from "./status.tsx";
 
 /** Re-reads the item whenever the project view changes, so open tabs follow the files on disk. */
@@ -22,11 +23,20 @@ function useItem(ref: ItemRef, project: ProjectView): ItemContent | null {
   return content;
 }
 
-function Details({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+function Details({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <header className="details">
-      <button className="details-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button className="details-toggle" aria-expanded={open} onClick={onToggle}>
         {open ? "▾" : "▸"} {title}
       </button>
       {open && <dl className="details-body">{children}</dl>}
@@ -43,12 +53,18 @@ function Field({ name, children }: { name: string; children: React.ReactNode }) 
   );
 }
 
-function TicketContent({ ticket }: { ticket: TicketDetail }) {
-  const blockers =
-    ticket.blockers === "unknown" ? "unknown" : ticket.blockers.length === 0 ? "none" : ticket.blockers.join(", ");
+export interface HeaderState {
+  /** Whether the details header is expanded. */
+  open: boolean;
+  onToggle: () => void;
+}
+
+function TicketContent({ ticket, header }: { ticket: TicketDetail; header: HeaderState }) {
   return (
     <article>
       <Details
+        open={header.open}
+        onToggle={header.onToggle}
         title={
           <>
             <StatusIcon status={ticket.status} /> {ticket.map}/{ticket.id} {ticket.title}
@@ -58,7 +74,7 @@ function TicketContent({ ticket }: { ticket: TicketDetail }) {
         <Field name="Status">{ticket.status}</Field>
         <Field name="Type">{ticket.type}</Field>
         <Field name="Claimant">{ticket.claimant ?? "none"}</Field>
-        <Field name="Blocked by">{blockers}</Field>
+        <Field name="Blocked by">{formatBlockers(ticket.blockers) ?? "none"}</Field>
         <Field name="Map">{ticket.mapTitle}</Field>
       </Details>
       <div className="content">
@@ -84,12 +100,12 @@ function TicketContent({ ticket }: { ticket: TicketDetail }) {
   );
 }
 
-export function ItemTab({ item, project }: { item: ItemRef; project: ProjectView }) {
+export function ItemTab({ item, project, header }: { item: ItemRef; project: ProjectView; header: HeaderState }) {
   const content = useItem(item, project);
   if (content === null) return null;
   const treeMap =
     item.kind === "map" && project.tree.ok ? project.tree.tree.maps.find((m) => m.name === item.name) : undefined;
-  if (content.kind === "ticket") return <TicketContent ticket={content.ticket} />;
+  if (content.kind === "ticket") return <TicketContent ticket={content.ticket} header={header} />;
   // A map known only through its tickets has no map.md: its details still show.
   if (content.kind === "missing" && treeMap === undefined) {
     return <p className="empty">This {item.kind} no longer exists. Close the tab.</p>;
@@ -99,7 +115,7 @@ export function ItemTab({ item, project }: { item: ItemRef; project: ProjectView
     content.kind === "map" ? content.map : { name: map?.name ?? "", title: map?.title ?? "", markdown: "" };
   return (
     <article>
-      <Details title={`Map: ${detail.title}`}>
+      <Details title={`Map: ${detail.title}`} open={header.open} onToggle={header.onToggle}>
         <Field name="Directory">.scratch/{detail.name}</Field>
         {map !== undefined && (
           <Field name="Progress">

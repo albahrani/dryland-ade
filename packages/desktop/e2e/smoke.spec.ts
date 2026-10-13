@@ -101,7 +101,12 @@ test("shows maps with progress, opens tickets and maps in tabs, follows disk edi
   await expect(window.getByText("What?")).toBeVisible();
   await window.getByRole("button", { name: /shop\/02 Grill the cart/ }).click();
   await expect(window.getByText("Claimant")).toHaveCount(0);
+  // A collapsed header stays collapsed when the user switches away and back.
+  await window.getByRole("tab", { name: "shop", exact: true }).click();
+  await window.getByRole("tab", { name: "shop/02" }).click();
+  await expect(window.getByText("Claimant")).toHaveCount(0);
   await window.getByRole("button", { name: /shop\/02 Grill the cart/ }).click();
+  await expect(window.getByText("Claimant")).toBeVisible();
   await window.getByRole("tab", { name: "shop", exact: true }).click();
   await window.getByRole("button", { name: "Grill the cart" }).click();
   await expect(window.getByRole("tab")).toHaveCount(2);

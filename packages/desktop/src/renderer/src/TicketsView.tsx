@@ -8,6 +8,7 @@ import {
   type ViewOptions,
 } from "../../shared/view-options.ts";
 import { STATUS_META } from "../../shared/status-meta.ts";
+import { formatBlockers } from "../../shared/blockers.ts";
 import { type ItemRef, tabKey } from "../../shared/tabs.ts";
 import { StatusIcon } from "./status.tsx";
 
@@ -24,9 +25,9 @@ const SORTS: { value: TicketSort; label: string }[] = [
 ];
 
 function Blockers({ ticket }: { ticket: TreeTicket }) {
-  if (ticket.blockers === "unknown") return <span className="meta">blocked by: unknown</span>;
-  if (ticket.blockers.length === 0) return null;
-  return <span className="meta">blocked by {ticket.blockers.join(", ")}</span>;
+  const text = formatBlockers(ticket.blockers);
+  if (text === null) return null;
+  return <span className="meta">{ticket.blockers === "unknown" ? `blocked by: ${text}` : `blocked by ${text}`}</span>;
 }
 
 function TicketRow({

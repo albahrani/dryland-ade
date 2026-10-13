@@ -1,7 +1,7 @@
 import type { TicketsTreeMap, TreeTicket } from "@dryland/core";
 import { describe, expect, it } from "vitest";
 import { mapProgress, PROGRESS_ORDER } from "../src/shared/map-progress.ts";
-import { STATUS_META } from "../src/shared/status-meta.ts";
+import { STATUS_META, TICKET_STATUSES } from "../src/shared/status-meta.ts";
 
 const row = (id: string, status: TreeTicket["status"]): TreeTicket => ({
   id,
@@ -51,5 +51,9 @@ describe("STATUS_META", () => {
   it("describes every ticket status once", () => {
     expect(Object.keys(STATUS_META).sort()).toEqual(["blocked", "done", "in-progress", "ready"]);
     expect(STATUS_META.ready).toMatchObject({ label: "Ready", shape: "○" });
+  });
+
+  it("lists statuses in sort order whatever order the table is written in", () => {
+    expect(TICKET_STATUSES).toEqual(["ready", "in-progress", "blocked", "done"]);
   });
 });

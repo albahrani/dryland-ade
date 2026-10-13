@@ -1,10 +1,17 @@
 import type { TicketsTreeMap, TicketStatus } from "@dryland/core";
+import { STATUS_META } from "./status-meta.ts";
 
 /** What a map's stacked bar divides into: ticket statuses, and the fog items that are not tickets yet. */
 export type ProgressSegment = TicketStatus | "fog";
 
 /** Bar order: finished work first, fog last. */
 export const PROGRESS_ORDER: ProgressSegment[] = ["done", "in-progress", "ready", "blocked", "fog"];
+
+/** Label and colour of each bar segment: the ticket statuses, plus fog, which is not a ticket status. */
+export const SEGMENT_META: Record<ProgressSegment, { label: string; colour: string }> = {
+  ...STATUS_META,
+  fog: { label: "Fog", colour: "var(--fg-dim)" },
+};
 
 export interface MapProgress {
   counts: Record<ProgressSegment, number>;

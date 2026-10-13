@@ -44,4 +44,7 @@ export const STATUS_META: Record<TicketStatus, StatusMeta> = {
   },
 };
 
-export const TICKET_STATUSES = Object.keys(STATUS_META) as TicketStatus[];
+/** Every status, in sort order. */
+export const TICKET_STATUSES = (Object.keys(STATUS_META) as TicketStatus[]).sort(
+  (a, b) => STATUS_META[a].order - STATUS_META[b].order,
+);

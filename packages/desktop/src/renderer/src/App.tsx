@@ -52,6 +52,8 @@ export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [activity, setActivity] = useState<ActivityView>("tickets");
   const [panelOpen, setPanelOpen] = useState(true);
+  // Tabs whose details header the user collapsed; not persisted.
+  const [collapsedHeaders, setCollapsedHeaders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     void window.dryland.getState().then(setState);
@@ -114,7 +116,20 @@ export function App() {
           </div>
         )}
         {project !== null && activeTab !== undefined ? (
-          <ItemTab key={tabKey(activeTab)} item={activeTab} project={project} />
+          <ItemTab
+            key={tabKey(activeTab)}
+            item={activeTab}
+            project={project}
+            header={{
+              open: !collapsedHeaders.has(tabKey(activeTab)),
+              onToggle: () =>
+                setCollapsedHeaders((current) => {
+                  const next = new Set(current);
+                  if (!next.delete(tabKey(activeTab))) next.add(tabKey(activeTab));
+                  return next;
+                }),
+            }}
+          />
         ) : (
           <p className="empty">Select a ticket or map to open it here.</p>
         )}
