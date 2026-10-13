@@ -129,14 +129,10 @@ export function rewriteBlockedBy(markdown: string, ids: string[]): string {
 }
 
 /**
- * Appends `text` as the last entry of the section with this `## ` heading, creating the section at the end
- * of the file when it is missing. Every other line, including line endings, is left as it was.
+ * Where the `## ` section with this heading (case-insensitive) sits in `lines`: its heading line and the
+ * line of the next `## ` heading, or the end. Fenced code is skipped. Lines may carry their terminators.
  */
-export function appendToSection(markdown: string, heading: string, text: string): string {
-  const eol = lineEnding(markdown);
-  const lines = markdown.split(/\r?\n/);
-  const entry = text.trim().split(/\r?\n/);
-
+function findSectionRange(lines: string[], heading: string): { start: number; end: number } | null {
   let fenced = false;
   let start = -1;
   let end = lines.length;
@@ -146,11 +142,24 @@ export function appendToSection(markdown: string, heading: string, text: string)
     if (start === -1 && line.slice(3).trim().toLowerCase() === heading.toLowerCase()) start = i;
     else if (start !== -1 && end === lines.length) end = i;
   });
+  return start === -1 ? null : { start, end };
+}
 
-  if (start === -1) {
+/**
+ * Appends `text` as the last entry of the section with this `## ` heading, creating the section at the end
+ * of the file when it is missing. Every other line, including line endings, is left as it was.
+ */
+export function appendToSection(markdown: string, heading: string, text: string): string {
+  const eol = lineEnding(markdown);
+  const lines = markdown.split(/\r?\n/);
+  const entry = text.trim().split(/\r?\n/);
+
+  const range = findSectionRange(lines, heading);
+  if (range === null) {
     const body = lines.join("\n").replace(/\s+$/, "").split("\n");
     return [...body, "", `## ${heading}`, "", ...entry, ""].join(eol);
   }
+  const { start, end } = range;
   let last = end - 1; // the last line of the section that has content
   while (last > start && (lines[last] ?? "").trim() === "") last--;
   const tail = lines.slice(end);
@@ -168,23 +177,15 @@ export function appendDecision(markdown: string, entry: string): string {
   const text = (line: string) => line.replace(/\r?\n$/, "");
   const endingOf = (line: string) => /\r?\n$/.exec(line)?.[0] ?? fileEol;
 
-  let fenced = false;
-  let start = -1;
-  let end = lines.length;
-  lines.forEach((line, i) => {
-    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
-    if (fenced || !line.startsWith("## ")) return;
-    if (start === -1 && text(line).slice(3).trim().toLowerCase() === "decisions so far") start = i;
-    else if (start !== -1 && end === lines.length) end = i;
-  });
-
-  if (start === -1) {
+  const range = findSectionRange(lines, "Decisions so far");
+  if (range === null) {
     const last = lines.length - 1;
     const body = lines.slice();
     if (last >= 0 && !/\n$/.test(body[last] ?? "")) body[last] += fileEol;
     return [...body, fileEol, `## Decisions so far${fileEol}`, fileEol, `${entry}${fileEol}`].join("");
   }
 
+  const { start, end } = range;
   const content = lines.slice(start + 1, end).map((line, i) => ({ line, index: start + 1 + i }));
   const filled = content.filter(({ line }) => text(line).trim() !== "");
   const first = filled[0];

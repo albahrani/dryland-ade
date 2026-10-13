@@ -1,4 +1,4 @@
-import { DrylandError } from "./errors.ts";
+import { DrylandError, requireOneLine } from "./errors.ts";
 import { issuesDir, lineEnding, parseTicketFile, rewriteStatus, ticketNumbers } from "./local-markdown.ts";
 import { assertMapName, readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
@@ -30,10 +30,7 @@ function slugOf(title: string): string {
 /** Everything is checked before the lock is taken, so a bad request never touches the tracker. */
 function validate(input: CreateTicketInput): { type: TicketType; title: string } {
   assertMapName(input.map);
-  const title = input.title.trim();
-  if (title === "" || /[\r\n]/.test(title)) {
-    throw new DrylandError("A ticket title must be one non-empty line.", "Pass it as --title \"<short title>\".");
-  }
+  const title = requireOneLine("ticket title", input.title, "title");
   const type = TICKET_TYPES.find((known) => known === input.type.toLowerCase());
   if (type === undefined) {
     throw new DrylandError(

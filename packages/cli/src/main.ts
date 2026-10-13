@@ -202,7 +202,8 @@ const COMMANDS: Record<
         { add: numberList(flags, "add"), remove: numberList(flags, "remove") },
         { autoCommit: autoCommit(flags) },
       );
-      const blockers = ticket.blockers === "unknown" || ticket.blockers.length === 0 ? "none" : ticket.blockers.join(", ");
+      const ids = ticket.blockers === "unknown" ? [] : ticket.blockers;
+      const blockers = ids.length === 0 ? "none" : ids.join(", ");
       return { value: ticket, text: `${ticket.map}/${ticket.id} is now blocked by: ${blockers}.\n`, warnings };
     },
   },

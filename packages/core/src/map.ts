@@ -61,7 +61,8 @@ export function assertMapName(name: string): void {
   }
 }
 
-export async function readMapFile(mainCheckout: string, name: string): Promise<MapModel> {
+/** The text of a map's `map.md`, or a failure with the next action when the map is unknown. */
+export async function readMapText(mainCheckout: string, name: string): Promise<string> {
   const markdown = await readFile(join(mainCheckout, ".scratch", name, "map.md"), "utf8").catch(() => null);
   if (markdown === null) {
     throw new DrylandError(
@@ -69,7 +70,11 @@ export async function readMapFile(mainCheckout: string, name: string): Promise<M
       "Run `dryland ticket list` to see the maps that have tickets, or start one with /wayfinder.",
     );
   }
-  return parseMap(name, markdown);
+  return markdown;
+}
+
+export async function readMapFile(mainCheckout: string, name: string): Promise<MapModel> {
+  return parseMap(name, await readMapText(mainCheckout, name));
 }
 
 /**

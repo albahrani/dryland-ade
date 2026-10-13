@@ -83,3 +83,15 @@ describe("dryland map index placeholder", () => {
     expect(map).toContain("None of the options fit; revisit later.\n- [Cart storage]");
   });
 });
+
+describe("dryland map index validation", () => {
+  it("rejects a title with square brackets and changes nothing", async () => {
+    const repo = shopRepo(FRESH_MAP);
+
+    const result = await repo.run(["map", "index", "shop", "--title", "Use [x] syntax", "--link", "a.md", "--gist", "g"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("Next:");
+    expect(repo.git("status", "--porcelain")).toBe("");
+  });
+});

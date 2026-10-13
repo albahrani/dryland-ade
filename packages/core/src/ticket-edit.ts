@@ -88,7 +88,7 @@ export async function blockTicket(
   return { ticket: value, warnings };
 }
 
-/** Appends a comment under the ticket's `## Comments` heading, creating it when missing. Earlier comments are untouched. */
+/** Appends a comment under the ticket's `## Comments` heading, creating it when missing; earlier ones are untouched. */
 export async function commentOnTicket(
   runner: ProcessRunner,
   cwd: string,
@@ -146,7 +146,7 @@ export async function triageTicket(
     const name = `${ticket.map}/${ticket.id}`;
     if (ticket.state !== "open") {
       throw new DrylandError(
-        `Ticket ${name} is ${ticket.state}, so its status is not a triage role to change.`,
+        `Ticket ${name} is ${ticket.state}, so it cannot be re-triaged.`,
         ticket.state === "claimed"
           ? `Release it first with \`dryland ticket release ${name}\`.`
           : "Create a new ticket for the follow-up work.",

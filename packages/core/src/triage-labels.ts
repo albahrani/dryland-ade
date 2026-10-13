@@ -22,7 +22,7 @@ export async function readTriageVocabulary(mainCheckout: string): Promise<Triage
   return vocabulary;
 }
 
-/** The label string the repo uses for each role, as its triage-labels doc writes it; a role without a row is its own label. */
+/** The label the repo uses for each role, as its triage-labels doc writes it; a role without a row is its own label. */
 export async function readTriageLabels(mainCheckout: string): Promise<Map<TriageRole, string>> {
   const labels = new Map<TriageRole, string>(TRIAGE_ROLES.map((role) => [role, role]));
   const doc = await readFile(join(mainCheckout, TRIAGE_LABELS_DOC), "utf8").catch(() => "");
