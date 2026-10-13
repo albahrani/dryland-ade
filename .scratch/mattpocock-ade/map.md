@@ -65,6 +65,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Block, comment, triage and map index](issues/25-block-comment-triage-and-map-index.md): ticket block, comment and triage plus map index, all through the shared tracker write path; line endings preserved per line, a bare Nothing. placeholder gives way to the first index entry.
 
+- [Worktrees: create, list and prune](issues/26-worktrees.md): `dryland worktree create`, `list` and `prune`; names are `<map>/<NN>-<slug>` or `<map>/scratch-<slug>`, branches start from the default branch, a `Dryland-Ticket:` trailer is the fallback link, and prune names every failed condition and needs `--yes`.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
