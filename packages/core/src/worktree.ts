@@ -95,6 +95,12 @@ export async function createWorktree(
   let base: string;
   let ticket: string | null = null;
   if (options.ticket !== undefined) {
+    if (options.slug !== undefined) {
+      throw new DrylandError(
+        "--slug names a scratch worktree, but a ticket was given and it names its own worktree.",
+        "Drop --slug, or drop the ticket and pass --map <map> for a scratch worktree.",
+      );
+    }
     const found = findTicket(await readTickets(mainCheckout), parseTicketReference(options.ticket));
     const file = await ticketFile(mainCheckout, found.map, found.id);
     const stem = basename(file ?? "", ".md").replace(/^\d+-/, "");
@@ -171,7 +177,7 @@ async function trailerTicket(
     try {
       const wanted = parseTicketReference(value);
       if (wanted.map === null) continue;
-      const found = tickets.find((t) => t.map === wanted.map && Number(t.id) === wanted.number);
+      const found = findTicketByNumber(tickets, wanted.map, wanted.number);
       if (found !== undefined) return `${found.map}/${found.id}`;
     } catch {
       // A trailer that is not a ticket reference links nothing.
@@ -180,19 +186,30 @@ async function trailerTicket(
   return null;
 }
 
+/** The ticket `map` holds under number `number`, if any. */
+function findTicketByNumber(tickets: Ticket[], map: string, number: number): Ticket | undefined {
+  return tickets.find((t) => t.map === map && Number(t.id) === number);
+}
+
 function linkByName(branch: string, tickets: Ticket[]): WorktreeLink | null {
   const match = TICKET_BRANCH.exec(branch);
   if (match?.[1] !== undefined && match[2] !== undefined) {
     const [, map, number] = match;
-    const found = tickets.find((t) => t.map === map && Number(t.id) === Number(number));
+    const found = findTicketByNumber(tickets, map, Number(number));
     if (found !== undefined) return { kind: "name", ticket: `${found.map}/${found.id}` };
   }
   return SCRATCH_BRANCH.test(branch) ? { kind: "scratch", ticket: null } : null;
 }
 
-/** Every worktree of the repo containing `cwd`, each with the ticket it links to. */
-export async function listWorktrees(runner: ProcessRunner, cwd: string): Promise<WorktreeEntry[]> {
-  const mainCheckout = await findMainCheckout(runner, cwd);
+interface WorktreeSnapshot {
+  entries: WorktreeEntry[];
+  tickets: Ticket[];
+  /** What branches are compared against: the default branch, or `HEAD` when the repo has none. */
+  base: string;
+}
+
+/** Reads the worktrees, tickets and default branch once, and links each worktree to its ticket. */
+async function snapshotWorktrees(runner: ProcessRunner, mainCheckout: string): Promise<WorktreeSnapshot> {
   const [raw, tickets, defaultName] = await Promise.all([
     gitWorktrees(runner, mainCheckout),
     readTickets(mainCheckout),
@@ -214,7 +231,17 @@ export async function listWorktrees(runner: ProcessRunner, cwd: string): Promise
     }
     entries.push({ ...worktree, main: isMain, link });
   }
-  return entries;
+  return { entries, tickets, base };
+}
+
+/** Every worktree of the repo containing `cwd`, each with the ticket it links to. */
+export async function listWorktrees(runner: ProcessRunner, cwd: string): Promise<WorktreeEntry[]> {
+  return (await snapshotWorktrees(runner, await findMainCheckout(runner, cwd))).entries;
+}
+
+export interface PruneResult extends WorktreeResult {
+  /** `false` when every condition held but the caller had not confirmed, so nothing was touched. */
+  removed: boolean;
 }
 
 export interface PruneOptions {
@@ -224,15 +251,18 @@ export interface PruneOptions {
   sessionAttached: boolean;
 }
 
-/** Removes a worktree and its branch only if the ticket is resolved, the branch merged or empty, the tree clean and no session attached. */
+/**
+ * Removes a worktree and its branch only if the ticket is resolved, the branch merged or empty, the tree clean
+ * and no session attached, and the caller confirmed. Fails naming every condition that does not hold.
+ */
 export async function pruneWorktree(
   runner: ProcessRunner,
   cwd: string,
   target: string,
   options: PruneOptions,
-): Promise<WorktreeResult> {
+): Promise<PruneResult> {
   const mainCheckout = await findMainCheckout(runner, cwd);
-  const entries = await listWorktrees(runner, cwd);
+  const { entries, tickets, base } = await snapshotWorktrees(runner, mainCheckout);
   const wanted = resolve(cwd, target);
   const entry = entries.find((e) => e.branch === target || e.path === wanted);
   if (entry === undefined) {
@@ -260,11 +290,9 @@ export async function pruneWorktree(
 
   const failed: string[] = [];
   if (link.ticket !== null) {
-    const tickets = await readTickets(mainCheckout);
     const ticket = findTicket(tickets, parseTicketReference(link.ticket));
     if (ticket.state !== "resolved") failed.push(`ticket ${link.ticket} is not resolved (it is ${ticket.state})`);
   }
-  const base = (await defaultBranch(runner, mainCheckout)) ?? "HEAD";
   const ahead = await gitIn(runner, mainCheckout, ["rev-list", "--count", `${base}..${branch}`], "comparing branches");
   if (Number(ahead.trim()) > 0) {
     failed.push(`branch ${branch} has unmerged commits (${ahead.trim()} not in ${base})`);
@@ -279,15 +307,10 @@ export async function pruneWorktree(
       "Clear what is listed, then run the command again.",
     );
   }
-  if (!options.yes) {
-    throw new DrylandError(
-      `Pruning ${branch} needs confirmation, so nothing was removed.`,
-      `Run again with --yes to remove the worktree ${path} and branch ${branch}.`,
-    );
-  }
+  if (!options.yes) return { branch, path, ticket: link.ticket, removed: false };
 
   await gitIn(runner, mainCheckout, ["worktree", "remove", path], `removing ${path}`);
   // Every condition above held, so the branch holds nothing the base does not; -D skips git's HEAD-relative check.
   await gitIn(runner, mainCheckout, ["branch", "-D", branch], `deleting ${branch}`);
-  return { branch, path, ticket: link.ticket };
+  return { branch, path, ticket: link.ticket, removed: true };
 }

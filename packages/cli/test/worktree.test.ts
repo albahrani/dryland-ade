@@ -84,6 +84,16 @@ describe("dryland worktree create", () => {
     expect(existsSync(created.path)).toBe(true);
   });
 
+  it("refuses --slug together with a ticket instead of ignoring it", async () => {
+    const repo = shopRepo();
+
+    const result = await repo.run(["worktree", "create", "shop/01", "--slug", "spike"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("--slug");
+    expect(repo.git("worktree", "list")).not.toContain("shop/01-cart");
+  });
+
   it("fails clearly for a ticket that does not exist", async () => {
     const repo = shopRepo();
 
@@ -173,8 +183,9 @@ describe("dryland worktree prune", () => {
 
     const result = await repo.run(["worktree", "prune", "shop/01-cart"]);
 
-    expect(result.stderr).toContain("--yes");
-    expect(result.stderr).toContain("nothing");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--yes");
+    expect(result.stdout).toContain("Nothing was removed");
     expect(existsSync(path)).toBe(true);
     expect(repo.git("branch", "--list", "shop/01-cart")).toContain("shop/01-cart");
   });

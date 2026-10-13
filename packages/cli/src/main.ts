@@ -315,7 +315,11 @@ const COMMANDS: Record<
         yes: flags.switches.has("yes"),
         sessionAttached: flags.switches.has("session-attached"),
       });
-      return { value: pruned, text: `Removed worktree ${pruned.path} and branch ${pruned.branch}.\n` };
+      const text = pruned.removed
+        ? `Removed worktree ${pruned.path} and branch ${pruned.branch}.\n`
+        : `Nothing was removed: pruning ${pruned.branch} needs confirmation.\n` +
+          `Run again with --yes to remove worktree ${pruned.path} and branch ${pruned.branch}.\n`;
+      return { value: pruned, text };
     },
   },
 };
