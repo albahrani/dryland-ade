@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 
 const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\n## Question\n\nWhat?\n`;
@@ -127,4 +127,77 @@ test("shows maps with progress, opens tickets and maps in tabs, follows disk edi
   await expect(window.getByRole("tab", { name: "shop/02" })).toHaveAttribute("aria-selected", "true");
   await expect(window.getByText("A fresh remark.")).toBeVisible();
   await second.close();
+});
+
+test("runs terminal sessions in tabs: input, output, resize, independence, and no process left behind", async () => {
+  const repo = fixtureRepo();
+  const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
+  // A stub shell: node prints a banner with its pid, echoes each input line, and reports when its terminal width changes.
+  const stub = join(mkdtempSync(join(tmpdir(), "dryland-e2e-shell-")), "stub-shell.mjs");
+  writeFileSync(
+    stub,
+    [
+      "console.log(`stub-shell-ready pid=${process.pid} cwd=${process.cwd()}`);",
+      "process.stdin.on('data', (d) => console.log(`got: ${d.toString().trim()}`));",
+      "let cols = process.stdout.columns;",
+      "setInterval(() => {",
+      "  process.stdout._refreshSize();",
+      "  if (process.stdout.columns !== cols) console.log(`resized cols=${(cols = process.stdout.columns)}`);",
+      "}, 100);",
+    ].join("\n"),
+  );
+  const app = await electron.launch({
+    args: [".", `--user-data-dir=${userData}`],
+    env: { ...process.env, DRYLAND_SHELL: process.execPath, DRYLAND_SHELL_ARGS: JSON.stringify([stub]) },
+  });
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+  }, repo);
+  const window = await app.firstWindow();
+  await expect(window.getByRole("button", { name: "New terminal" })).toBeDisabled();
+  await window.getByRole("button", { name: "Open project..." }).click();
+
+  // A session tab runs the shell in the project's checkout and shows its output.
+  await window.getByRole("button", { name: "New terminal" }).click();
+  await expect(window.getByRole("tab", { name: "Terminal 1" })).toHaveAttribute("aria-selected", "true");
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("stub-shell-ready");
+  await expect(screen).toContainText(basename(repo));
+  const firstPid = /pid=(\d+)/.exec(await screen.innerText())?.[1];
+  expect(firstPid).toBeDefined();
+
+  // Typed input reaches the process and its answer comes back.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("hello");
+  await window.keyboard.press("Enter");
+  await expect(screen).toContainText("got: hello");
+
+  // Resizing the window resizes the PTY: the process notices its new width.
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(900, 600));
+  await expect(screen).toContainText("resized cols=");
+
+  // A second session is independent of the first.
+  await window.getByRole("button", { name: "New terminal" }).click();
+  await expect(window.getByRole("tab", { name: "Terminal 2" })).toHaveAttribute("aria-selected", "true");
+  await expect(screen).toContainText("stub-shell-ready");
+  await expect(screen).not.toContainText("got: hello");
+  const secondPid = /pid=(\d+)/.exec(await screen.innerText())?.[1];
+  expect(secondPid).not.toBe(firstPid);
+  await window.getByRole("tab", { name: "Terminal 1" }).click();
+  await expect(screen).toContainText("got: hello");
+
+  // Closing the app leaves no process behind.
+  await app.close();
+  for (const pid of [firstPid, secondPid]) {
+    await expect
+      .poll(() => {
+        try {
+          process.kill(Number(pid), 0);
+          return "alive";
+        } catch {
+          return "gone";
+        }
+      })
+      .toBe("gone");
+  }
 });

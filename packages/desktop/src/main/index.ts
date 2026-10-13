@@ -9,10 +9,25 @@ import {
 } from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
 import type { AppState, ItemContent, ProjectView, TreeLoad } from "../shared/api.ts";
-import { EMPTY_TABS, type ItemRef, parseTabs, type TabsState } from "../shared/tabs.ts";
+import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
+import { nodePtyProvider } from "./pty/node-pty-provider.ts";
+import { createTerminalManager } from "./terminals.ts";
+import { resolveShell } from "./shell.ts";
 import { createUiStateStore } from "./ui-state.ts";
 import { watchProject } from "./watch-project.ts";
 
+/** A terminal can print after its window is gone, between the window closing and the app quitting. */
+function sendToWindow(channel: string, ...args: unknown[]): void {
+  if (window !== null && !window.isDestroyed()) window.webContents.send(channel, ...args);
+}
+
+const terminals = createTerminalManager({
+  provider: nodePtyProvider,
+  shell: resolveShell(process.platform, process.env),
+  env: process.env,
+  onData: (id, data) => sendToWindow("terminal:data", id, data),
+  onExit: (id, exitCode) => sendToWindow("terminal:exit", id, exitCode),
+});
 const store = createUiStateStore(join(app.getPath("userData"), "ui-state.json"));
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
@@ -40,7 +55,7 @@ async function currentState(): Promise<AppState> {
   return { project: view, legendDismissed, tabs: (view && tabs[view.path]) || EMPTY_TABS };
 }
 
-async function readItem(ref: ItemRef): Promise<ItemContent> {
+async function readItem(ref: DocumentRef): Promise<ItemContent> {
   if (project === null) return { kind: "missing" };
   try {
     const mainCheckout = await findMainCheckout(nodeProcessRunner, project.path);
@@ -75,7 +90,10 @@ async function pickProject(): Promise<void> {
   if (window === null) return;
   const result = await dialog.showOpenDialog(window, { title: "Open project", properties: ["openDirectory"] });
   const [path] = result.filePaths;
-  if (!result.canceled && path !== undefined) await openProject(path);
+  if (result.canceled || path === undefined) return;
+  // Terminals belong to the project they were opened in.
+  if (path !== project?.path) terminals.closeAll();
+  await openProject(path);
 }
 
 function createWindow(): void {
@@ -116,8 +134,16 @@ ipcMain.handle("tabs:save", (_event, tabs: TabsState) => {
   const saved = store.read().tabs;
   store.update({ tabs: { ...saved, [project.path]: parseTabs(tabs) } });
 });
-ipcMain.handle("item:read", (_event, ref: ItemRef) => readItem(ref));
+ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
+ipcMain.handle("terminal:open", async () => {
+  const loaded = await projectView();
+  if (loaded === null) return null;
+  return terminals.open({ cwd: loaded.mainCheckout ?? loaded.view.path });
+});
+ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
+ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
+ipcMain.on("terminal:close", (_event, id: string) => terminals.close(id));
 
 void app.whenReady().then(async () => {
   // The window opens first; a slow or missing last project fills in when it has loaded.
@@ -134,3 +160,6 @@ app.on("window-all-closed", () => {
   stopWatching?.();
   app.quit();
 });
+
+// No process outlives the app (ADR 0002).
+app.on("will-quit", () => terminals.closeAll());

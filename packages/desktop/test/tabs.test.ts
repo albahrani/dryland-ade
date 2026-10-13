@@ -24,6 +24,21 @@ describe("openTab", () => {
   });
 });
 
+describe("terminal tabs", () => {
+  const terminal: ItemRef = { kind: "terminal", id: "abc" };
+
+  it("open, focus and close like any other tab", () => {
+    const opened = openTab(openTab(EMPTY_TABS, ticket("01")), terminal);
+    expect(opened.active).toBe(tabKey(terminal));
+    expect(closeTab(opened, tabKey(terminal)).active).toBe(tabKey(ticket("01")));
+  });
+
+  it("are not restored: parseTabs drops them", () => {
+    const saved = openTab(openTab(EMPTY_TABS, ticket("01")), terminal);
+    expect(parseTabs(saved)).toEqual({ open: [ticket("01")], active: tabKey(ticket("01")) });
+  });
+});
+
 describe("closeTab", () => {
   const three = [ticket("01"), ticket("02"), ticket("03")].reduce(openTab, EMPTY_TABS);
 

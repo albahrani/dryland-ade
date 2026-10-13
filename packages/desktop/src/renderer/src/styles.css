@@ -95,8 +95,20 @@ ul {
 
 .editor {
   grid-area: editor;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: auto;
   padding: 12px;
+}
+
+.terminal {
+  flex: 1;
+  min-height: 0;
+}
+
+.terminal .xterm {
+  height: 100%;
 }
 
 .right-side {

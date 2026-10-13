@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import type { ItemContent, ProjectView } from "../../shared/api.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
-import type { ItemRef } from "../../shared/tabs.ts";
+import type { DocumentRef } from "../../shared/tabs.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
 import { StatusIcon } from "./status.tsx";
 
 /** Re-reads the item whenever the project view changes, so open tabs follow the files on disk. */
-function useItem(ref: ItemRef, project: ProjectView): ItemContent | null {
+function useItem(ref: DocumentRef, project: ProjectView): ItemContent | null {
   const [content, setContent] = useState<ItemContent | null>(null);
   useEffect(() => {
     let current = true;
@@ -100,7 +100,7 @@ function TicketContent({ ticket, header }: { ticket: TicketDetail; header: Heade
   );
 }
 
-export function ItemTab({ item, project, header }: { item: ItemRef; project: ProjectView; header: HeaderState }) {
+export function ItemTab({ item, project, header }: { item: DocumentRef; project: ProjectView; header: HeaderState }) {
   const content = useItem(item, project);
   if (content === null) return null;
   const treeMap =

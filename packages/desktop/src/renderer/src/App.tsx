@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppState, ProjectView } from "../../shared/api.ts";
 import { activeItem, closeTab, focusTab, type ItemRef, openTab, tabKey, type TabsState } from "../../shared/tabs.ts";
 import { ItemTab } from "./ItemTab.tsx";
 import { Legend } from "./Legend.tsx";
 import { MapsView } from "./MapsView.tsx";
+import { TerminalTab } from "./TerminalTab.tsx";
+import { disposeTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
 import { TicketsView } from "./TicketsView.tsx";
 
 type ActivityView = "tickets" | "maps" | "sessions";
@@ -14,7 +16,8 @@ const ACTIVITIES: { id: ActivityView; label: string; glyph: string }[] = [
   { id: "sessions", label: "Sessions", glyph: "▶" },
 ];
 
-function tabLabel(ref: ItemRef): string {
+function tabLabel(ref: ItemRef, terminalTitles: ReadonlyMap<string, string>): string {
+  if (ref.kind === "terminal") return terminalTitles.get(ref.id) ?? "Terminal";
   return ref.kind === "ticket" ? `${ref.map}/${ref.id}` : ref.name;
 }
 
@@ -54,10 +57,21 @@ export function App() {
   const [panelOpen, setPanelOpen] = useState(true);
   // Tabs whose details header the user collapsed; not persisted.
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<string>>(new Set());
+  // Titles of terminals, numbered in the order they were opened.
+  const [terminalTitles, setTerminalTitles] = useState<ReadonlyMap<string, string>>(new Map());
+  const terminalsOpened = useRef(0);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
 
   useEffect(() => {
     void window.dryland.getState().then(setState);
-    return window.dryland.onProjectChanged((project) => setState((current) => current && { ...current, project }));
+    const stopProject = window.dryland.onProjectChanged((project) =>
+      setState((current) => current && { ...current, project }),
+    );
+    const stopTerminals = routeTerminalEvents();
+    return () => {
+      stopProject();
+      stopTerminals();
+    };
   }, []);
 
   if (state === null) return null;
@@ -66,7 +80,40 @@ export function App() {
     setState({ ...state, tabs: next });
     void window.dryland.saveTabs(next);
   };
+  const closeItem = (ref: ItemRef) => {
+    if (ref.kind === "terminal") {
+      window.dryland.closeTerminal(ref.id);
+      disposeTerminal(ref.id);
+    }
+    setTabs(closeTab(tabs, tabKey(ref)));
+  };
+  const openProject = async () => {
+    const next = await window.dryland.openProject();
+    // Switching projects kills the main process's terminals; drop the views of those the new state has no tab for.
+    const kept = new Set(next.tabs.open.flatMap((tab) => (tab.kind === "terminal" ? [tab.id] : [])));
+    for (const id of terminalTitles.keys()) if (!kept.has(id)) disposeTerminal(id);
+    setTerminalTitles((current) => new Map([...current].filter(([id]) => kept.has(id))));
+    setState(next);
+  };
+  const newTerminal = async () => {
+    setTerminalError(null);
+    let id: string | null;
+    try {
+      id = await window.dryland.openTerminal();
+    } catch (error) {
+      setTerminalError(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    if (id === null) return;
+    // Registered before anything else runs, so the shell's first output is not dropped.
+    getOrCreateTerminal(id);
+    terminalsOpened.current += 1;
+    const title = `Terminal ${terminalsOpened.current}`;
+    setTerminalTitles((current) => new Map(current).set(id, title));
+    setState((current) => current && { ...current, tabs: openTab(current.tabs, { kind: "terminal", id }) });
+  };
   const activeTab = activeItem(tabs);
+  const terminalIds = tabs.open.flatMap((tab) => (tab.kind === "terminal" ? [tab.id] : []));
   const dismissLegend = () => {
     setState({ ...state, legendDismissed: true });
     void window.dryland.dismissLegend();
@@ -75,8 +122,11 @@ export function App() {
   return (
     <div className="shell">
       <header className="menubar">
-        <button className="project-widget" onClick={() => void window.dryland.openProject().then(setState)}>
+        <button className="project-widget" onClick={() => void openProject()}>
           {project === null ? "Open project..." : project.name}
+        </button>
+        <button className="project-widget" disabled={project === null} onClick={() => void newTerminal()}>
+          New terminal
         </button>
       </header>
       <nav className="activitybar" aria-label="Activity bar">
@@ -106,16 +156,24 @@ export function App() {
                   aria-selected={tabKey(tab) === tabs.active}
                   onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
                 >
-                  {tabLabel(tab)}
+                  {tabLabel(tab, terminalTitles)}
                 </button>
-                <button aria-label={`Close ${tabLabel(tab)}`} onClick={() => setTabs(closeTab(tabs, tabKey(tab)))}>
+                <button aria-label={`Close ${tabLabel(tab, terminalTitles)}`} onClick={() => closeItem(tab)}>
                   ×
                 </button>
               </span>
             ))}
           </div>
         )}
-        {project !== null && activeTab !== undefined ? (
+        {terminalError !== null && (
+          <p className="notice" role="alert">
+            Could not start a terminal: {terminalError}
+          </p>
+        )}
+        {terminalIds.map((id) => (
+          <TerminalTab key={id} id={id} active={activeTab?.kind === "terminal" && activeTab.id === id} />
+        ))}
+        {project !== null && activeTab !== undefined && activeTab.kind !== "terminal" ? (
           <ItemTab
             key={tabKey(activeTab)}
             item={activeTab}
@@ -131,7 +189,7 @@ export function App() {
             }}
           />
         ) : (
-          <p className="empty">Select a ticket or map to open it here.</p>
+          activeTab?.kind !== "terminal" && <p className="empty">Select a ticket or map to open it here.</p>
         )}
       </main>
       <aside className="right-side">

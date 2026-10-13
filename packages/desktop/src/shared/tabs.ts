@@ -1,5 +1,14 @@
-/** What an editor tab shows: a ticket (by map and number) or a map. */
-export type ItemRef = { kind: "ticket"; map: string; id: string } | { kind: "map"; name: string };
+/** A document an editor tab can show: a ticket (by map and number) or a map. */
+export type DocumentRef = { kind: "ticket"; map: string; id: string } | { kind: "map"; name: string };
+
+/** A terminal, by the id the main process gave it. Terminals never outlive the app, so they are not saved. */
+export interface TerminalRef {
+  kind: "terminal";
+  id: string;
+}
+
+/** What an editor tab shows. */
+export type ItemRef = DocumentRef | TerminalRef;
 
 export interface TabsState {
   open: ItemRef[];
@@ -10,6 +19,7 @@ export interface TabsState {
 export const EMPTY_TABS: TabsState = { open: [], active: null };
 
 export function tabKey(ref: ItemRef): string {
+  if (ref.kind === "terminal") return `terminal:${ref.id}`;
   return ref.kind === "ticket" ? `ticket:${ref.map}/${ref.id}` : `map:${ref.name}`;
 }
 
@@ -39,7 +49,7 @@ export function closeTab(state: TabsState, key: string): TabsState {
   return { open, active: next === undefined ? null : tabKey(next) };
 }
 
-function parseRef(raw: unknown): ItemRef | null {
+function parseRef(raw: unknown): DocumentRef | null {
   if (raw === null || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   if (r.kind === "ticket" && typeof r.map === "string" && typeof r.id === "string") {
@@ -49,13 +59,13 @@ function parseRef(raw: unknown): ItemRef | null {
   return null;
 }
 
-/** Reads saved tabs defensively: anything unreadable is dropped, never thrown. */
+/** Reads saved tabs defensively: anything unreadable, and every terminal tab, is dropped, never thrown. */
 export function parseTabs(raw: unknown): TabsState {
   if (raw === null || typeof raw !== "object") return EMPTY_TABS;
   const { open: rawOpen, active } = raw as Record<string, unknown>;
   if (!Array.isArray(rawOpen)) return EMPTY_TABS;
   const seen = new Set<string>();
-  const open: ItemRef[] = [];
+  const open: DocumentRef[] = [];
   for (const entry of rawOpen) {
     const ref = parseRef(entry);
     if (ref === null || seen.has(tabKey(ref))) continue;
