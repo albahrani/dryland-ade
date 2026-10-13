@@ -29,13 +29,23 @@ function git(cwd: string, args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 }
 
+/** A bare repo (no working tree) and its path. */
+export function createBareRepo(): string {
+  const path = mkdtempSync(join(tmpdir(), "dryland-bare-"));
+  git(path, ["init", "--quiet", "--bare", "--initial-branch=main"]);
+  return path;
+}
+
 /** A temp git repo with one commit; the unit later tickets run `dryland` against. */
 export class TempRepo {
   private constructor(readonly path: string) {}
 
-  static create(files: Record<string, string> = {}): TempRepo {
+  /** `separateGitDir` keeps the git directory outside the working tree, as `git init --separate-git-dir` does. */
+  static create(files: Record<string, string> = {}, opts: { separateGitDir?: boolean } = {}): TempRepo {
     const path = mkdtempSync(join(tmpdir(), "dryland-test-"));
-    git(path, ["init", "--quiet", "--initial-branch=main"]);
+    const initArgs = ["init", "--quiet", "--initial-branch=main"];
+    if (opts.separateGitDir) initArgs.push(`--separate-git-dir=${mkdtempSync(join(tmpdir(), "dryland-gitdir-"))}`);
+    git(path, initArgs);
     git(path, ["config", "user.name", "Dryland Test"]);
     git(path, ["config", "user.email", "test@dryland.invalid"]);
     git(path, ["config", "commit.gpgsign", "false"]);

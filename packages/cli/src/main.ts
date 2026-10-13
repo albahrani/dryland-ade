@@ -1,6 +1,7 @@
 import { DrylandError, listTickets, nodeProcessRunner, type Ticket } from "@dryland/core";
 
 function formatTickets(tickets: Ticket[]): string {
+  if (tickets.length === 0) return "No tickets.\n";
   const columnWidth = (pick: (ticket: Ticket) => string) => Math.max(...tickets.map((ticket) => pick(ticket).length));
   const stateWidth = columnWidth((ticket) => ticket.state);
   const typeWidth = columnWidth((ticket) => ticket.type);

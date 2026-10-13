@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { runDryland, TempRepo } from "./harness.ts";
+import { createBareRepo, runDryland, TempRepo } from "./harness.ts";
 
 const LOCAL_TRACKER_DOC = "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n";
 
@@ -88,6 +88,41 @@ describe("dryland ticket list", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("Jira");
     expect(result.stderr).toMatch(/local-markdown/i);
+  });
+
+  it("says there are no tickets for an empty tracker and returns an empty list for --json", async () => {
+    const repo = TempRepo.create({ "docs/agents/issue-tracker.md": LOCAL_TRACKER_DOC });
+
+    const plain = await repo.run(["ticket", "list"]);
+    const json = await repo.run(["ticket", "list", "--json"]);
+
+    expect(plain.exitCode).toBe(0);
+    expect(plain.stdout).toBe("No tickets.\n");
+    expect(JSON.parse(json.stdout)).toEqual([]);
+  });
+
+  it("finds the main checkout when its git directory lives elsewhere", async () => {
+    const repo = TempRepo.create(
+      {
+        "docs/agents/issue-tracker.md": LOCAL_TRACKER_DOC,
+        ".scratch/shop/issues/01-cart.md": ticket("Build the cart", "Type: task", "Status: claimed"),
+      },
+      { separateGitDir: true },
+    );
+
+    const result = await repo.run(["ticket", "list", "--json"]);
+
+    expect(JSON.parse(result.stdout)).toEqual([
+      { id: "01", map: "shop", title: "Build the cart", type: "task", state: "claimed" },
+    ]);
+  });
+
+  it("exits non-zero and names the next action in a bare repository", async () => {
+    const result = await runDryland(["ticket", "list"], { cwd: createBareRepo() });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("no working tree");
+    expect(result.stderr).toContain("Next:");
   });
 
   it("exits non-zero outside a git repository", async () => {
