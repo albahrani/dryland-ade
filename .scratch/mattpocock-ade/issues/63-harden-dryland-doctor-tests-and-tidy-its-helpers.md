@@ -4,7 +4,7 @@ Type: task
 Blocked by: 27
 
 Spec: [spec](../spec.md), user story 88. Leftovers from the review of [dryland doctor basics](27-dryland-doctor-basics.md).
-Status: ready-for-agent
+Status: resolved
 
 ## What to build
 
@@ -16,8 +16,12 @@ Small follow-ups in `dryland doctor`'s code and tests. Do them before or togethe
 
 ## Acceptance criteria
 
-- [ ] `dryland doctor` in a GitHub and a GitLab repo is tested through the CLI for installed, missing and logged-out `gh`/`glab`, asserting output and exit code
-- [ ] The "dryland is not on PATH" test passes regardless of what the machine's PATH holds
-- [ ] `exists()` and the PATH key lookup each have one definition
-- [ ] `formatDoctor` derives its continuation indent from the prefix it prints
-- [ ] Typecheck, lint, format check and the full suite pass
+- [x] `dryland doctor` in a GitHub and a GitLab repo is tested through the CLI for installed, missing and logged-out `gh`/`glab`, asserting output and exit code
+- [x] The "dryland is not on PATH" test passes regardless of what the machine's PATH holds
+- [x] `exists()` and the PATH key lookup each have one definition
+- [x] `formatDoctor` derives its continuation indent from the prefix it prints
+- [x] Typecheck, lint, format check and the full suite pass
+
+## Answer
+
+Built in fcc7178. CLI tests now cover gh/glab installed, missing and logged-out via stub executables (POSIX shell script; on Windows a node.exe copy with a NODE_OPTIONS preload). The not-on-PATH test builds PATH from an isolated dir plus git's directory (harness isolatedPath) instead of filtering the machine PATH. exists() and envKey() live once in core/src/env-fs.ts; formatDoctor derives its indent from the prefix. Known limit: a dryland installed in the same directory as git would still satisfy the isolated PATH.
