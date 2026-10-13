@@ -1,13 +1,14 @@
-import { access, readdir } from "node:fs/promises";
+import { access, readdir, stat } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import { TRACKER_DOC, readTrackerKind, type TrackerKind } from "./tracker.ts";
+import { readTrackerKind, type TrackerKind } from "./tracker.ts";
 import { TRIAGE_LABELS_DOC } from "./triage-labels.ts";
 
 const SETUP_SKILL = "/setup-matt-pocock-skills";
-const SETUP_DOCS = [TRACKER_DOC, TRIAGE_LABELS_DOC, "docs/agents/domain.md"];
+/** The docs `setup` checks; the tracker doc is the tracker check's, so a missing one is reported once. */
+const SETUP_DOCS = [TRIAGE_LABELS_DOC, "docs/agents/domain.md"];
 const SKILL_DIRS = [".claude/skills", ".agents/skills"];
 
 export interface DoctorCheck {
@@ -127,6 +128,12 @@ async function checkTracker(
   return pass("tracker", `${name}: \`${cli}\` is installed and logged in.`);
 }
 
+async function isRunnable(path: string, windows: boolean): Promise<boolean> {
+  const info = await stat(path).catch(() => null);
+  if (info === null || !info.isFile()) return false;
+  return windows || (info.mode & 0o111) !== 0;
+}
+
 async function checkPath(
   env: Record<string, string | undefined>,
 ): Promise<DoctorCheck> {
@@ -134,13 +141,19 @@ async function checkPath(
   const dirs = (pathKey === undefined ? "" : (env[pathKey] ?? ""))
     .split(delimiter)
     .filter((dir) => dir !== "");
+  const pathExtKey = Object.keys(env).find(
+    (key) => key.toLowerCase() === "pathext",
+  );
+  // On Windows a command needs one of the PATHEXT extensions to run; elsewhere it needs the x bit.
   const windows = process.platform === "win32";
   const extensions = windows
-    ? ["", ...(env["PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD").split(";")]
+    ? (env[pathExtKey ?? "PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
+        .split(";")
+        .filter((ext) => ext !== "")
     : [""];
   for (const dir of dirs) {
     for (const extension of extensions) {
-      if (await exists(join(dir, `dryland${extension}`)))
+      if (await isRunnable(join(dir, `dryland${extension}`), windows))
         return pass("path", `dryland is on PATH (${dir}).`);
     }
   }

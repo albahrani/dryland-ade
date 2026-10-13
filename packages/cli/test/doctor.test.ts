@@ -1,4 +1,10 @@
-import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -29,11 +35,14 @@ function dirWithDryland(): string {
 }
 
 /** `PATH` with `dir` in front, under the spelling of the key the environment already uses. */
-function pathWith(dir: string): Record<string, string> {
+function pathWith(
+  dir: string,
+  base: Record<string, string> = {},
+): Record<string, string> {
   const key =
     Object.keys(process.env).find((name) => name.toLowerCase() === "path") ??
     "PATH";
-  return { [key]: `${dir}${delimiter}${process.env[key] ?? ""}` };
+  return { [key]: `${dir}${delimiter}${base[key] ?? process.env[key] ?? ""}` };
 }
 
 const withDrylandOnPath = () => pathWith(dirWithDryland());
@@ -144,5 +153,46 @@ describe("dryland doctor", () => {
     const list = await checks(repo, withDrylandOnPath());
 
     expect(list.find((c) => c.id === "tracker")).toMatchObject({ ok: false });
+  });
+
+  it("does not count a directory named dryland as the launcher", async () => {
+    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const dir = mkdtempSync(join(tmpdir(), "dryland-dirbin-"));
+    mkdirSync(join(dir, "dryland"));
+    mkdirSync(join(dir, "dryland.cmd"));
+
+    const list = await checks(repo, pathWith(dir, withoutDrylandOnPath()));
+
+    expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "does not count a dryland without the executable bit",
+    async () => {
+      const repo = TempRepo.create({ ...DOCS, ...SKILL });
+      const dir = mkdtempSync(join(tmpdir(), "dryland-noexec-"));
+      writeFileSync(join(dir, "dryland"), "#!/bin/sh\n");
+      chmodSync(join(dir, "dryland"), 0o644);
+
+      const list = await checks(repo, pathWith(dir, withoutDrylandOnPath()));
+
+      expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
+    },
+  );
+
+  it("reports a missing tracker doc once, under tracker", async () => {
+    const repo = TempRepo.create({
+      ...SKILL,
+      "docs/agents/triage-labels.md": "x\n",
+      "docs/agents/domain.md": "x\n",
+    });
+
+    const result = await doctor(repo, withDrylandOnPath());
+
+    expect(
+      result.stdout.match(/docs\/agents\/issue-tracker\.md/g),
+    ).toHaveLength(1);
+    expect(result.stdout).toMatch(/OK\s+setup/);
+    expect(result.stdout).toMatch(/FAIL\s+tracker/);
   });
 });
