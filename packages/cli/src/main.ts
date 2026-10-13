@@ -82,8 +82,6 @@ interface Flags {
   values: Record<string, string>;
 }
 
-const VALUE_FLAGS = ["map", "title", "type", "question", "blocked-by", "answer"];
-
 /** The value of `--name`, or an error naming the flag that is missing. */
 function required(flags: Flags, name: string): string {
   const value = flags.values[name];
@@ -97,7 +95,15 @@ function required(flags: Flags, name: string): string {
 const autoCommit = (flags: Flags) => (flags.noCommit ? false : undefined);
 
 /** Every command: whether it takes a target (a ticket or map), and what it prints. */
-const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: Flags) => Promise<Output> }> = {
+const COMMANDS: Record<
+  string,
+  {
+    target: boolean;
+    /** The value options (without `--`) the command accepts; any other is refused rather than ignored. */
+    options?: string[];
+    run: (target: string, flags: Flags) => Promise<Output>;
+  }
+> = {
   "ticket list": {
     target: false,
     run: async () => {
@@ -134,6 +140,7 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: F
   },
   "ticket create": {
     target: false,
+    options: ["map", "title", "type", "question", "blocked-by"],
     run: async (_target, flags) => {
       const { ticket, warnings } = await createTicket(
         nodeProcessRunner,
@@ -155,6 +162,7 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: F
   },
   "ticket resolve": {
     target: true,
+    options: ["answer"],
     run: async (target, flags) => {
       const { ticket, warnings } = await resolveTicket(
         nodeProcessRunner,
@@ -182,6 +190,9 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: F
   },
 };
 
+/** Every value option some command takes, so its value is never mistaken for a target. */
+const VALUE_OPTIONS = new Set(Object.values(COMMANDS).flatMap((command) => command.options ?? []));
+
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
   const flags: Flags = { noCommit: args.includes("--no-commit"), values: {} };
@@ -189,7 +200,7 @@ async function run(args: string[]): Promise<number> {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
     const name = arg.startsWith("--") ? arg.slice(2) : "";
-    if (VALUE_FLAGS.includes(name)) {
+    if (VALUE_OPTIONS.has(name)) {
       const value = args[++i];
       if (value === undefined) throw new DrylandError(`--${name} needs a value.`, `Write it as --${name} <value>.`);
       flags.values[name] = value;
@@ -201,6 +212,14 @@ async function run(args: string[]): Promise<number> {
   const entry = COMMANDS[`${group} ${command}`];
 
   if (entry !== undefined && entry.target === (target !== undefined)) {
+    for (const name of Object.keys(flags.values)) {
+      if (!(entry.options ?? []).includes(name)) {
+        throw new DrylandError(
+          `--${name} is not an option of \`dryland ${group} ${command}\`.`,
+          "Remove it, or run `dryland` with no arguments for usage.",
+        );
+      }
+    }
     const { value, text, warnings = [] } = await entry.run(target ?? "", flags);
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);

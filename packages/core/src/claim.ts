@@ -1,20 +1,12 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { DrylandError } from "./errors.ts";
-import { readClaim, rewriteClaim, ticketFile } from "./local-markdown.ts";
+import { readClaim, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import type { Ticket } from "./ticket.ts";
-import { findTicket, parseTicketReference, readTickets, type TicketReference } from "./tickets.ts";
+import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 
 export interface ClaimOptions extends TrackerWriteOptions {
   /** Who is claiming: a session id or a branch name. */
   holder: string;
-}
-
-export interface TicketWriteResult {
-  ticket: Ticket;
-  warnings: string[];
 }
 
 /** The holder name for `cwd` when no session id is set: its branch, or the commit when detached. */
@@ -23,19 +15,6 @@ export async function branchHolder(runner: ProcessRunner, cwd: string): Promise<
   if (branch !== "") return branch;
   const commit = (await runner.run("git", ["rev-parse", "--short", "HEAD"], { cwd })).stdout.trim();
   return commit === "" ? "unknown" : `detached-${commit}`;
-}
-
-/** Reads the ticket afresh, so a decision made under the lock never rests on an earlier read. */
-export async function currentTicket(mainCheckout: string, wanted: TicketReference) {
-  const ticket = findTicket(await readTickets(mainCheckout), wanted);
-  const path = await ticketFile(mainCheckout, ticket.map, ticket.id);
-  if (path === null) {
-    throw new DrylandError(
-      `The file of ticket ${ticket.map}/${ticket.id} has gone.`,
-      "Run `dryland ticket list` and try again.",
-    );
-  }
-  return { ticket, path, text: await readFile(join(mainCheckout, path), "utf8") };
 }
 
 /** Claims an open ticket for `holder`. Of several concurrent claims exactly one wins. */
@@ -65,7 +44,7 @@ export async function claimTicket(
     }
     const claim = { holder: options.holder, at: new Date().toISOString() };
     return {
-      changes: [{ path, content: rewriteClaim(text, { claim }) }],
+      changes: [{ path, content: rewriteStatus(text, { claim }) }],
       message: `Claim ${name} for ${options.holder}`,
       value: { ...ticket, state: "claimed" as const, claimant: options.holder },
     };
@@ -91,7 +70,7 @@ export async function releaseTicket(
       );
     }
     return {
-      changes: [{ path, content: rewriteClaim(text, { release: true }) }],
+      changes: [{ path, content: rewriteStatus(text, { release: true }) }],
       message: `Release claim on ${name}`,
       value: { ...ticket, state: "open" as const, claimant: null },
       // A claim made by hand records no earlier status, so there is nothing to put back.

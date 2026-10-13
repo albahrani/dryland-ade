@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { DrylandError } from "./errors.ts";
-import { readLocalMarkdownTickets } from "./local-markdown.ts";
+import { readLocalMarkdownTickets, ticketFile } from "./local-markdown.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import { findSpecsWithoutTickets, frontierOf, type MapModel, readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
@@ -97,4 +99,23 @@ export async function mapFrontier(runner: ProcessRunner, cwd: string, name: stri
 export async function specsWithoutTickets(runner: ProcessRunner, cwd: string): Promise<string[]> {
   const { mainCheckout, tickets } = await loadTickets(runner, cwd);
   return findSpecsWithoutTickets(mainCheckout, tickets);
+}
+
+/** What a tracker write returns: the ticket as it now stands, and anything the user should know. */
+export interface TicketWriteResult {
+  ticket: Ticket;
+  warnings: string[];
+}
+
+/** Reads the ticket afresh, so a decision made under the lock never rests on an earlier read. */
+export async function currentTicket(mainCheckout: string, wanted: TicketReference) {
+  const ticket = findTicket(await readTickets(mainCheckout), wanted);
+  const path = await ticketFile(mainCheckout, ticket.map, ticket.id);
+  if (path === null) {
+    throw new DrylandError(
+      `The file of ticket ${ticket.map}/${ticket.id} has gone.`,
+      "Run `dryland ticket list` and try again.",
+    );
+  }
+  return { ticket, path, text: await readFile(join(mainCheckout, path), "utf8") };
 }

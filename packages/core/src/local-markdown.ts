@@ -14,6 +14,9 @@ export function stripAnnotations(markdown: string): string {
   return markdown.replace(/\r\n/g, "\n").replace(ANNOTATION_LINE, "").replace(ANNOTATION, "");
 }
 
+/** The line ending a file uses, so a rewrite keeps it. */
+export const lineEnding = (markdown: string): string => (markdown.includes("\r\n") ? "\r\n" : "\n");
+
 export interface ClaimRecord {
   holder: string;
   /** ISO timestamp of the claim. */
@@ -46,15 +49,15 @@ function claimAnnotation(claim: ClaimRecord): string {
 }
 
 /**
- * Rewrites only the header lines a claim touches: `Status:` and the Dryland annotation line under it.
- * A claim stores the previous status in the annotation, so a release can put it back. Everything else
- * in the file, including line endings, is left as it was.
+ * Rewrites only the header lines a claim, release or resolve touches: `Status:` and the Dryland annotation
+ * line under it. A claim stores the previous status in the annotation, so a release can put it back; a
+ * resolve replaces both. Everything else in the file, including line endings, is left as it was.
  */
-export function rewriteClaim(
+export function rewriteStatus(
   markdown: string,
   change: { claim: Omit<ClaimRecord, "was"> } | { release: true } | { resolve: true },
 ): string {
-  const eol = markdown.includes("\r\n") ? "\r\n" : "\n";
+  const eol = lineEnding(markdown);
   const lines = markdown.split(/\r?\n/);
   const titleIndex = lines.findIndex((line) => line.startsWith("# "));
 
@@ -237,12 +240,20 @@ export function parseTicketFile(
   };
 }
 
+/** The directory of a map's tickets, relative to the main checkout, with forward slashes. */
+export const issuesDir = (map: string): string => `.scratch/${map}/issues`;
+
+/** The numbers, as written in the file names (`01`, `20`), of a map's ticket files. */
+export async function ticketNumbers(mainCheckout: string, map: string): Promise<string[]> {
+  const files = await readdir(join(mainCheckout, issuesDir(map))).catch(() => []);
+  return files.flatMap((name) => TICKET_FILE.exec(name)?.[1] ?? []);
+}
+
 /** The file of a ticket, relative to the main checkout, with forward slashes. */
 export async function ticketFile(mainCheckout: string, map: string, id: string): Promise<string | null> {
-  const dir = join(".scratch", map, "issues");
-  const files = await readdir(join(mainCheckout, dir)).catch(() => []);
+  const files = await readdir(join(mainCheckout, issuesDir(map))).catch(() => []);
   const file = files.find((name) => TICKET_FILE.exec(name)?.[1] === id);
-  return file === undefined ? null : `${dir.replaceAll("\\", "/")}/${file}`;
+  return file === undefined ? null : `${issuesDir(map)}/${file}`;
 }
 
 /** Reads every `.scratch/<map>/issues/NN-*.md` under `mainCheckout`, ordered by map then number. */

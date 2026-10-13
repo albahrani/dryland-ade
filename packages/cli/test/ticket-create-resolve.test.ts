@@ -147,3 +147,16 @@ describe("dryland ticket resolve", () => {
     expect(again.stderr).toContain("already resolved");
   });
 });
+
+describe("dryland option checking", () => {
+  it("refuses an option the command does not take instead of ignoring it", async () => {
+    const repo = shopRepo();
+
+    const result = await repo.run(["ticket", "claim", "shop/01", "--answer", "oops"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("--answer");
+    expect(result.stderr).toContain("Next:");
+    expect(repo.read(TICKET_PATH)).toBe(TICKET);
+  });
+});

@@ -1,12 +1,9 @@
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
-import { currentTicket, type TicketWriteResult } from "./claim.ts";
 import { DrylandError } from "./errors.ts";
-import { parseTicketFile, rewriteClaim } from "./local-markdown.ts";
+import { issuesDir, lineEnding, parseTicketFile, rewriteStatus, ticketNumbers } from "./local-markdown.ts";
 import { readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { TICKET_TYPES, type TicketType } from "./ticket.ts";
-import { parseTicketReference } from "./tickets.ts";
+import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 
 export interface CreateTicketInput {
@@ -18,14 +15,14 @@ export interface CreateTicketInput {
   blockedBy?: string[];
 }
 
-const NUMBERED_FILE = /^(\d+)-.+\.md$/;
+const SLUG_LENGTH = 50;
 
 function slugOf(title: string): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 50)
+    .slice(0, SLUG_LENGTH)
     .replace(/-+$/, "");
   return slug === "" ? "ticket" : slug;
 }
@@ -64,9 +61,7 @@ export async function createTicket(
     await readMapFile(mainCheckout, input.map); // fails with the next action when the map is unknown
 
     // Read under the lock: the next number must not rest on a read made before another writer finished.
-    const dir = join(".scratch", input.map, "issues");
-    const files = await readdir(join(mainCheckout, dir)).catch(() => []);
-    const numbers = files.flatMap((file) => NUMBERED_FILE.exec(file)?.[1] ?? []);
+    const numbers = await ticketNumbers(mainCheckout, input.map);
     const next = Math.max(0, ...numbers.map(Number)) + 1;
     const id = String(next).padStart(Math.max(2, ...numbers.map((n) => n.length)), "0");
 
@@ -86,7 +81,7 @@ export async function createTicket(
     if (blockers.length > 0) header.push(`Blocked by: ${blockers.join(", ")}`);
     const question = (input.question ?? "").trim();
     const content = `${[...header, ...(question === "" ? [] : ["", "## Question", "", question])].join("\n")}\n`;
-    const path = `${dir.replaceAll("\\", "/")}/${id}-${slugOf(title)}.md`;
+    const path = `${issuesDir(input.map)}/${id}-${slugOf(title)}.md`;
 
     return {
       changes: [{ path, content }],
@@ -119,8 +114,8 @@ export async function resolveTicket(
         `Add a comment instead, or pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
       );
     }
-    const eol = file.includes("\r\n") ? "\r\n" : "\n";
-    const body = rewriteClaim(file, { resolve: true }).replace(/\s+$/, "");
+    const eol = lineEnding(file);
+    const body = rewriteStatus(file, { resolve: true }).replace(/\s+$/, "");
     const answerText = text.replace(/\r?\n/g, eol);
     // A template may already carry an empty `## Answer` heading; fill that rather than adding a second one.
     const stub = /^## Answer[ \t]*(?:\r?\n)*(?=## |$)/m;
