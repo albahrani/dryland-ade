@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -5,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   type EffortSnapshot,
   nextSteps,
+  nodeProcessRunner,
   parseMap,
   RECOMMENDED_SKILLS,
   parseTicketFile,
@@ -595,10 +597,87 @@ describe("nextSteps on this repo's real .scratch state", () => {
       }
     }
 
-    const steps = nextSteps(await readRepoSnapshot(root, await readLocalMarkdownTickets(root)));
+    const steps = nextSteps(await readRepoSnapshot(nodeProcessRunner, root, await readLocalMarkdownTickets(root)));
 
     expect(steps.map((s) => [s.ruleId, s.command, s.target])).toEqual([
       ["spec-without-tickets", "/to-tickets", { kind: "spec", map: "mattpocock-ade" }],
     ]);
+  });
+});
+
+describe("readRepoSnapshot git state", () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" });
+
+  function repoWithResolvedTicket(): string {
+    const root = mkdtempSync(join(tmpdir(), "dryland-snapshot-git-"));
+    git(root, "init", "-q", "-b", "main");
+    mkdirSync(join(root, "docs/agents"), { recursive: true });
+    mkdirSync(join(root, ".scratch/m/issues"), { recursive: true });
+    writeFileSync(join(root, "docs/agents/issue-tracker.md"), "# Issue tracker: Local Markdown\n");
+    writeFileSync(join(root, ".scratch/m/map.md"), "# Map: m\n");
+    writeFileSync(join(root, ".scratch/m/issues/01-a.md"), "# A\n\nType: task\nStatus: resolved\n");
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "init");
+    return root;
+  }
+
+  const read = async (root: string) => readRepoSnapshot(nodeProcessRunner, root, await readLocalMarkdownTickets(root));
+
+  it("yields review-before-pr and open-pr for a Linked worktree ahead of main", async () => {
+    const root = repoWithResolvedTicket();
+    const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
+    git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
+    writeFileSync(join(tree, "work.txt"), "x");
+    git(tree, "add", "-A");
+    git(tree, "commit", "-q", "-m", "work");
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git?.worktrees).toEqual([
+      { map: "m", id: "01", exists: true, aheadOfDefault: true, merged: false, prExists: null },
+    ]);
+    expect(nextSteps(snapshot).map((s) => s.ruleId)).toEqual(["map-cleared", "review-before-pr", "open-pr"]);
+  });
+
+  it("calls a branch merged once its work is in the default branch", async () => {
+    const root = repoWithResolvedTicket();
+    const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
+    git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
+    writeFileSync(join(tree, "work.txt"), "x");
+    git(tree, "add", "-A");
+    git(tree, "commit", "-q", "-m", "work");
+    git(root, "merge", "-q", "--no-edit", "m/01-a");
+    writeFileSync(join(root, "later.txt"), "y");
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "later");
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git?.worktrees[0]).toMatchObject({ aheadOfDefault: false, merged: true });
+    expect(nextSteps(snapshot).map((s) => s.ruleId)).toContain("retro");
+  });
+
+  it("does not call a fresh empty branch merged", async () => {
+    const root = repoWithResolvedTicket();
+    const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
+    git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
+    writeFileSync(join(root, "later.txt"), "y");
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "later");
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git?.worktrees[0]).toMatchObject({ aheadOfDefault: false, merged: false });
+  });
+
+  it("leaves git unknown outside a git repo, and sessions and skill setup unknown", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dryland-snapshot-nogit-"));
+
+    const snapshot = await read(root);
+
+    expect(snapshot.git).toBeNull();
+    expect(snapshot.sessions).toBeNull();
+    expect(snapshot.skillSetup).toBeNull();
   });
 });

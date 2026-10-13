@@ -207,10 +207,14 @@ interface WorktreeSnapshot {
 }
 
 /** Reads the worktrees, tickets and default branch once, and links each worktree to its ticket. */
-async function snapshotWorktrees(runner: ProcessRunner, mainCheckout: string): Promise<WorktreeSnapshot> {
+async function snapshotWorktrees(
+  runner: ProcessRunner,
+  mainCheckout: string,
+  known?: Ticket[],
+): Promise<WorktreeSnapshot> {
   const [raw, tickets, defaultName] = await Promise.all([
     gitWorktrees(runner, mainCheckout),
-    readTickets(mainCheckout),
+    known ?? readTickets(mainCheckout),
     defaultBranch(runner, mainCheckout),
   ]);
   const base = defaultName ?? "HEAD";
@@ -235,6 +239,67 @@ async function snapshotWorktrees(runner: ProcessRunner, mainCheckout: string): P
 /** Every worktree of the repo containing `cwd`, each with the ticket it links to. */
 export async function listWorktrees(runner: ProcessRunner, cwd: string): Promise<WorktreeEntry[]> {
   return (await snapshotWorktrees(runner, await findMainCheckout(runner, cwd))).entries;
+}
+
+/** What git says about one ticket's Linked worktrees, folded into one entry per ticket. */
+export interface TicketWorktreeState {
+  /** `<map>/<NN>`. */
+  ticket: string;
+  exists: boolean;
+  aheadOfDefault: boolean;
+  merged: boolean;
+}
+
+async function revision(runner: ProcessRunner, cwd: string, ref: string): Promise<string | null> {
+  const result = await runner.run("git", ["rev-parse", "--verify", "--quiet", ref], { cwd });
+  return result.exitCode === 0 ? result.stdout.trim() : null;
+}
+
+/**
+ * The git state of every ticket-linked worktree. A branch counts as merged when it carries no commits the
+ * default branch lacks and its tip is neither the default branch's tip nor the commit it was created at, i.e.
+ * it once had work and that work is now in. Squash merges are not seen. Returns `null` when git cannot say
+ * (not a repo), so callers treat the state as unknown rather than empty.
+ */
+export async function readTicketWorktreeStates(
+  runner: ProcessRunner,
+  mainCheckout: string,
+  tickets: Ticket[],
+): Promise<TicketWorktreeState[] | null> {
+  let snapshot: WorktreeSnapshot;
+  try {
+    snapshot = await snapshotWorktrees(runner, mainCheckout, tickets);
+  } catch (error) {
+    if (error instanceof DrylandError) return null;
+    throw error;
+  }
+  const { entries, base } = snapshot;
+  const baseTip = await revision(runner, mainCheckout, base);
+  const byTicket = new Map<string, TicketWorktreeState>();
+  for (const entry of entries) {
+    if (entry.main || entry.branch === null || entry.link.ticket === null) continue;
+    const present = await exists(entry.path);
+    const count = await runner.run("git", ["rev-list", "--count", `${base}..${entry.branch}`], { cwd: mainCheckout });
+    if (count.exitCode !== 0) continue;
+    const ahead = Number(count.stdout.trim()) > 0;
+    let merged = false;
+    if (!ahead) {
+      const tip = await revision(runner, mainCheckout, `refs/heads/${entry.branch}`);
+      const reflog = await runner.run("git", ["reflog", "show", "--format=%H", `refs/heads/${entry.branch}`], {
+        cwd: mainCheckout,
+      });
+      const created = reflog.exitCode === 0 ? (reflog.stdout.trim().split(/\r?\n/).at(-1) ?? "") : "";
+      merged = tip !== null && tip !== baseTip && created !== "" && tip !== created;
+    }
+    const previous = byTicket.get(entry.link.ticket);
+    byTicket.set(entry.link.ticket, {
+      ticket: entry.link.ticket,
+      exists: (previous?.exists ?? false) || present,
+      aheadOfDefault: (previous?.aheadOfDefault ?? false) || ahead,
+      merged: previous === undefined ? merged : previous.merged && merged,
+    });
+  }
+  return [...byTicket.values()];
 }
 
 export interface PruneResult extends WorktreeResult {

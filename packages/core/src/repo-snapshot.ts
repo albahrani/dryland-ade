@@ -1,13 +1,19 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { exists } from "./env-fs.ts";
-import type { EffortSnapshot, RepoSnapshot } from "./next-step.ts";
+import type { EffortSnapshot, GitState, RepoSnapshot, WorktreeGitState } from "./next-step.ts";
 import { parseMap } from "./map.ts";
+import type { ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
 import { TRACKER_DOC } from "./tracker.ts";
+import { readTicketWorktreeStates } from "./worktree.ts";
 
 /** Reads the artifacts under `mainCheckout` into the snapshot the next-step rules take. */
-export async function readRepoSnapshot(mainCheckout: string, tickets: Ticket[]): Promise<RepoSnapshot> {
+export async function readRepoSnapshot(
+  runner: ProcessRunner,
+  mainCheckout: string,
+  tickets: Ticket[],
+): Promise<RepoSnapshot> {
   const scratch = join(mainCheckout, ".scratch");
   const entries = await readdir(scratch, { withFileTypes: true }).catch(() => []);
   const efforts: EffortSnapshot[] = [];
@@ -29,8 +35,30 @@ export async function readRepoSnapshot(mainCheckout: string, tickets: Ticket[]):
     tickets,
     hasGlossary: await exists(join(mainCheckout, "GLOSSARY.md")),
     adrCount: adrs.filter((file) => file.endsWith(".md")).length,
-    git: null,
+    git: await readGitState(runner, mainCheckout, tickets),
+    // Not fed yet: the live session list (tickets 35 to 38) and skill-setup state (53, 54) are not in. `null`
+    // means unknown, so no claim is called stale and no rule is disabled meanwhile.
     sessions: null,
     skillSetup: null,
   };
+}
+
+async function readGitState(runner: ProcessRunner, mainCheckout: string, tickets: Ticket[]): Promise<GitState | null> {
+  const states = await readTicketWorktreeStates(runner, mainCheckout, tickets);
+  if (states === null) return null;
+  const worktrees: WorktreeGitState[] = [];
+  for (const state of states) {
+    const found = tickets.find((t) => `${t.map}/${t.id}` === state.ticket);
+    if (found === undefined) continue;
+    // No forge backend is read yet, so whether a PR exists is unknown, which the rules treat as "no PR".
+    worktrees.push({
+      map: found.map,
+      id: found.id,
+      exists: state.exists,
+      aheadOfDefault: state.aheadOfDefault,
+      merged: state.merged,
+      prExists: null,
+    });
+  }
+  return { worktrees };
 }
