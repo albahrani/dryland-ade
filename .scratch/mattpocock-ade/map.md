@@ -79,6 +79,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [dryland doctor basics](issues/27-dryland-doctor-basics.md): `dryland doctor [--json]` checks setup, tracker (gh/glab installed and logged in for GitHub/GitLab) and a runnable dryland on PATH; failing checks name the next action and exit 1, and it still reports outside a git repo.
 
+- [Harden dryland doctor tests and tidy its helpers](issues/63-harden-dryland-doctor-tests-and-tidy-its-helpers.md): dryland doctor's forge tracker path is tested through the CLI, PATH isolation is deterministic, and exists()/PATH key lookup are shared.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
