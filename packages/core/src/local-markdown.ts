@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { TICKET_TYPES, type Ticket, type TicketState, type TicketType } from "./ticket.ts";
+import { byTicketNumber, TICKET_TYPES, type Ticket, type TicketState, type TicketType } from "./ticket.ts";
 import { defaultTriageVocabulary, type TriageVocabulary } from "./triage-labels.ts";
 
 const TICKET_FILE = /^(\d+)-.+\.md$/;
@@ -388,5 +388,5 @@ export async function readLocalMarkdownTickets(
       tickets.push(parseTicketFile(map, match[1], await readFile(join(dir, file), "utf8"), vocabulary));
     }
   }
-  return tickets.sort((a, b) => a.map.localeCompare(b.map) || Number(a.id) - Number(b.id));
+  return tickets.sort(byTicketNumber);
 }

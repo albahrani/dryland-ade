@@ -8,7 +8,7 @@ import {
   stripAnnotations,
   stripHtmlComments,
 } from "./local-markdown.ts";
-import type { Ticket } from "./ticket.ts";
+import { byTicketNumber, type Ticket } from "./ticket.ts";
 
 export interface MapModel {
   /** The effort's directory name under `.scratch/`. */
@@ -86,16 +86,25 @@ export async function readMapFile(mainCheckout: string, name: string): Promise<M
  * ticket it lists is resolved; a blocker the map does not contain, or unknown blockers, keep it blocked.
  */
 export function frontierOf(tickets: Ticket[]): Ticket[] {
-  const resolved = new Set(tickets.filter((t) => t.state === "resolved").map((t) => Number(t.id)));
   return tickets
-    .filter(
-      (t) =>
-        t.state === "open" &&
-        t.claimant === null &&
-        t.blockers !== "unknown" &&
-        t.blockers.every((blocker) => resolved.has(Number(blocker))),
-    )
-    .sort((a, b) => Number(a.id) - Number(b.id));
+    .filter((t) => t.state === "open" && t.claimant === null && isUnblocked(t, tickets))
+    .sort(byTicketNumber);
+}
+
+/**
+ * The blockers of `ticket` that are not resolved among `tickets`, or `"unknown"` when its backend cannot say.
+ * A blocker `tickets` does not contain counts as unresolved.
+ */
+export function unresolvedBlockers(ticket: Ticket, tickets: Ticket[]): string[] | "unknown" {
+  if (ticket.blockers === "unknown") return "unknown";
+  const resolved = new Set(tickets.filter((t) => t.state === "resolved").map((t) => Number(t.id)));
+  return ticket.blockers.filter((blocker) => !resolved.has(Number(blocker)));
+}
+
+/** Whether every blocker of `ticket` is known and resolved among `tickets`. */
+export function isUnblocked(ticket: Ticket, tickets: Ticket[]): boolean {
+  const unresolved = unresolvedBlockers(ticket, tickets);
+  return unresolved !== "unknown" && unresolved.length === 0;
 }
 
 /** Efforts that have a `spec.md` but no tickets yet: the signal that `/to-tickets` is next. */

@@ -1,6 +1,6 @@
 import { issuesDir } from "./local-markdown.ts";
-import { frontierOf, type MapModel } from "./map.ts";
-import { type Ticket, ticketKind } from "./ticket.ts";
+import { frontierOf, isUnblocked, type MapModel, unresolvedBlockers } from "./map.ts";
+import { byTicketNumber, type Ticket, ticketKind } from "./ticket.ts";
 
 /** One effort directory under `.scratch/`: its map, if it has one, and whether it holds a spec. */
 export interface EffortSnapshot {
@@ -230,7 +230,7 @@ const staleClaims: Rule = (snapshot) => {
   if (sessions === null) return [];
   return snapshot.tickets
     .filter((t) => t.state === "claimed")
-    .sort((a, b) => a.map.localeCompare(b.map) || Number(a.id) - Number(b.id))
+    .sort(byTicketNumber)
     .flatMap((ticket) => {
       const live = sessions.filter(
         (s) => s.state !== "ended" && s.ticket?.map === ticket.map && s.ticket.id === ticket.id,
@@ -251,21 +251,13 @@ const staleClaims: Rule = (snapshot) => {
     });
 };
 
-/** Whether every blocker of the ticket is known and resolved within `tickets`. */
-function isUnblocked(ticket: Ticket, tickets: Ticket[]): boolean {
-  if (ticket.blockers === "unknown") return false;
-  return ticket.blockers.every((blocker) =>
-    tickets.some((t) => t.state === "resolved" && Number(t.id) === Number(blocker)),
-  );
-}
-
 /** The ready-for-agent tickets of an effort that nothing blocks and nobody holds, lowest number first. */
 function readyTickets(tickets: Ticket[]): Ticket[] {
   return tickets
     .filter(
       (t) => t.state === "open" && t.claimant === null && t.triageRole === "ready-for-agent" && isUnblocked(t, tickets),
     )
-    .sort((a, b) => Number(a.id) - Number(b.id));
+    .sort(byTicketNumber);
 }
 
 const implementSpec: Rule = perEffort((effort, tickets) => {
@@ -305,7 +297,7 @@ const implementTickets: Rule = perEffort((effort, tickets) =>
 const needsTriage: Rule = perEffort((effort, tickets) =>
   tickets
     .filter((t) => t.state !== "resolved" && t.triageRole === "needs-triage")
-    .sort((a, b) => Number(a.id) - Number(b.id))
+    .sort(byTicketNumber)
     .map((ticket) => ({
       ruleId: "needs-triage",
       command: "/triage",
@@ -319,7 +311,7 @@ const needsTriage: Rule = perEffort((effort, tickets) =>
 const blockingUnknown: Rule = perEffort((effort, tickets) =>
   tickets
     .filter((t) => t.state === "open" && t.blockers === "unknown")
-    .sort((a, b) => Number(a.id) - Number(b.id))
+    .sort(byTicketNumber)
     .map((ticket) => ({
       ruleId: "blocking-unknown",
       command: null,
@@ -337,7 +329,7 @@ function doneWorktrees(snapshot: RepoSnapshot): { ticket: Ticket; worktree: Work
       const ticket = snapshot.tickets.find((t) => t.map === worktree.map && t.id === worktree.id);
       return ticket?.state === "resolved" ? [{ ticket, worktree }] : [];
     })
-    .sort((a, b) => a.ticket.map.localeCompare(b.ticket.map) || Number(a.ticket.id) - Number(b.ticket.id));
+    .sort((a, b) => byTicketNumber(a.ticket, b.ticket));
 }
 
 const worktreeLabel = (t: Ticket) => `worktree ${ticketRef(t)}`;
@@ -446,7 +438,7 @@ export interface WhyNot {
 export function whyNot(snapshot: RepoSnapshot, ref: TicketRef): WhyNot {
   const siblings = snapshot.tickets.filter((t) => t.map === ref.map);
   const ticket = siblings.find((t) => t.id === ref.id);
-  if (ticket === undefined || ticket.blockers === "unknown") return { blockers: [], unknown: ticket !== undefined };
-  const resolved = new Set(siblings.filter((t) => t.state === "resolved").map((t) => Number(t.id)));
-  return { blockers: ticket.blockers.filter((blocker) => !resolved.has(Number(blocker))), unknown: false };
+  if (ticket === undefined) return { blockers: [], unknown: false };
+  const unresolved = unresolvedBlockers(ticket, siblings);
+  return unresolved === "unknown" ? { blockers: [], unknown: true } : { blockers: unresolved, unknown: false };
 }

@@ -35,3 +35,8 @@ export type TicketKind = "planning" | "implementation";
 export function ticketKind(ticket: Pick<Ticket, "type">): TicketKind {
   return ticket.type === "task" || ticket.type === "none" ? "implementation" : "planning";
 }
+
+/** Orders tickets by map, then by ticket number, lowest first. */
+export function byTicketNumber(a: Pick<Ticket, "map" | "id">, b: Pick<Ticket, "map" | "id">): number {
+  return a.map.localeCompare(b.map) || Number(a.id) - Number(b.id);
+}
