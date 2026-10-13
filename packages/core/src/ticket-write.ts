@@ -95,7 +95,7 @@ export async function resolveTicket(
   const wanted = parseTicketReference(reference);
   const text = answer.trim();
   if (text === "") {
-    throw new DrylandError("A resolution needs an answer.", "Pass it as --answer \"<what was decided or done>\".");
+    throw new DrylandError("A resolution needs an answer.", 'Pass it as --answer "<what was decided or done>".');
   }
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text: file } = await currentTicket(mainCheckout, wanted);

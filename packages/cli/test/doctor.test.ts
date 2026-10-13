@@ -1,18 +1,11 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TempRepo } from "./harness.ts";
 
 const DOCS = {
-  "docs/agents/issue-tracker.md":
-    "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n",
+  "docs/agents/issue-tracker.md": "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n",
   "docs/agents/triage-labels.md": "# Triage labels\n",
   "docs/agents/domain.md": "# Domain Docs\n",
 };
@@ -35,45 +28,26 @@ function dirWithDryland(): string {
 }
 
 /** `PATH` with `dir` in front, under the spelling of the key the environment already uses. */
-function pathWith(
-  dir: string,
-  base: Record<string, string> = {},
-): Record<string, string> {
-  const key =
-    Object.keys(process.env).find((name) => name.toLowerCase() === "path") ??
-    "PATH";
+function pathWith(dir: string, base: Record<string, string> = {}): Record<string, string> {
+  const key = Object.keys(process.env).find((name) => name.toLowerCase() === "path") ?? "PATH";
   return { [key]: `${dir}${delimiter}${base[key] ?? process.env[key] ?? ""}` };
 }
 
 const withDrylandOnPath = () => pathWith(dirWithDryland());
 /** `PATH` minus any directory that already holds a `dryland`, so the check cannot be satisfied by the machine. */
 function withoutDrylandOnPath(): Record<string, string> {
-  const key =
-    Object.keys(process.env).find((name) => name.toLowerCase() === "path") ??
-    "PATH";
+  const key = Object.keys(process.env).find((name) => name.toLowerCase() === "path") ?? "PATH";
   const kept = (process.env[key] ?? "")
     .split(delimiter)
-    .filter(
-      (dir) =>
-        !["dryland", "dryland.cmd", "dryland.exe", "dryland.bat"].some((n) =>
-          existsSync(join(dir, n)),
-        ),
-    );
+    .filter((dir) => !["dryland", "dryland.cmd", "dryland.exe", "dryland.bat"].some((n) => existsSync(join(dir, n))));
   return { [key]: kept.join(delimiter) };
 }
 
-function doctor(
-  repo: TempRepo,
-  env: Record<string, string>,
-  ...args: string[]
-) {
+function doctor(repo: TempRepo, env: Record<string, string>, ...args: string[]) {
   return repo.run(["doctor", ...args], repo.path, env);
 }
 
-async function checks(
-  repo: TempRepo,
-  env: Record<string, string>,
-): Promise<Check[]> {
+async function checks(repo: TempRepo, env: Record<string, string>): Promise<Check[]> {
   const result = await doctor(repo, env, "--json");
   return (JSON.parse(result.stdout) as { checks: Check[] }).checks;
 }
@@ -166,19 +140,16 @@ describe("dryland doctor", () => {
     expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
   });
 
-  it.skipIf(process.platform === "win32")(
-    "does not count a dryland without the executable bit",
-    async () => {
-      const repo = TempRepo.create({ ...DOCS, ...SKILL });
-      const dir = mkdtempSync(join(tmpdir(), "dryland-noexec-"));
-      writeFileSync(join(dir, "dryland"), "#!/bin/sh\n");
-      chmodSync(join(dir, "dryland"), 0o644);
+  it.skipIf(process.platform === "win32")("does not count a dryland without the executable bit", async () => {
+    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const dir = mkdtempSync(join(tmpdir(), "dryland-noexec-"));
+    writeFileSync(join(dir, "dryland"), "#!/bin/sh\n");
+    chmodSync(join(dir, "dryland"), 0o644);
 
-      const list = await checks(repo, pathWith(dir, withoutDrylandOnPath()));
+    const list = await checks(repo, pathWith(dir, withoutDrylandOnPath()));
 
-      expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
-    },
-  );
+    expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
+  });
 
   it("reports a missing tracker doc once, under tracker", async () => {
     const repo = TempRepo.create({
@@ -189,9 +160,7 @@ describe("dryland doctor", () => {
 
     const result = await doctor(repo, withDrylandOnPath());
 
-    expect(
-      result.stdout.match(/docs\/agents\/issue-tracker\.md/g),
-    ).toHaveLength(1);
+    expect(result.stdout.match(/docs\/agents\/issue-tracker\.md/g)).toHaveLength(1);
     expect(result.stdout).toMatch(/OK\s+setup/);
     expect(result.stdout).toMatch(/FAIL\s+tracker/);
   });

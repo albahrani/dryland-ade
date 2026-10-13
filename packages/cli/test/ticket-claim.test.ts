@@ -116,7 +116,10 @@ describe("dryland ticket claim commits", () => {
     expect(result.exitCode).toBe(0);
     expect(repo.git("show", "--name-only", "--format=", "HEAD")).toBe(TICKET_PATH);
     // repo.git() trims its output, which eats the leading space of the first status line.
-    const status = repo.git("status", "--porcelain").split("\n").map((line) => line.trim());
+    const status = repo
+      .git("status", "--porcelain")
+      .split("\n")
+      .map((line) => line.trim());
     expect(status.sort()).toEqual(["?? untracked.md", "M  other.md", "M notes.md"]);
   });
 
@@ -198,10 +201,7 @@ describe("dryland tracker lock", () => {
     const dead = spawnSync(process.execPath, ["-e", ""]);
     const lockDir = join(repo.path, ".git", "dryland");
     mkdirSync(lockDir, { recursive: true });
-    writeFileSync(
-      join(lockDir, "tracker.lock"),
-      JSON.stringify({ pid: dead.pid, token: "crashed", at: Date.now() }),
-    );
+    writeFileSync(join(lockDir, "tracker.lock"), JSON.stringify({ pid: dead.pid, token: "crashed", at: Date.now() }));
 
     const result = await repo.run(["ticket", "claim", "shop/01"]);
 

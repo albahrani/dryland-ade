@@ -36,11 +36,7 @@ const pass = (id: DoctorCheck["id"], detail: string): DoctorCheck => ({
   detail,
   nextAction: null,
 });
-const fail = (
-  id: DoctorCheck["id"],
-  detail: string,
-  nextAction: string,
-): DoctorCheck => ({
+const fail = (id: DoctorCheck["id"], detail: string, nextAction: string): DoctorCheck => ({
   id,
   ok: false,
   detail,
@@ -57,32 +53,22 @@ async function exists(path: string): Promise<boolean> {
 async function hasSkills(mainCheckout: string): Promise<boolean> {
   for (const dir of SKILL_DIRS) {
     const names = await readdir(join(mainCheckout, dir)).catch(() => []);
-    for (const name of names)
-      if (await exists(join(mainCheckout, dir, name, "SKILL.md"))) return true;
+    for (const name of names) if (await exists(join(mainCheckout, dir, name, "SKILL.md"))) return true;
   }
   return false;
 }
 
 async function checkSetup(mainCheckout: string): Promise<DoctorCheck> {
   const missing: string[] = [];
-  if (!(await hasSkills(mainCheckout)))
-    missing.push(`skills (${SKILL_DIRS.join(" or ")})`);
-  for (const doc of SETUP_DOCS)
-    if (!(await exists(join(mainCheckout, doc)))) missing.push(doc);
+  if (!(await hasSkills(mainCheckout))) missing.push(`skills (${SKILL_DIRS.join(" or ")})`);
+  for (const doc of SETUP_DOCS) if (!(await exists(join(mainCheckout, doc)))) missing.push(doc);
   if (missing.length > 0) {
-    return fail(
-      "setup",
-      `Missing: ${missing.join(", ")}.`,
-      `Run ${SETUP_SKILL} in this repo.`,
-    );
+    return fail("setup", `Missing: ${missing.join(", ")}.`, `Run ${SETUP_SKILL} in this repo.`);
   }
   return pass("setup", "Skills and docs/agents files are present.");
 }
 
-const FORGE_CLI: Record<
-  Exclude<TrackerKind, "local-markdown">,
-  { cli: string; name: string; url: string }
-> = {
+const FORGE_CLI: Record<Exclude<TrackerKind, "local-markdown">, { cli: string; name: string; url: string }> = {
   github: { cli: "gh", name: "GitHub", url: "https://cli.github.com" },
   gitlab: {
     cli: "glab",
@@ -91,10 +77,7 @@ const FORGE_CLI: Record<
   },
 };
 
-async function checkTracker(
-  runner: ProcessRunner,
-  mainCheckout: string,
-): Promise<DoctorCheck> {
+async function checkTracker(runner: ProcessRunner, mainCheckout: string): Promise<DoctorCheck> {
   let kind: TrackerKind;
   try {
     kind = await readTrackerKind(mainCheckout);
@@ -102,28 +85,18 @@ async function checkTracker(
     if (!(error instanceof DrylandError)) throw error;
     return fail("tracker", error.message, error.nextAction);
   }
-  if (kind === "local-markdown")
-    return pass("tracker", "Local Markdown: the Dryland tracker.");
+  if (kind === "local-markdown") return pass("tracker", "Local Markdown: the Dryland tracker.");
 
   const { cli, name, url } = FORGE_CLI[kind];
-  if (
-    (await runner.run(cli, ["--version"], { cwd: mainCheckout })).exitCode !== 0
-  ) {
+  if ((await runner.run(cli, ["--version"], { cwd: mainCheckout })).exitCode !== 0) {
     return fail(
       "tracker",
       `${name} tracker, but \`${cli}\` is not installed.`,
       `Install ${cli} from ${url}, then run \`${cli} auth login\`.`,
     );
   }
-  if (
-    (await runner.run(cli, ["auth", "status"], { cwd: mainCheckout }))
-      .exitCode !== 0
-  ) {
-    return fail(
-      "tracker",
-      `${name} tracker, but \`${cli}\` is not logged in.`,
-      `Run \`${cli} auth login\`.`,
-    );
+  if ((await runner.run(cli, ["auth", "status"], { cwd: mainCheckout })).exitCode !== 0) {
+    return fail("tracker", `${name} tracker, but \`${cli}\` is not logged in.`, `Run \`${cli} auth login\`.`);
   }
   return pass("tracker", `${name}: \`${cli}\` is installed and logged in.`);
 }
@@ -134,22 +107,14 @@ async function isRunnable(path: string, windows: boolean): Promise<boolean> {
   return windows || (info.mode & 0o111) !== 0;
 }
 
-async function checkPath(
-  env: Record<string, string | undefined>,
-): Promise<DoctorCheck> {
+async function checkPath(env: Record<string, string | undefined>): Promise<DoctorCheck> {
   const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path");
-  const dirs = (pathKey === undefined ? "" : (env[pathKey] ?? ""))
-    .split(delimiter)
-    .filter((dir) => dir !== "");
-  const pathExtKey = Object.keys(env).find(
-    (key) => key.toLowerCase() === "pathext",
-  );
+  const dirs = (pathKey === undefined ? "" : (env[pathKey] ?? "")).split(delimiter).filter((dir) => dir !== "");
+  const pathExtKey = Object.keys(env).find((key) => key.toLowerCase() === "pathext");
   // On Windows a command needs one of the PATHEXT extensions to run; elsewhere it needs the x bit.
   const windows = process.platform === "win32";
   const extensions = windows
-    ? (env[pathExtKey ?? "PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD")
-        .split(";")
-        .filter((ext) => ext !== "")
+    ? (env[pathExtKey ?? "PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((ext) => ext !== "")
     : [""];
   for (const dir of dirs) {
     for (const extension of extensions) {
@@ -173,16 +138,10 @@ export async function runDoctor(
   const checks: DoctorCheck[] = [];
   try {
     const mainCheckout = await findMainCheckout(runner, cwd);
-    checks.push(
-      await checkSetup(mainCheckout),
-      await checkTracker(runner, mainCheckout),
-    );
+    checks.push(await checkSetup(mainCheckout), await checkTracker(runner, mainCheckout));
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
-    checks.push(
-      fail("setup", error.message, error.nextAction),
-      fail("tracker", error.message, error.nextAction),
-    );
+    checks.push(fail("setup", error.message, error.nextAction), fail("tracker", error.message, error.nextAction));
   }
   checks.push(await checkPath(options.env ?? process.env));
   return { ok: checks.every((check) => check.ok), checks };

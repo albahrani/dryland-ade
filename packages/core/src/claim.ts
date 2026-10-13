@@ -76,7 +76,9 @@ export async function releaseTicket(
       // A claim made by hand records no earlier status, so there is nothing to put back.
       warnings:
         readClaim(text) === null
-          ? [`${name} was claimed without dryland, so it has no previous status to restore; its Status: line was removed and it is open.`]
+          ? [
+              `${name} was claimed without dryland, so it has no previous status to restore; its Status: line was removed and it is open.`,
+            ]
           : [],
     };
   });

@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "dependencies": { "@dryland/core": "workspace:*" },
-  "scripts": { "typecheck": "tsc -p tsconfig.json" }
+  "dependencies": {
+    "@dryland/core": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
 }

@@ -80,7 +80,8 @@ describe("dryland ticket create", () => {
 describe("dryland ticket resolve", () => {
   it("records the answer and resolved state, commits it, and unblocks dependants", async () => {
     const repo = shopRepo({
-      ".scratch/shop/issues/02-pay.md": "# Pay\n\nType: task\nStatus: ready-for-agent\nBlocked by: 01\n\n## Question\n\nPay.\n",
+      ".scratch/shop/issues/02-pay.md":
+        "# Pay\n\nType: task\nStatus: ready-for-agent\nBlocked by: 01\n\n## Question\n\nPay.\n",
     });
     expect((await repo.run(["map", "frontier", "shop", "--json"])).stdout).not.toContain('"02"');
 

@@ -191,7 +191,18 @@ describe("dryland ticket show", () => {
     const repo = TempRepo.create({
       ...base,
       ".scratch/shop/issues/01-fence.md": shopTicket(
-        "Fence", "Type: task", "## What to build", "", "```md", "## Answer", "not an answer", "```", "", "## Answer", "", "Real.",
+        "Fence",
+        "Type: task",
+        "## What to build",
+        "",
+        "```md",
+        "## Answer",
+        "not an answer",
+        "```",
+        "",
+        "## Answer",
+        "",
+        "Real.",
       ),
     });
 
@@ -237,7 +248,16 @@ describe("dryland ticket show", () => {
   });
 
   it("parses the same with a dryland annotation as without", async () => {
-    const plain = shopTicket("Build checkout", "Type: grilling", "Status: claimed", "Blocked by: 01", "", "## Question", "", "How?");
+    const plain = shopTicket(
+      "Build checkout",
+      "Type: grilling",
+      "Status: claimed",
+      "Blocked by: 01",
+      "",
+      "## Question",
+      "",
+      "How?",
+    );
     const annotated = [
       "# Build checkout",
       "<!-- dryland: created-by=dryland -->",

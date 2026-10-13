@@ -3,8 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "dryland": "./dist/dryland.mjs" },
-  "dependencies": { "@dryland/core": "workspace:*" },
+  "bin": {
+    "dryland": "./dist/dryland.mjs"
+  },
+  "dependencies": {
+    "@dryland/core": "workspace:*"
+  },
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json"

@@ -208,14 +208,14 @@ export async function writeTracker<T>(
     }
 
     const autoCommit =
-      options.autoCommit ?? (await git(["config", "--type=bool", "--get", "dryland.autoCommit"])).stdout.trim() !== "false";
+      options.autoCommit ??
+      (await git(["config", "--type=bool", "--get", "dryland.autoCommit"])).stdout.trim() !== "false";
     if (autoCommit) {
       const paths = changes.map((change) => change.path);
       // `add` makes a new ticket file known to git; `commit -- <paths>` then takes only those paths,
       // leaving anything else staged or dirty in the main checkout alone.
       const added = await git(["add", "--", ...paths]);
-      const committed =
-        added.exitCode === 0 ? await git(["commit", "--quiet", "-m", message, "--", ...paths]) : added;
+      const committed = added.exitCode === 0 ? await git(["commit", "--quiet", "-m", message, "--", ...paths]) : added;
       if (committed.exitCode !== 0) {
         const reason = (committed.stderr || committed.stdout).trim().split("\n").slice(-3).join(" ");
         warnings.push(

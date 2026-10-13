@@ -129,7 +129,12 @@ export async function createWorktree(
     if (taken.exitCode === 0 || (await exists(path))) continue;
     // Start from the default branch, the base prune compares against, whatever the main checkout has checked out.
     const start = startPoint === null ? [] : [startPoint];
-    await gitIn(runner, mainCheckout, ["worktree", "add", "--quiet", "-b", branch, path, ...start], `creating ${branch}`);
+    await gitIn(
+      runner,
+      mainCheckout,
+      ["worktree", "add", "--quiet", "-b", branch, path, ...start],
+      `creating ${branch}`,
+    );
     return { branch, path, ticket };
   }
 }

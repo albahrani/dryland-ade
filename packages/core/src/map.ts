@@ -40,7 +40,11 @@ export function parseMap(name: string, markdown: string): MapModel {
   const lines = stripAnnotations(markdown).split("\n");
   const { preamble, sections } = splitSections(lines);
   const section = (heading: string) => findSection(sections, heading);
-  const titleLine = preamble.find((line) => line.startsWith("# "))?.slice(2).trim() ?? "";
+  const titleLine =
+    preamble
+      .find((line) => line.startsWith("# "))
+      ?.slice(2)
+      .trim() ?? "";
   return {
     name,
     title: titleLine.replace(/^Map:\s*/i, ""),
@@ -100,7 +104,10 @@ export async function findSpecsWithoutTickets(mainCheckout: string, tickets: Tic
   const efforts = await readdir(scratch, { withFileTypes: true }).catch(() => []);
   const withTickets = new Set(tickets.map((t) => t.map));
   const found: string[] = [];
-  for (const effort of efforts.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {
+  for (const effort of efforts
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()) {
     if (withTickets.has(effort)) continue;
     const spec = await readFile(join(scratch, effort, "spec.md"), "utf8").catch(() => null);
     if (spec !== null) found.push(effort);

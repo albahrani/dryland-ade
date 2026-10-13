@@ -99,12 +99,12 @@ export async function commentOnTicket(
   const wanted = parseTicketReference(reference);
   const text = comment.trim();
   if (text === "") {
-    throw new DrylandError("A comment needs text.", "Pass it as --text \"<comment>\".");
+    throw new DrylandError("A comment needs text.", 'Pass it as --text "<comment>".');
   }
   if (/^## /m.test(text)) {
     throw new DrylandError(
-      "A comment cannot contain a line starting with \"## \", because that would open a new section.",
-      "Indent the line or use a \"###\" heading.",
+      'A comment cannot contain a line starting with "## ", because that would open a new section.',
+      'Indent the line or use a "###" heading.',
     );
   }
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {

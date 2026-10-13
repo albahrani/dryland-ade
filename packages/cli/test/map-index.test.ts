@@ -47,7 +47,7 @@ describe("dryland map index", () => {
     expect(result.exitCode).toBe(0);
     const shown = JSON.parse((await repo.run(["map", "show", "shop", "--json"])).stdout);
     expect(shown.decisions).toEqual(["[Cart storage](issues/01-cart.md): Carts live on the server."]);
-    expect(repo.log()[0]).toBe("Index \"Cart storage\" in the shop map");
+    expect(repo.log()[0]).toBe('Index "Cart storage" in the shop map');
     expect(repo.git("status", "--porcelain")).toBe("?? unrelated.txt");
   });
 
@@ -58,9 +58,7 @@ describe("dryland map index", () => {
 
     expect(result.exitCode).toBe(0);
     const entry = "- [Cart storage](issues/01-cart.md): Carts live on the server.";
-    expect(repo.read(MAP_PATH)).toBe(
-      BUSY_MAP.replace("\n## Not yet specified", `\n${entry}\n\n## Not yet specified`),
-    );
+    expect(repo.read(MAP_PATH)).toBe(BUSY_MAP.replace("\n## Not yet specified", `\n${entry}\n\n## Not yet specified`));
   });
 
   it("fails for an unknown map and states the next action", async () => {
@@ -88,7 +86,17 @@ describe("dryland map index validation", () => {
   it("rejects a title with square brackets and changes nothing", async () => {
     const repo = shopRepo(FRESH_MAP);
 
-    const result = await repo.run(["map", "index", "shop", "--title", "Use [x] syntax", "--link", "a.md", "--gist", "g"]);
+    const result = await repo.run([
+      "map",
+      "index",
+      "shop",
+      "--title",
+      "Use [x] syntax",
+      "--link",
+      "a.md",
+      "--gist",
+      "g",
+    ]);
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("Next:");

@@ -3,12 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import {
-  nodeProcessRunner,
-  runDoctor,
-  type ProcessResult,
-  type ProcessRunner,
-} from "../src/index.ts";
+import { nodeProcessRunner, runDoctor, type ProcessResult, type ProcessRunner } from "../src/index.ts";
 
 function repo(tracker: string): string {
   const root = mkdtempSync(join(tmpdir(), "dryland-doctor-"));
@@ -30,8 +25,7 @@ function repo(tracker: string): string {
 function runnerWith(forge: Record<string, ProcessResult>): ProcessRunner {
   return {
     async run(command, args, options) {
-      if (command === "git")
-        return nodeProcessRunner.run(command, args, options);
+      if (command === "git") return nodeProcessRunner.run(command, args, options);
       const key = [command, ...args].join(" ");
       return (
         forge[key] ?? {

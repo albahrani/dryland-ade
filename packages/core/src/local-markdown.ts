@@ -326,10 +326,7 @@ export function parseTicketFile(
 
   const section = (name: string) => findSection(sections, name);
   const bodySections = sections.filter((s) => !["answer", "comments"].includes(s.heading.toLowerCase()));
-  const body = [
-    preamble.slice(bodyStart).join("\n"),
-    ...bodySections.map((s) => `## ${s.heading}\n\n${s.content}`),
-  ]
+  const body = [preamble.slice(bodyStart).join("\n"), ...bodySections.map((s) => `## ${s.heading}\n\n${s.content}`)]
     .join("\n")
     .trim();
 
@@ -379,7 +376,10 @@ export async function readLocalMarkdownTickets(
   const scratch = join(mainCheckout, ".scratch");
   const maps = await readdir(scratch, { withFileTypes: true }).catch(() => []);
   const tickets: Ticket[] = [];
-  for (const map of maps.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {
+  for (const map of maps
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()) {
     const dir = join(scratch, map, "issues");
     const files = await readdir(dir).catch(() => []);
     for (const file of files) {

@@ -13,10 +13,7 @@ export interface RunResult {
 }
 
 /** Runs the real bundled `dryland` command. */
-export function runDryland(
-  args: string[],
-  opts: { cwd: string; env?: Record<string, string> },
-): Promise<RunResult> {
+export function runDryland(args: string[], opts: { cwd: string; env?: Record<string, string> }): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [BUNDLE, ...args], {
       cwd: opts.cwd,

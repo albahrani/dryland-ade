@@ -82,7 +82,15 @@ function formatMap(map: MapView): string {
     ["Implementation", map.tickets.filter((t) => ticketKind(t) === "implementation")],
   ] as const;
   for (const [name, tickets] of groups) {
-    if (tickets.length > 0) lines.push("", `${name}:`, ...formatTickets(tickets).trimEnd().split("\n").map((l) => `  ${l}`));
+    if (tickets.length > 0)
+      lines.push(
+        "",
+        `${name}:`,
+        ...formatTickets(tickets)
+          .trimEnd()
+          .split("\n")
+          .map((l) => `  ${l}`),
+      );
   }
   if (map.fog.length > 0) lines.push("", "Fog:", ...map.fog.map((item) => `  - ${item}`));
   return `${lines.join("\n")}\n`;
@@ -400,4 +408,3 @@ try {
   process.stderr.write(`dryland: ${error.message}\nNext: ${error.nextAction}\n`);
   process.exitCode = 1;
 }
-

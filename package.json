@@ -10,7 +10,9 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "vitest run",
-    "build": "pnpm --filter @dryland/cli build"
+    "build": "pnpm --filter @dryland/cli build",
+    "format": "prettier --write \"packages/**/*.{ts,mjs,json}\" \"*.{js,ts,json}\"",
+    "format:check": "prettier --check \"packages/**/*.{ts,mjs,json}\" \"*.{js,ts,json}\""
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
