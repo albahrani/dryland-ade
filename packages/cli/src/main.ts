@@ -14,10 +14,12 @@ import {
   pruneWorktree,
   releaseTicket,
   resolveTicket,
+  runDoctor,
   showMap,
   showTicket,
   ticketKind,
   triageTicket,
+  type DoctorReport,
   type MapView,
   type Ticket,
   type WorktreeEntry,
@@ -34,6 +36,15 @@ function formatWorktrees(entries: WorktreeEntry[]): string {
   const width = Math.max(...entries.map((e) => label(e).length));
   const linkWidth = Math.max(...entries.map((e) => link(e).length));
   return entries.map((e) => `${label(e).padEnd(width)}  ${link(e).padEnd(linkWidth)}  ${e.path}\n`).join("");
+}
+
+function formatDoctor(report: DoctorReport): string {
+  const width = Math.max(...report.checks.map((c) => c.id.length));
+  const lines = report.checks.flatMap((c) => [
+    `${c.ok ? "OK  " : "FAIL"}  ${c.id.padEnd(width)}  ${c.detail}`,
+    ...(c.nextAction === null ? [] : [`${" ".repeat(6 + width)}Next: ${c.nextAction}`]),
+  ]);
+  return `${lines.join("\n")}\n`;
 }
 
 function formatTickets(tickets: Ticket[], empty = "No tickets."): string {
@@ -95,6 +106,7 @@ const USAGE = [
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
+  "       dryland doctor [--json]",
   "",
 ].join("\n");
 
@@ -103,6 +115,8 @@ interface Output {
   text: string;
   /** Written to stderr; the command still succeeded. */
   warnings?: string[];
+  /** Overrides the exit code of 0; the output is still written. */
+  exitCode?: number;
 }
 
 interface Flags {
@@ -288,6 +302,13 @@ const COMMANDS: Record<
       return { value, text: `Indexed "${flags.values["title"]}" in the ${target} map.\n`, warnings };
     },
   },
+  doctor: {
+    target: false,
+    run: async () => {
+      const report = await runDoctor(nodeProcessRunner, process.cwd());
+      return { value: report, text: formatDoctor(report), exitCode: report.ok ? 0 : 1 };
+    },
+  },
   "worktree create": {
     target: "optional",
     options: ["map", "slug"],
@@ -346,25 +367,26 @@ async function run(args: string[]): Promise<number> {
     }
   }
   const [group, command, target] = positional;
-  const entry = COMMANDS[`${group} ${command}`];
+  const commandName = [group, command].filter((word) => word !== undefined).join(" ");
+  const entry = COMMANDS[commandName];
 
   if (entry !== undefined && (entry.target === "optional" || entry.target === (target !== undefined))) {
     const given = [
       ...Object.keys(flags.values).map((name) => [name, entry.options ?? []] as const),
       ...[...flags.switches].map((name) => [name, entry.switches ?? []] as const),
     ];
-    for (const [name, accepted] of given) {
-      if (!accepted.includes(name)) {
+    for (const [option, accepted] of given) {
+      if (!accepted.includes(option)) {
         throw new DrylandError(
-          `--${name} is not an option of \`dryland ${group} ${command}\`.`,
+          `--${option} is not an option of \`dryland ${commandName}\`.`,
           "Remove it, or run `dryland` with no arguments for usage.",
         );
       }
     }
-    const { value, text, warnings = [] } = await entry.run(target ?? "", flags);
+    const { value, text, warnings = [], exitCode = 0 } = await entry.run(target ?? "", flags);
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
-    return 0;
+    return exitCode;
   }
 
   process.stderr.write(USAGE);
