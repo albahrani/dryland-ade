@@ -1,3 +1,4 @@
+import { issuesDir } from "./local-markdown.ts";
 import { frontierOf, type MapModel } from "./map.ts";
 import { type Ticket, ticketKind } from "./ticket.ts";
 
@@ -57,7 +58,7 @@ const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
  * role always is. A `task` is once its effort has a spec, unless it poses a `## Question`: that is how
  * wayfinding writes its decision tickets, and before a spec a task only unblocks a decision.
  */
-function isImplementation(ticket: Ticket, effort: EffortSnapshot): boolean {
+function isSliceOfSpec(ticket: Ticket, effort: EffortSnapshot): boolean {
   if (ticket.triageRole !== null) return true;
   return effort.hasSpec && ticketKind(ticket) === "implementation" && !/^## Question/m.test(ticket.body);
 }
@@ -93,7 +94,7 @@ function perEffort(steps: (effort: EffortSnapshot, tickets: Ticket[]) => NextSte
 const mapFrontier: Rule = perEffort((effort, tickets) => {
   if (effort.map === null) return [];
   return frontierOf(tickets)
-    .filter((ticket) => !isImplementation(ticket, effort))
+    .filter((ticket) => !isSliceOfSpec(ticket, effort))
     .map((ticket) => ({
       ruleId: "map-frontier",
       command: `/wayfinder ${effort.name}`,
@@ -113,7 +114,7 @@ function blockersText(ticket: Ticket): string {
 
 /** The map's still-open decision tickets, claimed ones included: someone is on them. */
 function openWayfinding(effort: EffortSnapshot, tickets: Ticket[]): Ticket[] {
-  return tickets.filter((t) => t.state !== "resolved" && !isImplementation(t, effort));
+  return tickets.filter((t) => t.state !== "resolved" && !isSliceOfSpec(t, effort));
 }
 
 const fogOnly: Rule = perEffort((effort, tickets) => {
@@ -127,7 +128,7 @@ const fogOnly: Rule = perEffort((effort, tickets) => {
       reason: `Map ${effort.name} has no open ticket left and ${count(map.fog.length, "item")} of fog, so the map itself is next.`,
       evidence: [
         { artifact: mapFile(effort.name), field: "Not yet specified", value: count(map.fog.length, "item") },
-        { artifact: `.scratch/${effort.name}/issues`, field: "open tickets", value: "0" },
+        { artifact: issuesDir(effort.name), field: "open tickets", value: "0" },
       ],
     },
   ];
@@ -135,7 +136,7 @@ const fogOnly: Rule = perEffort((effort, tickets) => {
 
 const clearedMap: Rule = perEffort((effort, tickets) => {
   const { map } = effort;
-  const resolved = tickets.filter((t) => t.state === "resolved" && !isImplementation(t, effort));
+  const resolved = tickets.filter((t) => t.state === "resolved" && !isSliceOfSpec(t, effort));
   // A map that has never had a ticket is not cleared, it is empty.
   if (map === null || effort.hasSpec || map.fog.length > 0 || resolved.length === 0) return [];
   if (openWayfinding(effort, tickets).length > 0) return [];
@@ -147,14 +148,14 @@ const clearedMap: Rule = perEffort((effort, tickets) => {
       reason: `Map ${effort.name} is cleared: no open ticket and no fog remain, so its decisions can become a spec.`,
       evidence: [
         { artifact: mapFile(effort.name), field: "Not yet specified", value: "empty" },
-        { artifact: `.scratch/${effort.name}/issues`, field: "open tickets", value: "0" },
+        { artifact: issuesDir(effort.name), field: "open tickets", value: "0" },
       ],
     },
   ];
 });
 
 const specWithoutTickets: Rule = perEffort((effort, tickets) => {
-  if (!effort.hasSpec || tickets.some((t) => isImplementation(t, effort))) return [];
+  if (!effort.hasSpec || tickets.some((t) => isSliceOfSpec(t, effort))) return [];
   return [
     {
       ruleId: "spec-without-tickets",
@@ -163,7 +164,7 @@ const specWithoutTickets: Rule = perEffort((effort, tickets) => {
       reason: `The spec of ${effort.name} has not been sliced into tickets yet.`,
       evidence: [
         { artifact: specFile(effort.name), field: "presence", value: "present" },
-        { artifact: `.scratch/${effort.name}/issues`, field: "implementation tickets", value: "0" },
+        { artifact: issuesDir(effort.name), field: "implementation tickets", value: "0" },
       ],
     },
   ];

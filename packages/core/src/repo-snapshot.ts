@@ -1,15 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { exists } from "./env-fs.ts";
 import type { EffortSnapshot, RepoSnapshot } from "./next-step.ts";
 import { parseMap } from "./map.ts";
 import type { Ticket } from "./ticket.ts";
 import { TRACKER_DOC } from "./tracker.ts";
-
-const exists = (path: string) =>
-  readFile(path).then(
-    () => true,
-    () => false,
-  );
 
 /** Reads the artifacts under `mainCheckout` into the snapshot the next-step rules take. */
 export async function readRepoSnapshot(mainCheckout: string, tickets: Ticket[]): Promise<RepoSnapshot> {
