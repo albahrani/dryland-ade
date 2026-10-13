@@ -26,7 +26,7 @@ export async function branchHolder(runner: ProcessRunner, cwd: string): Promise<
 }
 
 /** Reads the ticket afresh, so a decision made under the lock never rests on an earlier read. */
-async function currentTicket(mainCheckout: string, wanted: TicketReference) {
+export async function currentTicket(mainCheckout: string, wanted: TicketReference) {
   const ticket = findTicket(await readTickets(mainCheckout), wanted);
   const path = await ticketFile(mainCheckout, ticket.map, ticket.id);
   if (path === null) {

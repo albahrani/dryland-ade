@@ -1,11 +1,13 @@
 import {
   branchHolder,
   claimTicket,
+  createTicket,
   DrylandError,
   listTickets,
   mapFrontier,
   nodeProcessRunner,
   releaseTicket,
+  resolveTicket,
   showMap,
   showTicket,
   ticketKind,
@@ -59,6 +61,9 @@ const USAGE = [
   "       dryland ticket show <map>/<number> [--json]",
   "       dryland ticket claim <map>/<number> [--no-commit] [--json]",
   "       dryland ticket release <map>/<number> [--no-commit] [--json]",
+  "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
+  "                             [--blocked-by <number>[,<number>...]] [--no-commit] [--json]",
+  "       dryland ticket resolve <map>/<number> --answer <text> [--no-commit] [--json]",
   "       dryland map show <map> [--json]",
   "       dryland map frontier <map> [--json]",
   "",
@@ -73,6 +78,19 @@ interface Output {
 
 interface Flags {
   noCommit: boolean;
+  /** Options that take a value, by name without the leading `--`. */
+  values: Record<string, string>;
+}
+
+const VALUE_FLAGS = ["map", "title", "type", "question", "blocked-by", "answer"];
+
+/** The value of `--name`, or an error naming the flag that is missing. */
+function required(flags: Flags, name: string): string {
+  const value = flags.values[name];
+  if (value === undefined) {
+    throw new DrylandError(`--${name} is required.`, `Add --${name} <value>; run \`dryland\` for usage.`);
+  }
+  return value;
 }
 
 /** `false` when the user passed `--no-commit`; otherwise git's `dryland.autoCommit` decides. */
@@ -114,6 +132,40 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: F
       return { value: ticket, text: `Released ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
+  "ticket create": {
+    target: false,
+    run: async (_target, flags) => {
+      const { ticket, warnings } = await createTicket(
+        nodeProcessRunner,
+        process.cwd(),
+        {
+          map: required(flags, "map"),
+          title: required(flags, "title"),
+          type: required(flags, "type"),
+          question: flags.values["question"],
+          blockedBy: flags.values["blocked-by"]
+            ?.split(",")
+            .map((number) => number.trim())
+            .filter((number) => number !== ""),
+        },
+        { autoCommit: autoCommit(flags) },
+      );
+      return { value: ticket, text: `Created ${ticket.map}/${ticket.id}: ${ticket.title}\n`, warnings };
+    },
+  },
+  "ticket resolve": {
+    target: true,
+    run: async (target, flags) => {
+      const { ticket, warnings } = await resolveTicket(
+        nodeProcessRunner,
+        process.cwd(),
+        target,
+        required(flags, "answer"),
+        { autoCommit: autoCommit(flags) },
+      );
+      return { value: ticket, text: `Resolved ${ticket.map}/${ticket.id}.\n`, warnings };
+    },
+  },
   "map show": {
     target: true,
     run: async (target) => {
@@ -132,8 +184,20 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: F
 
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
-  const flags: Flags = { noCommit: args.includes("--no-commit") };
-  const [group, command, target] = args.filter((arg) => arg !== "--json" && arg !== "--no-commit");
+  const flags: Flags = { noCommit: args.includes("--no-commit"), values: {} };
+  const positional: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    const name = arg.startsWith("--") ? arg.slice(2) : "";
+    if (VALUE_FLAGS.includes(name)) {
+      const value = args[++i];
+      if (value === undefined) throw new DrylandError(`--${name} needs a value.`, `Write it as --${name} <value>.`);
+      flags.values[name] = value;
+    } else if (arg !== "--json" && arg !== "--no-commit") {
+      positional.push(arg);
+    }
+  }
+  const [group, command, target] = positional;
   const entry = COMMANDS[`${group} ${command}`];
 
   if (entry !== undefined && entry.target === (target !== undefined)) {

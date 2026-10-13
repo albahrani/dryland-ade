@@ -50,7 +50,10 @@ function claimAnnotation(claim: ClaimRecord): string {
  * A claim stores the previous status in the annotation, so a release can put it back. Everything else
  * in the file, including line endings, is left as it was.
  */
-export function rewriteClaim(markdown: string, change: { claim: Omit<ClaimRecord, "was"> } | { release: true }): string {
+export function rewriteClaim(
+  markdown: string,
+  change: { claim: Omit<ClaimRecord, "was"> } | { release: true } | { resolve: true },
+): string {
   const eol = markdown.includes("\r\n") ? "\r\n" : "\n";
   const lines = markdown.split(/\r?\n/);
   const titleIndex = lines.findIndex((line) => line.startsWith("# "));
@@ -77,6 +80,9 @@ export function rewriteClaim(markdown: string, change: { claim: Omit<ClaimRecord
   let replacement: string[];
   if ("claim" in change) {
     replacement = ["Status: claimed", claimAnnotation({ ...change.claim, was: currentStatus })];
+  } else if ("resolve" in change) {
+    // Any claim annotation is dropped below, and the status it remembered is no longer wanted.
+    replacement = ["Status: resolved"];
   } else {
     const was = currentStatus.toLowerCase() === "claimed" ? (existing?.was ?? "") : currentStatus;
     replacement = was === "" ? [] : [`Status: ${was}`];
