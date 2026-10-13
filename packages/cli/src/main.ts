@@ -1,7 +1,17 @@
-import { DrylandError, listTickets, nodeProcessRunner, type Ticket } from "@dryland/core";
+import {
+  DrylandError,
+  listTickets,
+  mapFrontier,
+  nodeProcessRunner,
+  showMap,
+  showTicket,
+  ticketKind,
+  type MapView,
+  type Ticket,
+} from "@dryland/core";
 
-function formatTickets(tickets: Ticket[]): string {
-  if (tickets.length === 0) return "No tickets.\n";
+function formatTickets(tickets: Ticket[], empty = "No tickets."): string {
+  if (tickets.length === 0) return `${empty}\n`;
   const columnWidth = (pick: (ticket: Ticket) => string) => Math.max(...tickets.map((ticket) => pick(ticket).length));
   const stateWidth = columnWidth((ticket) => ticket.state);
   const typeWidth = columnWidth((ticket) => ticket.type);
@@ -10,17 +20,73 @@ function formatTickets(tickets: Ticket[]): string {
     .join("");
 }
 
+function formatTicket(ticket: Ticket): string {
+  const t = ticket;
+  const blockers = t.blockers === "unknown" ? "unknown" : t.blockers.length === 0 ? "none" : t.blockers.join(", ");
+  const lines = [
+    `${t.map}/${t.id}  ${t.title}`,
+    `Type: ${t.type}`,
+    `State: ${t.state}`,
+    `Claimed by: ${t.claimant ?? "nobody"}`,
+    `Blocked by: ${blockers}`,
+    `Triage: ${t.triageRole ?? "none"}`,
+  ];
+  if (t.body !== "") lines.push("", t.body);
+  if (t.answer !== null) lines.push("", "Answer:", t.answer);
+  if (t.comments.length > 0) lines.push("", `Comments (${t.comments.length}):`, t.comments.join("\n\n"));
+  return `${lines.join("\n")}\n`;
+}
+
+function formatMap(map: MapView): string {
+  const lines = [`Map: ${map.title} (${map.name})`];
+  if (map.destination !== "") lines.push("", `Destination: ${map.destination}`);
+  const groups = [
+    ["Planning", map.tickets.filter((t) => ticketKind(t) === "planning")],
+    ["Implementation", map.tickets.filter((t) => ticketKind(t) === "implementation")],
+  ] as const;
+  for (const [name, tickets] of groups) {
+    if (tickets.length > 0) lines.push("", `${name}:`, ...formatTickets(tickets).trimEnd().split("\n").map((l) => `  ${l}`));
+  }
+  if (map.fog.length > 0) lines.push("", "Fog:", ...map.fog.map((item) => `  - ${item}`));
+  return `${lines.join("\n")}\n`;
+}
+
+const USAGE = [
+  "Usage: dryland ticket list [--json]",
+  "       dryland ticket show <map>/<number> [--json]",
+  "       dryland map show <map> [--json]",
+  "       dryland map frontier <map> [--json]",
+  "",
+].join("\n");
+
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
-  const [group, command] = args.filter((arg) => arg !== "--json");
+  const [group, command, target] = args.filter((arg) => arg !== "--json");
+  const out = (value: unknown, text: string) =>
+    process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
 
-  if (group === "ticket" && command === "list") {
+  if (group === "ticket" && command === "list" && target === undefined) {
     const tickets = await listTickets(nodeProcessRunner, process.cwd());
-    process.stdout.write(json ? `${JSON.stringify(tickets, null, 2)}\n` : formatTickets(tickets));
+    out(tickets, formatTickets(tickets));
+    return 0;
+  }
+  if (group === "ticket" && command === "show" && target !== undefined) {
+    const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
+    out(ticket, formatTicket(ticket));
+    return 0;
+  }
+  if (group === "map" && command === "show" && target !== undefined) {
+    const map = await showMap(nodeProcessRunner, process.cwd(), target);
+    out(map, formatMap(map));
+    return 0;
+  }
+  if (group === "map" && command === "frontier" && target !== undefined) {
+    const tickets = await mapFrontier(nodeProcessRunner, process.cwd(), target);
+    out(tickets, formatTickets(tickets, "No frontier tickets."));
     return 0;
   }
 
-  process.stderr.write("Usage: dryland ticket list [--json]\n");
+  process.stderr.write(USAGE);
   return 2;
 }
 

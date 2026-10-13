@@ -6,6 +6,16 @@ import { createBareRepo, runDryland, TempRepo } from "./harness.ts";
 
 const LOCAL_TRACKER_DOC = "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n";
 
+/** The fields this suite is about; the full model is covered in ticket-model.test.ts. */
+const summary = (stdout: string) =>
+  (JSON.parse(stdout) as Record<string, unknown>[]).map(({ id, map, title, type, state }) => ({
+    id,
+    map,
+    title,
+    type,
+    state,
+  }));
+
 const ticket = (title: string, ...lines: string[]) => [`# ${title}`, "", ...lines, ""].join("\n");
 
 describe("dryland ticket list", () => {
@@ -40,7 +50,7 @@ describe("dryland ticket list", () => {
     const result = await repo.run(["ticket", "list", "--json"]);
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual([
+    expect(summary(result.stdout)).toEqual([
       { id: "01", map: "shop", title: "Build the cart", type: "task", state: "resolved" },
       { id: "02", map: "shop", title: "Loose notes", type: "none", state: "open" },
     ]);
@@ -59,7 +69,7 @@ describe("dryland ticket list", () => {
 
     const result = await repo.run(["ticket", "list", "--json"], worktree);
 
-    expect(JSON.parse(result.stdout)).toEqual([
+    expect(summary(result.stdout)).toEqual([
       { id: "01", map: "shop", title: "Build the cart", type: "task", state: "claimed" },
     ]);
   });
@@ -112,7 +122,7 @@ describe("dryland ticket list", () => {
 
     const result = await repo.run(["ticket", "list", "--json"]);
 
-    expect(JSON.parse(result.stdout)).toEqual([
+    expect(summary(result.stdout)).toEqual([
       { id: "01", map: "shop", title: "Build the cart", type: "task", state: "claimed" },
     ]);
   });
@@ -148,7 +158,9 @@ describe("dryland ticket list on real skill tickets", () => {
     const result = await repo.run(["ticket", "list", "--json"]);
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual([
+    const listed = summary(result.stdout).filter((t) => ["01", "11", "13", "20", "22"].includes(String(t.id)));
+    expect(summary(result.stdout)).toHaveLength(22);
+    expect(listed).toEqual([
       { id: "01", map: "mattpocock-ade", title: "How Orca works", type: "research", state: "resolved" },
       { id: "11", map: "mattpocock-ade", title: "Views and UX", type: "prototype", state: "resolved" },
       {
