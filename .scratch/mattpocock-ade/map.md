@@ -89,6 +89,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Desktop shell with the Tickets tree](issues/30-desktop-shell-with-tickets-tree.md): Electron shell and Tickets view over readTicketsTree, with file watching, remembered project and legend, Playwright smoke test.
 
+- [Maps view and ticket/map tabs](issues/31-maps-view-and-ticket-map-tabs.md): Maps view with stacked progress bars and stats card, ticket and map editor tabs with a details header, persisted per project and live on disk edits, and one STATUS_META table.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
