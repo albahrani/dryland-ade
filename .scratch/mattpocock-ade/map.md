@@ -85,6 +85,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Rule engine: remaining rules](issues/29-rule-engine-remaining-rules.md): Waiting sessions, stale-claim flags, triage, implement, pr and retro rules, why-not and compatibility disabling complete the next-step engine.
 
+- [Feed git state into the repo snapshot](issues/64-feed-git-session-and-skill-setup-state-into-the-re.md): readRepoSnapshot fills git from Linked worktrees; sessions and skill setup split out to 65 and 66.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
