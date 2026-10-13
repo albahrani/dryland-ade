@@ -67,6 +67,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Worktrees: create, list and prune](issues/26-worktrees.md): `dryland worktree create`, `list` and `prune`; names are `<map>/<NN>-<slug>` or `<map>/scratch-<slug>`, branches start from the default branch, a `Dryland-Ticket:` trailer is the fallback link, and prune names every failed condition and needs `--yes`.
 
+- [dryland doctor basics](issues/27-dryland-doctor-basics.md): `dryland doctor [--json]` checks setup, tracker (gh/glab installed and logged in for GitHub/GitLab) and a runnable dryland on PATH; failing checks name the next action and exit 1, and it still reports outside a git repo.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
