@@ -26,13 +26,30 @@ export async function listTickets(runner: ProcessRunner, cwd: string): Promise<T
   return (await loadTickets(runner, cwd)).tickets;
 }
 
-/** Finds one ticket by `<map>/<id>`, or by bare id when only one map has it. */
+export interface TicketReference {
+  /** The map the reference names; `null` for a bare number. */
+  map: string | null;
+  number: number;
+}
+
+/** Parses `<map>/<number>` or a bare `<number>`; anything else is rejected before any tracker is read. */
+export function parseTicketReference(reference: string): TicketReference {
+  const match = /^(?:([^/\s]+)\/)?(\d+)$/.exec(reference);
+  if (match?.[2] === undefined) {
+    throw new DrylandError(
+      `"${reference}" is not a ticket reference.`,
+      "Write it as <map>/<number>, e.g. shop/02, or just the number when only one map has it.",
+    );
+  }
+  return { map: match[1] ?? null, number: Number(match[2]) };
+}
+
+/** Finds one ticket by `<map>/<number>`, or by bare number when only one map has it. */
 export async function showTicket(runner: ProcessRunner, cwd: string, reference: string): Promise<Ticket> {
+  const wanted = parseTicketReference(reference);
   const { tickets } = await loadTickets(runner, cwd);
-  const [first, second] = reference.split("/");
-  const [mapName, id] = second === undefined ? [undefined, first] : [first, second];
   const matches = tickets.filter(
-    (t) => Number(t.id) === Number(id) && /^\d+$/.test(id ?? "") && (mapName === undefined || t.map === mapName),
+    (t) => Number(t.id) === wanted.number && (wanted.map === null || t.map === wanted.map),
   );
   const [only, ...others] = matches;
   if (only === undefined) {

@@ -14,9 +14,19 @@ export function stripAnnotations(markdown: string): string {
   return markdown.replace(/\r\n/g, "\n").replace(ANNOTATION_LINE, "").replace(ANNOTATION, "");
 }
 
+/** Removes every HTML comment, e.g. the guidance comments in wayfinder's map template. */
+export function stripHtmlComments(markdown: string): string {
+  return markdown.replace(/<!--[\s\S]*?-->/g, "");
+}
+
 export interface MarkdownSection {
   heading: string;
   content: string;
+}
+
+/** The content of the section with this lower-case heading, if there is one. */
+export function findSection(sections: MarkdownSection[], heading: string): string | undefined {
+  return sections.find((s) => s.heading.toLowerCase() === heading)?.content;
 }
 
 /** Splits lines into the text before the first `## ` heading and the `## ` sections after it. */
@@ -105,7 +115,7 @@ export function parseTicketFile(
     }
   }
 
-  const section = (name: string) => sections.find((s) => s.heading.toLowerCase() === name)?.content;
+  const section = (name: string) => findSection(sections, name);
   const bodySections = sections.filter((s) => !["answer", "comments"].includes(s.heading.toLowerCase()));
   const body = [
     preamble.slice(bodyStart).join("\n"),

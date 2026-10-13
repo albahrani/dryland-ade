@@ -59,30 +59,51 @@ const USAGE = [
   "",
 ].join("\n");
 
+interface Output {
+  value: unknown;
+  text: string;
+}
+
+/** Every command: whether it takes a target (a ticket or map), and what it prints. */
+const COMMANDS: Record<string, { target: boolean; run: (target: string) => Promise<Output> }> = {
+  "ticket list": {
+    target: false,
+    run: async () => {
+      const tickets = await listTickets(nodeProcessRunner, process.cwd());
+      return { value: tickets, text: formatTickets(tickets) };
+    },
+  },
+  "ticket show": {
+    target: true,
+    run: async (target) => {
+      const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
+      return { value: ticket, text: formatTicket(ticket) };
+    },
+  },
+  "map show": {
+    target: true,
+    run: async (target) => {
+      const map = await showMap(nodeProcessRunner, process.cwd(), target);
+      return { value: map, text: formatMap(map) };
+    },
+  },
+  "map frontier": {
+    target: true,
+    run: async (target) => {
+      const tickets = await mapFrontier(nodeProcessRunner, process.cwd(), target);
+      return { value: tickets, text: formatTickets(tickets, "No frontier tickets.") };
+    },
+  },
+};
+
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
   const [group, command, target] = args.filter((arg) => arg !== "--json");
-  const out = (value: unknown, text: string) =>
-    process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
+  const entry = COMMANDS[`${group} ${command}`];
 
-  if (group === "ticket" && command === "list" && target === undefined) {
-    const tickets = await listTickets(nodeProcessRunner, process.cwd());
-    out(tickets, formatTickets(tickets));
-    return 0;
-  }
-  if (group === "ticket" && command === "show" && target !== undefined) {
-    const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
-    out(ticket, formatTicket(ticket));
-    return 0;
-  }
-  if (group === "map" && command === "show" && target !== undefined) {
-    const map = await showMap(nodeProcessRunner, process.cwd(), target);
-    out(map, formatMap(map));
-    return 0;
-  }
-  if (group === "map" && command === "frontier" && target !== undefined) {
-    const tickets = await mapFrontier(nodeProcessRunner, process.cwd(), target);
-    out(tickets, formatTickets(tickets, "No frontier tickets."));
+  if (entry !== undefined && entry.target === (target !== undefined)) {
+    const { value, text } = await entry.run(target ?? "");
+    process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
     return 0;
   }
 
@@ -97,3 +118,4 @@ try {
   process.stderr.write(`dryland: ${error.message}\nNext: ${error.nextAction}\n`);
   process.exitCode = 1;
 }
+

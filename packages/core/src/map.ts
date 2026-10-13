@@ -1,7 +1,13 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DrylandError } from "./errors.ts";
-import { type MarkdownSection, splitSections, stripAnnotations } from "./local-markdown.ts";
+import {
+  findSection,
+  type MarkdownSection,
+  splitSections,
+  stripAnnotations,
+  stripHtmlComments,
+} from "./local-markdown.ts";
 import type { Ticket } from "./ticket.ts";
 
 export interface MapModel {
@@ -19,7 +25,7 @@ export interface MapModel {
 
 /** Bullet items of a section, with wrapped continuation lines joined. A leading "Nothing." means no items. */
 function itemsOf(content: string | undefined): string[] {
-  const text = (content ?? "").replace(/<!--[\s\S]*?-->/g, "").trim();
+  const text = stripHtmlComments(content ?? "").trim();
   if (/^(nothing|none)\b/i.test(text)) return [];
   const items: string[] = [];
   for (const line of text.split("\n")) {
@@ -33,12 +39,12 @@ function itemsOf(content: string | undefined): string[] {
 export function parseMap(name: string, markdown: string): MapModel {
   const lines = stripAnnotations(markdown).split("\n");
   const { preamble, sections } = splitSections(lines);
-  const section = (heading: string) => sections.find((s) => s.heading.toLowerCase() === heading)?.content;
+  const section = (heading: string) => findSection(sections, heading);
   const titleLine = preamble.find((line) => line.startsWith("# "))?.slice(2).trim() ?? "";
   return {
     name,
     title: titleLine.replace(/^Map:\s*/i, ""),
-    destination: (section("destination") ?? "").replace(/<!--[\s\S]*?-->/g, "").trim(),
+    destination: stripHtmlComments(section("destination") ?? "").trim(),
     fog: itemsOf(section("not yet specified")),
     decisions: itemsOf(section("decisions so far")),
     sections,

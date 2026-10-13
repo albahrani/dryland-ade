@@ -226,6 +226,16 @@ describe("dryland ticket show", () => {
     expect(result.stderr).toContain("dryland ticket list");
   });
 
+  it("rejects a malformed reference before reading the tracker", async () => {
+    const repo = TempRepo.create({}); // no tracker doc: only the reference check can explain the failure
+
+    const result = await repo.run(["ticket", "show", "shop/"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain('"shop/" is not a ticket reference');
+    expect(result.stderr).toContain("<map>/<number>");
+  });
+
   it("parses the same with a dryland annotation as without", async () => {
     const plain = shopTicket("Build checkout", "Type: grilling", "Status: claimed", "Blocked by: 01", "", "## Question", "", "How?");
     const annotated = [
