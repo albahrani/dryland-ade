@@ -13,8 +13,8 @@ const HEADINGS: Record<string, TrackerKind> = {
 };
 
 /** Reads which tracker the repo uses from the title of `docs/agents/issue-tracker.md`. */
-export async function readTrackerKind(root: string): Promise<TrackerKind> {
-  const doc = await readFile(join(root, TRACKER_DOC), "utf8").catch(() => null);
+export async function readTrackerKind(mainCheckout: string): Promise<TrackerKind> {
+  const doc = await readFile(join(mainCheckout, TRACKER_DOC), "utf8").catch(() => null);
   if (doc === null) {
     throw new DrylandError(
       `${TRACKER_DOC} is missing, so Dryland cannot tell which issue tracker this repo uses.`,

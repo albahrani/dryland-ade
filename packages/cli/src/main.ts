@@ -1,9 +1,9 @@
 import { DrylandError, listTickets, nodeProcessRunner, type Ticket } from "@dryland/core";
 
 function formatTickets(tickets: Ticket[]): string {
-  const pad = (pick: (ticket: Ticket) => string) => Math.max(...tickets.map((ticket) => pick(ticket).length));
-  const stateWidth = pad((ticket) => ticket.state);
-  const typeWidth = pad((ticket) => ticket.type);
+  const columnWidth = (pick: (ticket: Ticket) => string) => Math.max(...tickets.map((ticket) => pick(ticket).length));
+  const stateWidth = columnWidth((ticket) => ticket.state);
+  const typeWidth = columnWidth((ticket) => ticket.type);
   return tickets
     .map((t) => `${t.map}/${t.id}  ${t.state.padEnd(stateWidth)}  ${t.type.padEnd(typeWidth)}  ${t.title}\n`)
     .join("");

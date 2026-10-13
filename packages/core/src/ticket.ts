@@ -1,4 +1,5 @@
-export type TicketType = "research" | "prototype" | "grilling" | "task" | "none";
+export const TICKET_TYPES = ["research", "prototype", "grilling", "task"] as const;
+export type TicketType = (typeof TICKET_TYPES)[number] | "none";
 export type TicketState = "open" | "claimed" | "resolved";
 
 export interface Ticket {

@@ -1,9 +1,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Ticket, TicketState, TicketType } from "./ticket.ts";
+import { TICKET_TYPES, type Ticket, type TicketState, type TicketType } from "./ticket.ts";
 
 const TICKET_FILE = /^(\d+)-.+\.md$/;
-const TYPES: readonly string[] = ["research", "prototype", "grilling", "task"];
+
+/** `claimed` and `resolved` are states; any other status (a triage role, nothing) leaves the ticket open. */
+function stateOf(status: string | undefined): TicketState {
+  const value = status?.toLowerCase();
+  return value === "resolved" || value === "claimed" ? value : "open";
+}
 
 export function parseTicketFile(map: string, id: string, markdown: string): Ticket {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -17,15 +22,13 @@ export function parseTicketFile(map: string, id: string, markdown: string): Tick
   };
 
   const rawType = field("Type")?.toLowerCase() ?? "";
-  const type = (TYPES.includes(rawType) ? rawType : "none") as TicketType;
-  const status = field("Status")?.toLowerCase() ?? "";
-  const state: TicketState = status === "resolved" ? "resolved" : status === "claimed" ? "claimed" : "open";
-  return { id, map, title, type, state };
+  const type: TicketType = TICKET_TYPES.find((known) => known === rawType) ?? "none";
+  return { id, map, title, type, state: stateOf(field("Status")) };
 }
 
-/** Reads every `.scratch/<map>/issues/NN-*.md` under `root`, ordered by map then number. */
-export async function readLocalMarkdownTickets(root: string): Promise<Ticket[]> {
-  const scratch = join(root, ".scratch");
+/** Reads every `.scratch/<map>/issues/NN-*.md` under `mainCheckout`, ordered by map then number. */
+export async function readLocalMarkdownTickets(mainCheckout: string): Promise<Ticket[]> {
+  const scratch = join(mainCheckout, ".scratch");
   const maps = await readdir(scratch, { withFileTypes: true }).catch(() => []);
   const tickets: Ticket[] = [];
   for (const map of maps.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {

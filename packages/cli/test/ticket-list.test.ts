@@ -1,7 +1,8 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TempRepo } from "./harness.ts";
+import { runDryland, TempRepo } from "./harness.ts";
 
 const LOCAL_TRACKER_DOC = "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n";
 
@@ -90,9 +91,6 @@ describe("dryland ticket list", () => {
   });
 
   it("exits non-zero outside a git repository", async () => {
-    const { mkdtempSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { runDryland } = await import("./harness.ts");
     const dir = mkdtempSync(join(tmpdir(), "dryland-nogit-"));
 
     const result = await runDryland(["ticket", "list"], { cwd: dir });
@@ -104,7 +102,6 @@ describe("dryland ticket list", () => {
 
 describe("dryland ticket list on real skill tickets", () => {
   it("parses tickets copied from this repo's own .scratch directory", async () => {
-    const { readdirSync, readFileSync } = await import("node:fs");
     const fixtures = join(import.meta.dirname, "fixtures/real-scratch");
     const issues = join(fixtures, "mattpocock-ade/issues");
     const files: Record<string, string> = { "docs/agents/issue-tracker.md": LOCAL_TRACKER_DOC };
