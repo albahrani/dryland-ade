@@ -83,6 +83,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Rule engine: map workflow rules](issues/28-rule-engine-map-workflow-rules.md): Pure nextSteps(snapshot) in core with the setup, frontier, fog-only, cleared-map and spec-without-tickets rules, each with a reason and evidence.
 
+- [Rule engine: remaining rules](issues/29-rule-engine-remaining-rules.md): Waiting sessions, stale-claim flags, triage, implement, pr and retro rules, why-not and compatibility disabling complete the next-step engine.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
