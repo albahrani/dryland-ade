@@ -1,7 +1,7 @@
 # Worktrees: create, list and prune
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 24
 
 Spec: [spec](../spec.md), user stories 49, 73, 78. "Worktrees and linking". ADR 0001.
@@ -18,10 +18,14 @@ Small pieces for slugify and collision suffixing may be copied from Orca with MI
 
 ## Acceptance criteria
 
-- [ ] `worktree create` for a ticket produces a worktree and branch named `<effort>/<NN>-<slug>`
-- [ ] Creating a second worktree whose slug collides gets a suffix instead of failing
-- [ ] `worktree create` without a ticket produces a `<effort>/scratch-<slug>` worktree
-- [ ] `worktree list` shows the linked ticket by name, falls back to the commit trailer, and marks everything else as unlinked
-- [ ] `worktree prune` refuses, naming the failed condition, when the ticket is unresolved, the branch has unmerged commits, the tree is dirty or a session is attached
-- [ ] `worktree prune` without `--yes` does nothing and says so
-- [ ] When all conditions hold and `--yes` is given, worktree and branch are removed
+- [x] `worktree create` for a ticket produces a worktree and branch named `<effort>/<NN>-<slug>`
+- [x] Creating a second worktree whose slug collides gets a suffix instead of failing
+- [x] `worktree create` without a ticket produces a `<effort>/scratch-<slug>` worktree
+- [x] `worktree list` shows the linked ticket by name, falls back to the commit trailer, and marks everything else as unlinked
+- [x] `worktree prune` refuses, naming the failed condition, when the ticket is unresolved, the branch has unmerged commits, the tree is dirty or a session is attached
+- [x] `worktree prune` without `--yes` does nothing and says so
+- [x] When all conditions hold and `--yes` is given, worktree and branch are removed
+
+## Answer
+
+Implemented in 3149f75, tidied after. `dryland worktree create [<map>/<NN>] [--map <map>] [--slug <slug>]`, `worktree list` and `worktree prune <branch> [--yes] [--session-attached]`, all through the CLI seam. Decisions: worktrees live in `<repo>.worktrees/` beside the main checkout and branch from the default branch; a Linked worktree falls back to a `Dryland-Ticket: <map>/<NN>` commit trailer (recorded in GLOSSARY.md, with a new Scratch worktree entry); scratch worktrees have no ticket, so prune skips the resolved check for them; unlinked branches and the main checkout are never pruned; prune names every failed condition, and without `--yes` it removes nothing and exits 0 saying so. Known limits: a squash-merged branch looks unmerged, and a branch whose trailer commits are already merged shows as unlinked. Removing the worktree from Copilot's `trustedFolders` on prune is left to the Copilot adapter ticket.
