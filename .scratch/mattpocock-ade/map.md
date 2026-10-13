@@ -59,9 +59,15 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [GitHub project preparation and release checklist](issues/18-github-project-preparation.md): repo `dryland-ade`, squash to one clean initial commit after a secrets/path scan, nothing moved (skill-expected paths stay), standard OSS files + templates, SHA-pinned 3-OS CI and tag-driven release, `v0.1.0-beta.1` first, 1.0 after Windows smoke checklist, branch protection and Dependabot.
 
+- [Verify Copilot hooks and trust prompt in interactive mode](issues/19-verify-copilot-interactive-mode.md): interactive Copilot fires the global env-gated hooks (inert without the env var), a `trustedFolders` entry suppresses the trust prompt and removes cleanly, waiting = `permissionRequest`/`notification(permission_prompt)`, idle = `agentStop`; `sessionStart` fires only at first submit, so "launched" state comes from the ADE's own PTY spawn.
+
 ## Not yet specified
 
-- Spec/ADR authoring itself (the final deliverable) once the route is clear.
+- Spec/ADR authoring itself (the final deliverable) once the route is clear. Things to handle while authoring:
+  - ADRs still missing: the user-level agent-config exception (only in Notes), Agent adapter seam + hook status sourcing, the next-step rule engine, the `ade` CLI surface + live reporting.
+  - Rename (decided in [Product name and branding](issues/16-product-name.md)): working title "ADE" became **Dryland ADE** / **Dryland**, binary `dryland`. The spec uses `dryland` where earlier decisions say `ade` (CLI commands, `ade doctor`, launcher), and the ADRs get the one-line note that ticket 16 promised. Prefixes like `ADE_PANE_KEY` and `<!-- ade: -->` follow the binary name unless the spec says otherwise.
+  - Glossary gaps: ticket kinds (Fog / Planning / Implementation), unlinked branch, stale claim, live event, next-up marker.
+  - Risks for the spec: the Claude Code adapter is docs-only (not installed on the dev machine).
 
 ## Out of scope
 

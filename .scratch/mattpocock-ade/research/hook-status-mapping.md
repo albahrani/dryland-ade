@@ -175,3 +175,28 @@ Results:
 3. **Trust append**: adding the worktree realpath (JSON-escaped backslashes) as the last `trustedFolders` entry left the file valid JSON with every other key untouched; hooks still fired. Reverting (restoring the backup / removing the one entry) returned the file to its prior state (28 entries).
 
 Not verified: interactive-mode trust prompt suppression and interactive hook firing (no headless way to drive the TUI here). Piping `-p` output through `Select -First N` closes the pipe early and truncates hook events; ADE should not do that. Also noted: `config.json.trusted-folders.lock` exists, so the ADE should respect/use that lock when editing, and tolerate Copilot rewriting the file.
+
+## Interactive verification (2026-10-13, Copilot CLI 1.0.96, Windows, ticket 19)
+
+Setup: temp repo + `git worktree add`, env-gated global hook `~/.copilot/hooks/ade-test.json` registering `sessionStart`, `sessionEnd`, `userPromptSubmitted`, `preToolUse`, `postToolUse`, `agentStop`, `subagentStop`, `errorOccurred`, `notification`, `permissionRequest`, each piping stdin to a log. `config.json` and `hooks/` were backed up first. A human drove interactive `copilot` in a real terminal.
+
+**Run A (worktree untrusted, `ADE_PANE_KEY=1`)**
+- A trust prompt appeared with three options: "Yes", "Yes, and remember this folder for future sessions", "No (Esc)". "Yes" (this session only) left `config.json` unchanged.
+- No hook fired for the launch, the trust prompt, or a typed but unsubmitted `/grilling`.
+- After submitting "create a file x.txt containing hello", the log showed: `userPromptSubmitted` → `sessionStart` (`source: "new"`, `initialPrompt`) → `preToolUse` (`create`) → `permissionRequest` (`toolName: "edit"`) → `notification` (`notification_type: "permission_prompt"`, `title: "Permission needed"`) → after about 19 s waiting for approval, `postToolUse` → `agentStop` (includes `transcriptPath` under `~/.copilot/session-state/<sessionId>/`) → on `/exit`, `sessionEnd` (`reason: "user_exit"`).
+- Every payload carries `sessionId`, `timestamp` and `cwd` (the worktree path).
+
+**Run B (worktree appended to `trustedFolders`, `ADE_PANE_KEY=1`)**
+- No trust prompt.
+- `userPromptSubmitted` → `sessionStart` → `agentStop` → `sessionEnd`. During 60 s idle after `agentStop`, **no** `notification` (`agent_idle`) fired.
+
+**Run C (no `ADE_PANE_KEY`)**: nothing logged. The hook is inert.
+
+**Cleanup**: removing the single `trustedFolders` entry and the hook file left `config.json` byte-identical to the backup.
+
+**Implications for the adapter**
+- Hook-based status works in interactive mode; trust is only needed to avoid the prompt, not for hooks to fire.
+- `sessionStart` is lazy: it fires at the first submitted prompt, not at launch. The ADE must derive "launched, waiting for user" from its own PTY spawn, and only learns the Copilot `sessionId` on first submit. Pre-typing a skill command emits nothing.
+- Waiting = `permissionRequest` / `notification(permission_prompt)`; idle = `agentStop` (don't rely on `agent_idle`); running = `userPromptSubmitted` / `preToolUse` / `postToolUse`; ended = `sessionEnd`.
+- `cwd` maps a session to its worktree (and so its ticket); `transcriptPath` is available if needed later.
+- Pre-seeding `trustedFolders` is what keeps a freshly created worktree from showing the trust prompt; otherwise the user sees it once per worktree.
