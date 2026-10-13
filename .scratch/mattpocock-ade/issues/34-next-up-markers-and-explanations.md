@@ -21,3 +21,7 @@ The item a next step points at carries the Next-up marker: a gold bar and a star
 - [ ] "Why not this?" on a blocked ticket lists its unresolved blockers; on a ticket with unknown blockers it says "blocking unknown"
 - [ ] Markers update when a ticket changes on disk
 - [ ] The same repo state always shows the same markers
+
+## Comments
+
+From the review of 30: readTicketsTree (core, Tickets view) and readRepoSnapshot each scan .scratch and read map.md separately, and findSpecsWithoutTickets scans it a third time. When the main process builds the snapshot here, read efforts and tickets once per refresh through one shared helper and feed both the tree and the snapshot.
