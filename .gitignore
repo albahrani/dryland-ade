@@ -1,3 +1,5 @@
 # Machine-local junctions created by `npx skills`; recreate with:
 #   npx skills@latest add mattpocock/skills -a claude-code -a github-copilot -s "*" -y
 .claude/skills/
+node_modules/
+dist/
