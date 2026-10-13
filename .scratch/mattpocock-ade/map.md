@@ -63,6 +63,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - Spec and ADR set authored: [spec](spec.md) (`ready-for-agent`, uses `dryland` and `DRYLAND_*` / `<!-- dryland: -->` / `.dryland/` throughout); ADRs 0005 (user-level agent-config exception), 0006 (Agent adapters and hook-sourced status), 0007 (next-step rule engine), 0008 (CLI surface, normalized ticket model, live reporting); rename note added to ADRs 0001 to 0004; glossary gained ticket kind, stale claim, next-up marker, live event, unlinked branch. Build order starts with the Claude Code adapter, whose verification is its first implementation ticket.
 
+- [Block, comment, triage and map index](issues/25-block-comment-triage-and-map-index.md): ticket block, comment and triage plus map index, all through the shared tracker write path; line endings preserved per line, a bare Nothing. placeholder gives way to the first index entry.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
