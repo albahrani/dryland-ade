@@ -81,6 +81,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Harden dryland doctor tests and tidy its helpers](issues/63-harden-dryland-doctor-tests-and-tidy-its-helpers.md): dryland doctor's forge tracker path is tested through the CLI, PATH isolation is deterministic, and exists()/PATH key lookup are shared.
 
+- [Rule engine: map workflow rules](issues/28-rule-engine-map-workflow-rules.md): Pure nextSteps(snapshot) in core with the setup, frontier, fog-only, cleared-map and spec-without-tickets rules, each with a reason and evidence.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
