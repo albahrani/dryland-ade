@@ -63,7 +63,7 @@ export function App() {
         ))}
       </nav>
       <aside className="sidebar">
-        {!legendDismissed && project !== null && <Legend onDismiss={dismissLegend} />}
+        {!legendDismissed && <Legend onDismiss={dismissLegend} />}
         <Sidebar view={activity} project={project} />
       </aside>
       <main className="editor">

@@ -11,8 +11,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "build": "pnpm --filter @dryland/cli build",
-    "format": "prettier --write \"packages/**/*.{ts,mjs,json}\" \"*.{js,ts,json}\"",
-    "format:check": "prettier --check \"packages/**/*.{ts,mjs,json}\" \"*.{js,ts,json}\"",
+    "format": "prettier --write \"packages/**/*.{ts,tsx,css,html,mjs,json}\" \"*.{js,ts,json}\"",
+    "format:check": "prettier --check \"packages/**/*.{ts,tsx,css,html,mjs,json}\" \"*.{js,ts,json}\"",
     "test:linux": "node scripts/test-linux.mjs"
   },
   "devDependencies": {

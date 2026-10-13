@@ -88,10 +88,14 @@ ipcMain.handle("project:open", async () => {
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 
 void app.whenReady().then(async () => {
-  const { lastProject } = store.read();
-  if (lastProject !== null) await openProject(lastProject);
+  // The window opens first; a slow or missing last project fills in when it has loaded.
   buildMenu();
   createWindow();
+  const { lastProject } = store.read();
+  if (lastProject !== null) {
+    await openProject(lastProject);
+    await refresh();
+  }
 });
 
 app.on("window-all-closed", () => {
