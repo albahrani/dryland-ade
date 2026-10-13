@@ -30,3 +30,7 @@ The human does:
 - [ ] `ci` is green on the pushed repo on all three OSes
 - [ ] `v0.1.0-beta.1` is published and its Windows installer installs and starts
 - [ ] An installed beta finds the release on the `beta` channel
+
+## Comments
+
+From the review of 30: the Windows e2e smoke job (packages/desktop, 'e2e (windows-latest)' in ci.yml) has never run on GitHub. Add an acceptance line here: the e2e job is green on the pushed repo; then tick the last criterion of ticket 30 (Playwright smoke passes on Windows and runs in CI). Watch for: Electron binary download, pnpm onlyBuiltDependencies, pnpm/action-setup.
