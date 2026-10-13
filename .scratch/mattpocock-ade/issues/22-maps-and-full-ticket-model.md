@@ -1,7 +1,7 @@
 # Maps and the full ticket model
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 20
 
 Spec: [spec](../spec.md), user stories 12, 16, 17, 25, 66. "Normalized ticket model". ADR 0008.
@@ -16,10 +16,14 @@ The frontier is the open, unblocked, unclaimed tickets of a map, lowest number f
 
 ## Acceptance criteria
 
-- [ ] `ticket show` prints a ticket's fields including blockers, answer and comments; `--json` returns the normalized model
-- [ ] `map show` prints a map's tickets grouped by ticket kind, with its fog items
-- [ ] `map frontier` returns only open, unblocked, unclaimed tickets, lowest number first; a ticket is unblocked when every ticket it lists is resolved
-- [ ] Ticket kind is derived from type and map fog and is not written anywhere
-- [ ] A ticket or map containing a `<!-- dryland: ... -->` annotation parses to the same result as without it
-- [ ] Parsers are tested with this repo's real map and tickets as fixtures
-- [ ] No command in this ticket writes to the repo
+- [x] `ticket show` prints a ticket's fields including blockers, answer and comments; `--json` returns the normalized model
+- [x] `map show` prints a map's tickets grouped by ticket kind, with its fog items
+- [x] `map frontier` returns only open, unblocked, unclaimed tickets, lowest number first; a ticket is unblocked when every ticket it lists is resolved
+- [x] Ticket kind is derived from type and map fog and is not written anywhere
+- [x] A ticket or map containing a `<!-- dryland: ... -->` annotation parses to the same result as without it
+- [x] Parsers are tested with this repo's real map and tickets as fixtures
+- [x] No command in this ticket writes to the repo
+
+## Answer
+
+Implemented in de80538, tidied in 4154e21. `dryland ticket show`, `map show` and `map frontier` read the full normalized ticket model (type, state, claimant, blockers as a list or unknown, triage role from `docs/agents/triage-labels.md`, body, answer, comments) and parse maps into tickets grouped by derived kind, fog and Decisions-so-far. The frontier is open, unblocked, unclaimed tickets, lowest number first. `<!-- dryland: ... -->` annotations parse identically, and none of these commands writes (asserted by a no-write test). Covered by `ticket-model.test.ts`, including this repo's real map and tickets as fixtures; specs without tickets are detectable via `findSpecsWithoutTickets`.

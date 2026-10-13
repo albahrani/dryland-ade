@@ -63,6 +63,16 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - Spec and ADR set authored: [spec](spec.md) (`ready-for-agent`, uses `dryland` and `DRYLAND_*` / `<!-- dryland: -->` / `.dryland/` throughout); ADRs 0005 (user-level agent-config exception), 0006 (Agent adapters and hook-sourced status), 0007 (next-step rule engine), 0008 (CLI surface, normalized ticket model, live reporting); rename note added to ADRs 0001 to 0004; glossary gained ticket kind, stale claim, next-up marker, live event, unlinked branch. Build order starts with the Claude Code adapter, whose verification is its first implementation ticket.
 
+- [Workspace and dryland ticket list](issues/20-workspace-and-ticket-list.md): pnpm workspace (`core`, `cli`, stub `desktop`), Vitest and the temp-repo CLI harness; `ticket list` finds the main checkout from any worktree, and git runs only through the `ProcessRunner` seam.
+
+- [CI on three OSes](issues/21-ci-on-three-oses.md): SHA-pinned workflow runs typecheck, lint and Vitest on Windows, macOS and Linux with minimal permissions; Dependabot covers npm and Actions; actionlint passes locally, not yet run on real runners.
+
+- [Maps and the full ticket model](issues/22-maps-and-full-ticket-model.md): `ticket show`, `map show` and `map frontier` on the normalized model; kind is derived, never stored; annotations parse transparently; read-only.
+
+- [Claim and release under a lock](issues/23-claim-and-release-under-a-lock.md): The tracker write path: main checkout only, atomic, locked, pathspec commit with warnings; one winner among parallel claims; stale locks recover.
+
+- [Ticket create and resolve](issues/24-ticket-create-and-resolve.md): `ticket create` numbers under the lock and round-trips through `show`; `ticket resolve` records the answer, releases the claim and never touches the worktree.
+
 - [Block, comment, triage and map index](issues/25-block-comment-triage-and-map-index.md): ticket block, comment and triage plus map index, all through the shared tracker write path; line endings preserved per line, a bare Nothing. placeholder gives way to the first index entry.
 
 - [Worktrees: create, list and prune](issues/26-worktrees.md): `dryland worktree create`, `list` and `prune`; names are `<map>/<NN>-<slug>` or `<map>/scratch-<slug>`, branches start from the default branch, a `Dryland-Ticket:` trailer is the fallback link, and prune names every failed condition and needs `--yes`.

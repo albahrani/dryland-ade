@@ -18,11 +18,11 @@ The hooks check and the user-config install/status/remove come with the Copilot 
 
 ## Acceptance criteria
 
-- [ ] In a healthy default repo, `doctor` reports every check as OK and exits 0
-- [ ] Each failing check names what is missing and the next action; the command exits non-zero
-- [ ] A repo without the skills set up is reported with `/setup-matt-pocock-skills` as the next action
-- [ ] A GitHub or GitLab repo with `gh`/`glab` missing or logged out is reported clearly, without asking for a token (tested by faking the process runner)
-- [ ] `--json` returns the checks as structured data
+- [x] In a healthy default repo, `doctor` reports every check as OK and exits 0
+- [x] Each failing check names what is missing and the next action; the command exits non-zero
+- [x] A repo without the skills set up is reported with `/setup-matt-pocock-skills` as the next action
+- [x] A GitHub or GitLab repo with `gh`/`glab` missing or logged out is reported clearly, without asking for a token (tested by faking the process runner)
+- [x] `--json` returns the checks as structured data
 
 ## Answer
 
