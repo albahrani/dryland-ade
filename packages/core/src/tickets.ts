@@ -10,6 +10,11 @@ import { readTriageVocabulary } from "./triage-labels.ts";
 /** Every ticket of the repo containing `cwd`, plus where its main checkout is. */
 async function loadTickets(runner: ProcessRunner, cwd: string): Promise<{ mainCheckout: string; tickets: Ticket[] }> {
   const mainCheckout = await findMainCheckout(runner, cwd);
+  return { mainCheckout, tickets: await readTickets(mainCheckout) };
+}
+
+/** Every ticket of the main checkout, from the tracker its docs name. */
+export async function readTickets(mainCheckout: string): Promise<Ticket[]> {
   const kind = await readTrackerKind(mainCheckout);
   if (kind !== "local-markdown") {
     throw new DrylandError(
@@ -18,7 +23,7 @@ async function loadTickets(runner: ProcessRunner, cwd: string): Promise<{ mainCh
     );
   }
   const vocabulary = await readTriageVocabulary(mainCheckout);
-  return { mainCheckout, tickets: await readLocalMarkdownTickets(mainCheckout, vocabulary) };
+  return readLocalMarkdownTickets(mainCheckout, vocabulary);
 }
 
 /** Lists the tickets of the repo containing `cwd`, from the tracker its docs name. */
@@ -46,8 +51,13 @@ export function parseTicketReference(reference: string): TicketReference {
 
 /** Finds one ticket by `<map>/<number>`, or by bare number when only one map has it. */
 export async function showTicket(runner: ProcessRunner, cwd: string, reference: string): Promise<Ticket> {
+  parseTicketReference(reference); // a malformed reference is rejected before any tracker is read
+  return findTicket((await loadTickets(runner, cwd)).tickets, reference);
+}
+
+/** Picks the ticket a reference names out of `tickets`, or fails with the next action. */
+export function findTicket(tickets: Ticket[], reference: string): Ticket {
   const wanted = parseTicketReference(reference);
-  const { tickets } = await loadTickets(runner, cwd);
   const matches = tickets.filter(
     (t) => Number(t.id) === wanted.number && (wanted.map === null || t.map === wanted.map),
   );

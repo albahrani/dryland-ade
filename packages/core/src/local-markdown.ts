@@ -14,6 +14,90 @@ export function stripAnnotations(markdown: string): string {
   return markdown.replace(/\r\n/g, "\n").replace(ANNOTATION_LINE, "").replace(ANNOTATION, "");
 }
 
+export interface ClaimRecord {
+  holder: string;
+  /** ISO timestamp of the claim. */
+  at: string;
+  /** The `Status:` value the ticket had before the claim, restored on release; empty when it had none. */
+  was: string;
+}
+
+const CLAIM_ANNOTATION = /<!--\s*dryland:\s*(\{[\s\S]*?\})\s*-->/;
+const CLAIM_ANNOTATION_LINE = new RegExp(`^[ \t]*${CLAIM_ANNOTATION.source}[ \t]*$`);
+
+/** The claim a ticket file records in its Dryland annotation, if any. */
+export function readClaim(markdown: string): ClaimRecord | null {
+  // Only the header can carry a claim; an annotation further down is prose and is never read.
+  const sections = markdown.search(/^## /m);
+  const json = CLAIM_ANNOTATION.exec(sections === -1 ? markdown : markdown.slice(0, sections))?.[1];
+  if (json === undefined) return null;
+  try {
+    const claim = (JSON.parse(json) as { claim?: Partial<ClaimRecord> }).claim;
+    if (typeof claim?.holder !== "string" || typeof claim.at !== "string") return null;
+    return { holder: claim.holder, at: claim.at, was: typeof claim.was === "string" ? claim.was : "" };
+  } catch {
+    return null;
+  }
+}
+
+function claimAnnotation(claim: ClaimRecord): string {
+  // `>` is escaped so no holder name can close the comment early.
+  return `<!-- dryland: ${JSON.stringify({ claim }).replaceAll(">", "\\u003e")} -->`;
+}
+
+/**
+ * Rewrites only the header lines a claim touches: `Status:` and the Dryland annotation line under it.
+ * A claim stores the previous status in the annotation, so a release can put it back. Everything else
+ * in the file, including line endings, is left as it was.
+ */
+export function rewriteClaim(markdown: string, change: { claim: Omit<ClaimRecord, "was"> } | { release: true }): string {
+  const eol = markdown.includes("\r\n") ? "\r\n" : "\n";
+  const lines = markdown.split(/\r?\n/);
+  const titleIndex = lines.findIndex((line) => line.startsWith("# "));
+
+  let statusIndex = -1;
+  let lastFieldIndex = titleIndex;
+  const annotationIndexes = new Set<number>();
+  for (let i = titleIndex + 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (line.trim() === "") continue;
+    if (CLAIM_ANNOTATION_LINE.test(line)) {
+      annotationIndexes.add(i);
+      lastFieldIndex = i;
+      continue;
+    }
+    const match = FIELD_LINE.exec(line);
+    if (match?.[1] === undefined) break;
+    if (match[1].toLowerCase() === "status" && statusIndex === -1) statusIndex = i;
+    lastFieldIndex = i;
+  }
+
+  const existing = readClaim(markdown);
+  const currentStatus = statusIndex === -1 ? "" : (FIELD_LINE.exec(lines[statusIndex] ?? "")?.[2] ?? "").trim();
+  let replacement: string[];
+  if ("claim" in change) {
+    replacement = ["Status: claimed", claimAnnotation({ ...change.claim, was: currentStatus })];
+  } else {
+    const was = currentStatus.toLowerCase() === "claimed" ? (existing?.was ?? "") : currentStatus;
+    replacement = was === "" ? [] : [`Status: ${was}`];
+  }
+
+  // Without a `Status:` line the replacement goes after the last header field, or under the title.
+  const insertAfter = statusIndex === -1 ? lastFieldIndex : -1;
+  const out: string[] = [];
+  lines.forEach((line, i) => {
+    if (!annotationIndexes.has(i)) {
+      if (i === statusIndex) out.push(...replacement);
+      else out.push(line);
+    }
+    if (i === insertAfter && replacement.length > 0) {
+      if (i === titleIndex) out.push("");
+      out.push(...replacement);
+    }
+  });
+  return out.join(eol);
+}
+
 /** Removes every HTML comment, e.g. the guidance comments in wayfinder's map template. */
 export function stripHtmlComments(markdown: string): string {
   return markdown.replace(/<!--[\s\S]*?-->/g, "");
@@ -93,6 +177,7 @@ export function parseTicketFile(
   markdown: string,
   vocabulary: TriageVocabulary = defaultTriageVocabulary(),
 ): Ticket {
+  const claim = readClaim(markdown);
   const { preamble, sections } = splitSections(stripAnnotations(markdown).split("\n"));
   const titleIndex = preamble.findIndex((line) => line.startsWith("# "));
   const title = titleIndex === -1 ? "" : (preamble[titleIndex] ?? "").slice(2).trim();
@@ -135,8 +220,8 @@ export function parseTicketFile(
     title,
     type,
     state,
-    // The default skill format records no assignee: a claim is just `Status: claimed`.
-    claimant: null,
+    // The default skill format records no assignee; a claim made by `dryland` adds an annotation.
+    claimant: state === "claimed" ? (claim?.holder ?? null) : null,
     blockers: blockersOf(fields.get("blocked by")),
     triageRole: state === "open" && status ? (vocabulary.get(status.toLowerCase()) ?? null) : null,
     body,
@@ -144,6 +229,14 @@ export function parseTicketFile(
     comments: commentsOf(section("comments")),
     raw,
   };
+}
+
+/** The file of a ticket, relative to the main checkout, with forward slashes. */
+export async function ticketFile(mainCheckout: string, map: string, id: string): Promise<string | null> {
+  const dir = join(".scratch", map, "issues");
+  const files = await readdir(join(mainCheckout, dir)).catch(() => []);
+  const file = files.find((name) => TICKET_FILE.exec(name)?.[1] === id);
+  return file === undefined ? null : `${dir.replaceAll("\\", "/")}/${file}`;
 }
 
 /** Reads every `.scratch/<map>/issues/NN-*.md` under `mainCheckout`, ordered by map then number. */

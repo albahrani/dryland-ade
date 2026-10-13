@@ -1,8 +1,11 @@
 import {
+  branchHolder,
+  claimTicket,
   DrylandError,
   listTickets,
   mapFrontier,
   nodeProcessRunner,
+  releaseTicket,
   showMap,
   showTicket,
   ticketKind,
@@ -54,6 +57,8 @@ function formatMap(map: MapView): string {
 const USAGE = [
   "Usage: dryland ticket list [--json]",
   "       dryland ticket show <map>/<number> [--json]",
+  "       dryland ticket claim <map>/<number> [--no-commit] [--json]",
+  "       dryland ticket release <map>/<number> [--no-commit] [--json]",
   "       dryland map show <map> [--json]",
   "       dryland map frontier <map> [--json]",
   "",
@@ -62,10 +67,19 @@ const USAGE = [
 interface Output {
   value: unknown;
   text: string;
+  /** Written to stderr; the command still succeeded. */
+  warnings?: string[];
 }
 
+interface Flags {
+  noCommit: boolean;
+}
+
+/** `false` when the user passed `--no-commit`; otherwise git's `dryland.autoCommit` decides. */
+const autoCommit = (flags: Flags) => (flags.noCommit ? false : undefined);
+
 /** Every command: whether it takes a target (a ticket or map), and what it prints. */
-const COMMANDS: Record<string, { target: boolean; run: (target: string) => Promise<Output> }> = {
+const COMMANDS: Record<string, { target: boolean; run: (target: string, flags: Flags) => Promise<Output> }> = {
   "ticket list": {
     target: false,
     run: async () => {
@@ -78,6 +92,26 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string) => Promi
     run: async (target) => {
       const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
       return { value: ticket, text: formatTicket(ticket) };
+    },
+  },
+  "ticket claim": {
+    target: true,
+    run: async (target, flags) => {
+      const holder = process.env["DRYLAND_SESSION_ID"] || (await branchHolder(nodeProcessRunner, process.cwd()));
+      const { ticket, warnings } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
+        holder,
+        autoCommit: autoCommit(flags),
+      });
+      return { value: ticket, text: `Claimed ${ticket.map}/${ticket.id} for ${holder}.\n`, warnings };
+    },
+  },
+  "ticket release": {
+    target: true,
+    run: async (target, flags) => {
+      const { ticket, warnings } = await releaseTicket(nodeProcessRunner, process.cwd(), target, {
+        autoCommit: autoCommit(flags),
+      });
+      return { value: ticket, text: `Released ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
   "map show": {
@@ -98,11 +132,13 @@ const COMMANDS: Record<string, { target: boolean; run: (target: string) => Promi
 
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
-  const [group, command, target] = args.filter((arg) => arg !== "--json");
+  const flags: Flags = { noCommit: args.includes("--no-commit") };
+  const [group, command, target] = args.filter((arg) => arg !== "--json" && arg !== "--no-commit");
   const entry = COMMANDS[`${group} ${command}`];
 
   if (entry !== undefined && entry.target === (target !== undefined)) {
-    const { value, text } = await entry.run(target ?? "");
+    const { value, text, warnings = [] } = await entry.run(target ?? "", flags);
+    for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
     return 0;
   }

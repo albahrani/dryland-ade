@@ -4,6 +4,8 @@ export * from "./main-checkout.ts";
 export * from "./map.ts";
 export * from "./process-runner.ts";
 export * from "./ticket.ts";
+export * from "./claim.ts";
 export * from "./tickets.ts";
+export * from "./tracker-write.ts";
 export * from "./tracker.ts";
 export * from "./triage-labels.ts";

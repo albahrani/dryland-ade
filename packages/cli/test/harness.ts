@@ -13,9 +13,15 @@ export interface RunResult {
 }
 
 /** Runs the real bundled `dryland` command. */
-export function runDryland(args: string[], opts: { cwd: string }): Promise<RunResult> {
+export function runDryland(
+  args: string[],
+  opts: { cwd: string; env?: Record<string, string> },
+): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [BUNDLE, ...args], { cwd: opts.cwd });
+    const child = spawn(process.execPath, [BUNDLE, ...args], {
+      cwd: opts.cwd,
+      env: { ...process.env, ...opts.env },
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => (stdout += chunk));
@@ -89,7 +95,7 @@ export class TempRepo {
     return dir;
   }
 
-  run(args: string[], cwd: string = this.path): Promise<RunResult> {
-    return runDryland(args, { cwd });
+  run(args: string[], cwd: string = this.path, env: Record<string, string> = {}): Promise<RunResult> {
+    return runDryland(args, { cwd, env });
   }
 }
