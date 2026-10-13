@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TempRepo } from "./harness.ts";
@@ -149,6 +149,8 @@ describe("dryland ticket claim commits", () => {
   it("keeps the change on disk, warns and says what to do when the commit fails", async () => {
     const repo = shopRepo();
     repo.write(".git/hooks/pre-commit", "#!/bin/sh\necho blocked by hook >&2\nexit 1\n");
+    // On POSIX git skips a hook that is not executable.
+    chmodSync(join(repo.path, ".git/hooks/pre-commit"), 0o755);
 
     const result = await repo.run(["ticket", "claim", "shop/01"]);
 

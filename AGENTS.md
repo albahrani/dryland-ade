@@ -22,3 +22,7 @@ Implementing a ticket does not close it. Once its work is committed, resolve it 
 4. Commit the ticket and map files as their own commit, separate from the code.
 
 The ticket is closed when its `Status:` is `resolved`, it holds an `## Answer`, and the map links it. Run `dryland` from `node packages/cli/dist/dryland.mjs` after `pnpm build` unless it is on `PATH`.
+
+## Testing on Windows
+
+CI runs Linux, macOS and Windows, but a Windows machine hides POSIX-only failures (executable bits, hooks, `#!/bin/sh` stubs). On Windows with Docker running, run the full suite twice before committing: `pnpm test`, then `pnpm test:linux` (the suite in a throwaway `node` container on a copy of the working tree). Fix failures from either run. Without Docker, say so and leave the Linux run to CI.
