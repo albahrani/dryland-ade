@@ -30,7 +30,7 @@ function slugOf(title: string): string {
 /** Everything is checked before the lock is taken, so a bad request never touches the tracker. */
 function validate(input: CreateTicketInput): { type: TicketType; title: string } {
   assertMapName(input.map);
-  const title = requireOneLine("ticket title", input.title, "title");
+  const title = requireOneLine("ticket title", input.title, "title", "<short title>");
   const type = TICKET_TYPES.find((known) => known === input.type.toLowerCase());
   if (type === undefined) {
     throw new DrylandError(

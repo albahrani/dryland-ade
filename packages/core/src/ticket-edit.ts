@@ -1,5 +1,5 @@
 import { DrylandError } from "./errors.ts";
-import { appendToSection, rewriteBlockedBy, rewriteStatus } from "./local-markdown.ts";
+import { appendComment, rewriteBlockedBy, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { TRIAGE_ROLES, type TriageRole } from "./ticket.ts";
 import { currentTicket, parseTicketReference, readTickets, type TicketWriteResult } from "./tickets.ts";
@@ -111,7 +111,7 @@ export async function commentOnTicket(
     const { ticket, path, text: file } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
     return {
-      changes: [{ path, content: appendToSection(file, "Comments", text) }],
+      changes: [{ path, content: appendComment(file, text) }],
       message: `Comment on ${name}`,
       value: { ...ticket, comments: [...ticket.comments, text] },
     };

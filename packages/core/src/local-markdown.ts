@@ -60,15 +60,17 @@ function rewriteHeaderField(
   replace: (current: string) => string[],
   options: { dropAnnotations: boolean } = { dropAnnotations: false },
 ): string {
-  const eol = lineEnding(markdown);
-  const lines = markdown.split(/\r?\n/);
+  // Lines keep their own terminators, so a file with mixed line endings is not normalised.
+  const lines = markdown.split(/(?<=\n)/);
+  const fileEol = lineEnding(markdown);
+  const text = (line: string) => line.replace(/\r?\n$/, "");
   const titleIndex = lines.findIndex((line) => line.startsWith("# "));
 
   let fieldIndex = -1;
   let lastFieldIndex = titleIndex;
   const annotationIndexes = new Set<number>();
   for (let i = titleIndex + 1; i < lines.length; i++) {
-    const line = lines[i] ?? "";
+    const line = text(lines[i] ?? "");
     if (line.trim() === "") continue;
     if (CLAIM_ANNOTATION_LINE.test(line)) {
       annotationIndexes.add(i);
@@ -81,21 +83,27 @@ function rewriteHeaderField(
     lastFieldIndex = i;
   }
 
-  const current = fieldIndex === -1 ? "" : (FIELD_LINE.exec(lines[fieldIndex] ?? "")?.[2] ?? "").trim();
+  const current = fieldIndex === -1 ? "" : (FIELD_LINE.exec(text(lines[fieldIndex] ?? ""))?.[2] ?? "").trim();
   const replacement = replace(current);
+  /** `texts` as lines that end the way `like` does; a `like` with no ending at the end of the file gets none. */
+  const asLines = (texts: string[], like: string) => {
+    const own = /\r?\n$/.exec(like)?.[0] ?? "";
+    return texts.map((t, i) => `${t}${i === texts.length - 1 ? own : own || fileEol}`);
+  };
+
   const insertAfter = fieldIndex === -1 ? lastFieldIndex : -1;
   const out: string[] = [];
   lines.forEach((line, i) => {
-    if (!(options.dropAnnotations && annotationIndexes.has(i))) {
-      if (i === fieldIndex) out.push(...replacement);
-      else out.push(line);
-    }
+    const dropped = options.dropAnnotations && annotationIndexes.has(i);
+    if (i === fieldIndex) out.push(...asLines(replacement, line));
+    else if (!dropped) out.push(line);
     if (i === insertAfter && replacement.length > 0) {
-      if (i === titleIndex) out.push("");
-      out.push(...replacement);
+      if (!dropped && !/\n$/.test(line)) out[out.length - 1] = `${line}${fileEol}`;
+      if (i === titleIndex) out.push(/\r?\n$/.exec(line)?.[0] ?? fileEol);
+      out.push(...asLines(replacement, line));
     }
   });
-  return out.join(eol);
+  return out.join("");
 }
 
 /**
@@ -146,25 +154,64 @@ function findSectionRange(lines: string[], heading: string): { start: number; en
 }
 
 /**
- * Appends `text` as the last entry of the section with this `## ` heading, creating the section at the end
- * of the file when it is missing. Every other line, including line endings, is left as it was.
+ * Appends `entry` (one or more lines) as the last entry of the section with this `## ` heading, or creates
+ * the section at the end of the file. Every other line is kept with its own line ending. In a `list` section
+ * a bare "Nothing." placeholder gives way to the entry and a loose list stays loose; in a `paragraph` section
+ * the entry follows a blank line.
  */
-export function appendToSection(markdown: string, heading: string, text: string): string {
-  const eol = lineEnding(markdown);
-  const lines = markdown.split(/\r?\n/);
-  const entry = text.trim().split(/\r?\n/);
+function appendToSection(markdown: string, heading: string, entry: string, style: "paragraph" | "list"): string {
+  const lines = markdown.split(/(?<=\n)/);
+  const fileEol = lineEnding(markdown);
+  const text = (line: string) => line.replace(/\r?\n$/, "");
+  const endingOf = (line: string) => /\r?\n$/.exec(line)?.[0] ?? fileEol;
+  const isBlank = (line: string | undefined) => text(line ?? "").trim() === "";
+  const entryLines = (eol: string) => entry.split(/\r?\n/).map((line) => `${line}${eol}`);
 
   const range = findSectionRange(lines, heading);
   if (range === null) {
-    const body = lines.join("\n").replace(/\s+$/, "").split("\n");
-    return [...body, "", `## ${heading}`, "", ...entry, ""].join(eol);
+    const last = lines.length - 1;
+    if (last >= 0 && !/\n$/.test(lines[last] ?? "")) lines[last] += fileEol;
+    const spacing = last >= 0 && !isBlank(lines[last]) ? [fileEol] : [];
+    return [...lines, ...spacing, `## ${heading}${fileEol}`, fileEol, ...entryLines(fileEol)].join("");
   }
+
   const { start, end } = range;
-  let last = end - 1; // the last line of the section that has content
-  while (last > start && (lines[last] ?? "").trim() === "") last--;
-  const tail = lines.slice(end);
-  // A section that ends the file ends with one newline; one that precedes another keeps a blank line.
-  return [...lines.slice(0, last + 1), "", ...entry, "", ...tail].join(eol);
+  const filled: number[] = [];
+  for (let i = start + 1; i < end; i++) if (!isBlank(lines[i])) filled.push(i);
+  const first = filled[0];
+  const last = filled[filled.length - 1];
+
+  if (first === undefined || last === undefined) {
+    const headingLine = lines[start] ?? "";
+    const eol = endingOf(headingLine);
+    lines[start] = /\n$/.test(headingLine) ? headingLine : `${headingLine}${eol}`;
+    lines.splice(start + 1, 0, eol, ...entryLines(eol));
+    return lines.join("");
+  }
+  // Only the bare placeholder of the map template gives way; a real decision that starts "None of..." stays.
+  if (style === "list" && first === last && /^(nothing|none)\.?$/i.test(text(lines[first] ?? "").trim())) {
+    lines.splice(first, 1, ...entryLines(endingOf(lines[first] ?? "")));
+    return lines.join("");
+  }
+
+  const lastLine = lines[last] ?? "";
+  const eol = endingOf(lastLine);
+  const unterminated = !/\n$/.test(lastLine);
+  if (unterminated) lines[last] = `${lastLine}${eol}`;
+  // A list keeps its spacing: a blank line between entries stays between entries.
+  const loose = style === "paragraph" || last - first + 1 > filled.length;
+  const added = [...(loose ? [eol] : []), ...entryLines(eol)];
+  // Only the end of the file lacks a terminator, and the file then still ends without one.
+  if (unterminated) added[added.length - 1] = (added[added.length - 1] ?? "").slice(0, -eol.length);
+  // An entry directly above the next heading keeps a blank line between them.
+  if (style === "paragraph" && end < lines.length && last === end - 1) added.push(eol);
+  lines.splice(last + 1, 0, ...added);
+  return lines.join("");
+}
+
+/** Appends a comment under `## Comments`, creating the heading when it is missing. Earlier lines are untouched. */
+export function appendComment(markdown: string, comment: string): string {
+  return appendToSection(markdown, "Comments", comment, "paragraph");
 }
 
 /**
@@ -172,42 +219,7 @@ export function appendToSection(markdown: string, heading: string, text: string)
  * A lone "Nothing." placeholder gives way to the entry. Every other line is kept with its own line ending.
  */
 export function appendDecision(markdown: string, entry: string): string {
-  const lines = markdown.split(/(?<=\n)/);
-  const fileEol = lineEnding(markdown);
-  const text = (line: string) => line.replace(/\r?\n$/, "");
-  const endingOf = (line: string) => /\r?\n$/.exec(line)?.[0] ?? fileEol;
-
-  const range = findSectionRange(lines, "Decisions so far");
-  if (range === null) {
-    const last = lines.length - 1;
-    const body = lines.slice();
-    if (last >= 0 && !/\n$/.test(body[last] ?? "")) body[last] += fileEol;
-    return [...body, fileEol, `## Decisions so far${fileEol}`, fileEol, `${entry}${fileEol}`].join("");
-  }
-
-  const { start, end } = range;
-  const content = lines.slice(start + 1, end).map((line, i) => ({ line, index: start + 1 + i }));
-  const filled = content.filter(({ line }) => text(line).trim() !== "");
-  const first = filled[0];
-  const last = filled[filled.length - 1];
-  if (first === undefined || last === undefined) {
-    const heading = lines[start] ?? "";
-    const eol = endingOf(heading);
-    lines[start] = /\n$/.test(heading) ? heading : `${heading}${eol}`;
-    lines.splice(start + 1, 0, eol, `${entry}${eol}`);
-    return lines.join("");
-  }
-  // Only the bare placeholder of the map template gives way; a real decision that starts "None of..." stays.
-  if (first === last && /^(nothing|none)\.?$/i.test(text(first.line).trim())) {
-    lines[first.index] = `${entry}${endingOf(first.line)}`;
-    return lines.join("");
-  }
-  const eol = endingOf(last.line);
-  if (!/\n$/.test(last.line)) lines[last.index] = `${last.line}${eol}`;
-  // Keep the list's spacing: a blank line between entries stays between entries.
-  const loose = last.index - first.index + 1 > filled.length;
-  lines.splice(last.index + 1, 0, ...(loose ? [eol] : []), `${entry}${/\n$/.test(last.line) ? eol : ""}`);
-  return lines.join("");
+  return appendToSection(markdown, "Decisions so far", entry, "list");
 }
 
 /** Removes every HTML comment, e.g. the guidance comments in wayfinder's map template. */

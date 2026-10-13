@@ -1,8 +1,8 @@
-/** `value` trimmed, which must be one non-empty line; `what` and `flag` name it in the error. */
-export function requireOneLine(what: string, value: string, flag: string): string {
+/** `value` trimmed, which must be one non-empty line; `what`, `flag` and `hint` name it in the error. */
+export function requireOneLine(what: string, value: string, flag: string, hint = "<text>"): string {
   const text = value.trim();
   if (text === "" || /[\r\n]/.test(text)) {
-    throw new DrylandError(`A ${what} must be one non-empty line.`, `Pass it as --${flag} "<text>".`);
+    throw new DrylandError(`A ${what} must be one non-empty line.`, `Pass it as --${flag} "${hint}".`);
   }
   return text;
 }
