@@ -4,7 +4,7 @@ import { DrylandError } from "./errors.ts";
 import { readClaim, rewriteClaim, ticketFile } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
-import { findTicket, parseTicketReference, readTickets } from "./tickets.ts";
+import { findTicket, parseTicketReference, readTickets, type TicketReference } from "./tickets.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 
 export interface ClaimOptions extends TrackerWriteOptions {
@@ -26,8 +26,8 @@ export async function branchHolder(runner: ProcessRunner, cwd: string): Promise<
 }
 
 /** Reads the ticket afresh, so a decision made under the lock never rests on an earlier read. */
-async function currentTicket(mainCheckout: string, reference: string) {
-  const ticket = findTicket(await readTickets(mainCheckout), reference);
+async function currentTicket(mainCheckout: string, wanted: TicketReference) {
+  const ticket = findTicket(await readTickets(mainCheckout), wanted);
   const path = await ticketFile(mainCheckout, ticket.map, ticket.id);
   if (path === null) {
     throw new DrylandError(
@@ -45,9 +45,9 @@ export async function claimTicket(
   reference: string,
   options: ClaimOptions,
 ): Promise<TicketWriteResult> {
-  parseTicketReference(reference);
+  const wanted = parseTicketReference(reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
-    const { ticket, path, text } = await currentTicket(mainCheckout, reference);
+    const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
     if (ticket.state === "claimed") {
       const holder = ticket.claimant ?? "someone";
@@ -80,9 +80,9 @@ export async function releaseTicket(
   reference: string,
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
-  parseTicketReference(reference);
+  const wanted = parseTicketReference(reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
-    const { ticket, path, text } = await currentTicket(mainCheckout, reference);
+    const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
     if (ticket.state !== "claimed") {
       throw new DrylandError(
@@ -94,6 +94,11 @@ export async function releaseTicket(
       changes: [{ path, content: rewriteClaim(text, { release: true }) }],
       message: `Release claim on ${name}`,
       value: { ...ticket, state: "open" as const, claimant: null },
+      // A claim made by hand records no earlier status, so there is nothing to put back.
+      warnings:
+        readClaim(text) === null
+          ? [`${name} was claimed without dryland, so it has no previous status to restore; its Status: line was removed and it is open.`]
+          : [],
     };
   });
   return { ticket: value, warnings };

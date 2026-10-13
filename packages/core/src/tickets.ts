@@ -35,6 +35,8 @@ export interface TicketReference {
   /** The map the reference names; `null` for a bare number. */
   map: string | null;
   number: number;
+  /** The reference as written, for messages. */
+  text: string;
 }
 
 /** Parses `<map>/<number>` or a bare `<number>`; anything else is rejected before any tracker is read. */
@@ -46,31 +48,30 @@ export function parseTicketReference(reference: string): TicketReference {
       "Write it as <map>/<number>, e.g. shop/02, or just the number when only one map has it.",
     );
   }
-  return { map: match[1] ?? null, number: Number(match[2]) };
+  return { map: match[1] ?? null, number: Number(match[2]), text: reference };
 }
 
 /** Finds one ticket by `<map>/<number>`, or by bare number when only one map has it. */
 export async function showTicket(runner: ProcessRunner, cwd: string, reference: string): Promise<Ticket> {
-  parseTicketReference(reference); // a malformed reference is rejected before any tracker is read
-  return findTicket((await loadTickets(runner, cwd)).tickets, reference);
+  const wanted = parseTicketReference(reference); // rejected before any tracker is read
+  return findTicket((await loadTickets(runner, cwd)).tickets, wanted);
 }
 
 /** Picks the ticket a reference names out of `tickets`, or fails with the next action. */
-export function findTicket(tickets: Ticket[], reference: string): Ticket {
-  const wanted = parseTicketReference(reference);
+export function findTicket(tickets: Ticket[], wanted: TicketReference): Ticket {
   const matches = tickets.filter(
     (t) => Number(t.id) === wanted.number && (wanted.map === null || t.map === wanted.map),
   );
   const [only, ...others] = matches;
   if (only === undefined) {
     throw new DrylandError(
-      `There is no ticket "${reference}".`,
+      `There is no ticket "${wanted.text}".`,
       "Run `dryland ticket list` to see ticket ids, written as <map>/<number>.",
     );
   }
   if (others.length > 0) {
     throw new DrylandError(
-      `Ticket "${reference}" exists in several maps: ${matches.map((t) => `${t.map}/${t.id}`).join(", ")}.`,
+      `Ticket "${wanted.text}" exists in several maps: ${matches.map((t) => `${t.map}/${t.id}`).join(", ")}.`,
       "Name the map too, as <map>/<number>.",
     );
   }

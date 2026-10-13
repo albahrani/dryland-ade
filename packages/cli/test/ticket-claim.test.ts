@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TempRepo } from "./harness.ts";
@@ -46,6 +46,17 @@ describe("dryland ticket release", () => {
     expect(result.exitCode).toBe(0);
     expect(repo.read(TICKET_PATH)).toBe(TICKET);
     expect(repo.log()[0]).toBe("Release claim on shop/01");
+    expect(repo.git("status", "--porcelain")).toBe("");
+  });
+
+  it("says so when a claim made by hand had no recorded status to restore", async () => {
+    const repo = shopRepo({ [TICKET_PATH]: TICKET.replace("Status: ready-for-agent", "Status: claimed") });
+
+    const result = await repo.run(["ticket", "release", "shop/01"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("no previous status");
+    expect(repo.read(TICKET_PATH)).not.toContain("Status:");
     expect(repo.git("status", "--porcelain")).toBe("");
   });
 
@@ -153,6 +164,31 @@ describe("dryland ticket claim commits", () => {
 
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toContain("not the default branch main");
+  });
+});
+
+describe("dryland tracker write edge cases", () => {
+  it("takes the default branch from init.defaultBranch when no origin or main/master exists", async () => {
+    const repo = shopRepo();
+    repo.git("branch", "-m", "main", "trunk");
+    repo.git("config", "init.defaultBranch", "trunk");
+    repo.git("switch", "--quiet", "-c", "feature");
+
+    const result = await repo.run(["ticket", "claim", "shop/01"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain("not the default branch trunk");
+  });
+
+  it("removes a temp file a crashed write left in the issues directory", async () => {
+    const repo = shopRepo();
+    const leftover = ".scratch/shop/issues/.0b3c1f6e-8a52-4c1b-9a43-6f2d5f7d1e90.tmp";
+    repo.write(leftover, "half a ticket");
+
+    const result = await repo.run(["ticket", "claim", "shop/01"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(join(repo.path, leftover))).toBe(false);
   });
 });
 

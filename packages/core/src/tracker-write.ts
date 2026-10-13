@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DrylandError } from "./errors.ts";
@@ -24,6 +24,8 @@ export interface TrackerWrite<T> {
   /** The commit message; one commit covers all `changes`. */
   message: string;
   value: T;
+  /** Things the user should know about this write, reported with the result. */
+  warnings?: string[];
 }
 
 export interface TrackerWriteOptions {
@@ -123,6 +125,15 @@ function lockTimeout(lockPath: string): DrylandError {
     `Retry in a moment. If no dryland command is running, delete ${lockPath}.`,
   );
 }
+const TEMP_FILE = /^.[0-9a-f-]{36}.tmp$/;
+
+/** Under the lock no write is in flight, so any temp file here was left by a process that crashed mid-write. */
+async function removeLeftoverTemps(dir: string): Promise<void> {
+  for (const name of await readdir(dir).catch(() => [])) {
+    if (TEMP_FILE.test(name)) await rm(join(dir, name), { force: true });
+  }
+}
+
 /** Writes a file so readers see the old or the new content, never a partial one. */
 async function writeAtomically(path: string, content: string): Promise<void> {
   const temp = join(dirname(path), `.${randomUUID()}.tmp`);
@@ -151,7 +162,8 @@ async function defaultBranch(runner: ProcessRunner, mainCheckout: string): Promi
   };
   const remoteHead = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
   if (remoteHead.startsWith("origin/")) return remoteHead.slice("origin/".length);
-  for (const name of ["main", "master"]) {
+  const configured = await git("config", "--get", "init.defaultBranch");
+  for (const name of [...(configured === "" ? [] : [configured]), "main", "master"]) {
     if ((await git("rev-parse", "--verify", "--quiet", `refs/heads/${name}`)) !== "") return name;
   }
   return null;
@@ -177,8 +189,13 @@ export async function writeTracker<T>(
 
   const release = await acquireLock(lockPath);
   try {
-    const { changes, message, value } = await produce(mainCheckout);
-    for (const change of changes) await writeAtomically(join(mainCheckout, change.path), change.content);
+    const { changes, message, value, warnings: produced = [] } = await produce(mainCheckout);
+    warnings.push(...produced);
+    for (const change of changes) {
+      const target = join(mainCheckout, change.path);
+      await removeLeftoverTemps(dirname(target));
+      await writeAtomically(target, change.content);
+    }
 
     const current = (await git(["symbolic-ref", "--quiet", "--short", "HEAD"])).stdout.trim();
     const expected = await defaultBranch(runner, mainCheckout);

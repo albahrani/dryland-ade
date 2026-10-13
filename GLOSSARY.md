@@ -31,6 +31,10 @@ _Avoid_: Phase, stage, category
 The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
 
+**Claim**:
+A mark on a ticket that one session is working on it, naming its holder (a session id or branch) and when it was made. Taken by `ticket claim`, undone by `ticket release`.
+_Avoid_: Lock, assignment
+
 **Stale claim**:
 A claim on a ticket that no live session holds; flagged as possibly stale and released only by an explicit user action.
 _Avoid_: Orphaned ticket, expired lock
