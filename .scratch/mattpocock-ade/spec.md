@@ -233,7 +233,7 @@ Three packages in a pnpm workspace under the `@dryland` scope:
   - spec with ready tickets: `/implement-spec`, or `/implement` per `ready-for-agent` ticket
   - branch ahead and ticket done: `/pr` (with `/code-review` before)
   - merged feature: `/retro`
-- Priority: waiting sessions, then possibly stale claims, then map frontier (lowest number first), then ready implementation work, then untriaged or unspecified work, then housekeeping (`/pr`, `/retro`).
+- Priority: a missing setup config first (nothing else works without it), then waiting sessions, then possibly stale claims, then map frontier (lowest number first), then ready implementation work, then untriaged or unspecified work, then housekeeping (`/pr`, `/retro`).
 - A claim with no live Dryland session behind it is flagged "claimed, possibly stale". It is never auto-released.
 - Unknown backend facts are flagged ("blocking unknown"), never guessed.
 - "Why not X?" lists X's unresolved blockers.
