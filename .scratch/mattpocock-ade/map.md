@@ -87,6 +87,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Feed git state into the repo snapshot](issues/64-feed-git-session-and-skill-setup-state-into-the-re.md): readRepoSnapshot fills git from Linked worktrees; sessions and skill setup split out to 65 and 66.
 
+- [Desktop shell with the Tickets tree](issues/30-desktop-shell-with-tickets-tree.md): Electron shell and Tickets view over readTicketsTree, with file watching, remembered project and legend, Playwright smoke test.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
