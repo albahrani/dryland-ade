@@ -1,5 +1,7 @@
 # Electron + TypeScript desktop stack, PTYs owned by the app
 
+_Naming: the product is now Dryland ADE and the CLI binary is `dryland`; read `ade` in this ADR as `dryland`. How the CLI gets onto `PATH` is decided in ADR 0004, which supersedes any "shim on PATH" wording here._
+
 The ADE is an Electron app written in TypeScript (React renderer, pnpm workspace, `electron-vite`). Agent CLIs run in `node-pty` PTYs rendered by xterm.js (WebGL, fit, unicode11), using native ConPTY on Windows. Tauri was rejected: no bundled Node means no `node-pty`, a rewritten PTY layer, and system webviews that vary per OS. The project is MIT licensed, matching Orca, and may copy small isolated Orca pieces (agent CLI config-table idea, worktree slugify/collision suffixing, ConPTY patches) with the MIT notice and Lovecast Inc. copyright kept in a `THIRD_PARTY_NOTICES` file. Nothing is vendored wholesale and Orca's app shell, relay and mobile code are not used.
 
 ## Decisions

@@ -1,5 +1,7 @@
 # ADE writes metadata only, prose only as marked annotations, and degrades on modified skill setups
 
+_Naming: the product is now Dryland ADE and the CLI binary is `dryland`; read `ade` in this ADR as `dryland`, the annotation marker as `<!-- dryland: ... -->` and the verdict file as `.dryland/compat.md`._
+
 The ADE is a lens plus actuator, so its writes are narrow: tracker metadata through `ade` (claim, resolve, blocking, map index line, `Status:` and triage labels), each confirmed by a click unless the user started it from a ticket. Prose artifacts are not strictly off limits, because an ADE-owned addition may later improve UX or parsing. Any such **ADE-owned annotation** must be written through `ade`, delimited so skills ignore it (e.g. `<!-- ade: ... -->`), never alter skill-authored text, and be optional for every ADE feature. Each type is recorded as its own decision, and v1 ships none. A hard "never write prose" rule was rejected as too rigid; free-form content edits were rejected as coupling the ADE to skill details that change.
 
 For non-default skill setups the ADE detects, warns and degrades; it never refuses or auto-repairs. Installed skills and `docs/agents/*.md` are fingerprinted against the default mirror on every startup. A modified setup prompts the user to run an agent-driven compatibility check (`ade doctor --compat-prompt`), skip, or accept the deviations. The resulting verdict file only toggles ADE features. Updating skills from the ADE is out of v1.

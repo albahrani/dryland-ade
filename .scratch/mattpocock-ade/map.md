@@ -9,7 +9,7 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 - Domain: agent development environment (ADE). Inspiration but NOT a fork: https://github.com/stablyai/orca (research input only; fresh build).
 - Shows, from skill artifacts and git: what is open/done, next steps, which skill fits which ticket, plus worktrees/branches/commits in context of features, tickets and maps.
 - Hard constraint: agents are driven via their own CLIs under the user's subscription (embedded terminal/PTY, passive observation via transcripts/hooks). No Claude API, no Claude Agent SDK. Interactivity is limited accordingly; research how Orca does it.
-- First-class Agent CLIs: Claude Code and GitHub Copilot CLI (only Copilot is available on the dev machine); as many others as cheaply possible, leaning on what can be taken over from Orca.
+- First-class Agent CLIs: Claude Code and GitHub Copilot CLI (Copilot was verified on the earlier dev machine; the current dev machine has Claude Code only, so the Claude adapter is the one verifiable locally); as many others as cheaply possible, leaning on what can be taken over from Orca.
 - Trackers in v1: local-markdown, GitHub, GitLab (via `gh`/`glab` CLIs, no stored tokens), selected from `docs/agents/issue-tracker.md`.
 - Source of truth is the repo; the ADE is a lens plus actuator with minimal local UI state.
 - v1 supports the default setup produced by `setup-matt-pocock-skills` plus the ADE tracker (the ADE's own CLI registered as the "Other" tracker, see ADR 0001); custom skill modifications are out of scope.
@@ -52,22 +52,22 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 - [Packaging, distribution and testing](issues/14-packaging-and-testing.md): electron-builder, unsigned GitHub Releases, electron-updater latest/beta channels (macOS notify-only), ade launcher in install dir, 2s shutdown budget, Vitest-based test layers; see ADR 0004.
 
 - [Remaining screens](issues/15-remaining-screens.md): Settings (6 tabs), New map (agent choice only, pre-types `/wayfinder`), New ticket (`ade ticket create` behind confirm), Merge/PR in Source Control (dry-run checks, local merge or `gh`/`glab` PR, conflicts handed to the agent), project switcher with live-session counts; prototype in `prototype/views-and-ux/screens.js`.
-
+
 - [Product name and branding](issues/16-product-name.md): **Dryland ADE** (short: Dryland), binary `dryland`, npm scope `@dryland/*`, repo `dryland-ade`, appId `dev.dryland.ade` (placeholder owner); unofficial, community-made, with visible love for Matt Pocock's skills.
 
 - [Verify Copilot hook and trust setup end to end](issues/17-verify-copilot-worktree-hooks.md): a global env-gated `~/.copilot/hooks/<ade>.json` fires sessionStart/agentStop/sessionEnd under `copilot -p` (even in untrusted worktrees) and is inert without the env var; appending to `trustedFolders` is clean and reversible; interactive-mode trust prompt unverified; exact shapes in `research/hook-status-mapping.md`.
-
+
 - [GitHub project preparation and release checklist](issues/18-github-project-preparation.md): repo `dryland-ade`, squash to one clean initial commit after a secrets/path scan, nothing moved (skill-expected paths stay), standard OSS files + templates, SHA-pinned 3-OS CI and tag-driven release, `v0.1.0-beta.1` first, 1.0 after Windows smoke checklist, branch protection and Dependabot.
 
 - [Verify Copilot hooks and trust prompt in interactive mode](issues/19-verify-copilot-interactive-mode.md): interactive Copilot fires the global env-gated hooks (inert without the env var), a `trustedFolders` entry suppresses the trust prompt and removes cleanly, waiting = `permissionRequest`/`notification(permission_prompt)`, idle = `agentStop`; `sessionStart` fires only at first submit, so "launched" state comes from the ADE's own PTY spawn.
 
+- Spec and ADR set authored: [spec](spec.md) (`ready-for-agent`, uses `dryland` and `DRYLAND_*` / `<!-- dryland: -->` / `.dryland/` throughout); ADRs 0005 (user-level agent-config exception), 0006 (Agent adapters and hook-sourced status), 0007 (next-step rule engine), 0008 (CLI surface, normalized ticket model, live reporting); rename note added to ADRs 0001 to 0004; glossary gained ticket kind, stale claim, next-up marker, live event, unlinked branch. Build order starts with the Claude Code adapter, whose verification is its first implementation ticket.
+
 ## Not yet specified
 
-- Spec/ADR authoring itself (the final deliverable) once the route is clear. Things to handle while authoring:
-  - ADRs still missing: the user-level agent-config exception (only in Notes), Agent adapter seam + hook status sourcing, the next-step rule engine, the `ade` CLI surface + live reporting.
-  - Rename (decided in [Product name and branding](issues/16-product-name.md)): working title "ADE" became **Dryland ADE** / **Dryland**, binary `dryland`. The spec uses `dryland` where earlier decisions say `ade` (CLI commands, `ade doctor`, launcher), and the ADRs get the one-line note that ticket 16 promised. Prefixes like `ADE_PANE_KEY` and `<!-- ade: -->` follow the binary name unless the spec says otherwise.
-  - Glossary gaps: ticket kinds (Fog / Planning / Implementation), unlinked branch, stale claim, live event, next-up marker.
-  - Risks for the spec: the Claude Code adapter is docs-only (not installed on the dev machine).
+Nothing. The destination is reached: next is `/to-tickets` on the spec.
+
+- Carried into the build as risks (see the spec's Further Notes): the Claude Code adapter is docs-only until its first implementation ticket verifies it.
 
 ## Out of scope
 

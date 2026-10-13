@@ -1,5 +1,7 @@
 # Unsigned electron-builder releases with channel auto-update, launcher in the install directory
 
+_Naming: the product is now Dryland ADE and the CLI binary is `dryland`; read `ade` in this ADR as `dryland` (launcher `bin\dryland.cmd` / `dryland`)._
+
 The ADE is packaged with `electron-builder` and distributed through GitHub Releases (plus build-from-source via `pnpm`). Builds are unsigned in v1. Updates use `electron-updater` with the GitHub provider. We rejected a compiled standalone `ade` executable (it would duplicate the ~80 MB Electron runtime and still need a PATH entry) and a self-healing shim in a separate user directory (spreads files across the machine).
 
 ## Decisions
