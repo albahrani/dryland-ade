@@ -1,5 +1,6 @@
-import { access, readdir, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { delimiter, join } from "node:path";
+import { envKey, exists } from "./env-fs.ts";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
@@ -42,13 +43,6 @@ const fail = (id: DoctorCheck["id"], detail: string, nextAction: string): Doctor
   detail,
   nextAction,
 });
-
-async function exists(path: string): Promise<boolean> {
-  return access(path).then(
-    () => true,
-    () => false,
-  );
-}
 
 async function hasSkills(mainCheckout: string): Promise<boolean> {
   for (const dir of SKILL_DIRS) {
@@ -108,13 +102,11 @@ async function isRunnable(path: string, windows: boolean): Promise<boolean> {
 }
 
 async function checkPath(env: Record<string, string | undefined>): Promise<DoctorCheck> {
-  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path");
-  const dirs = (pathKey === undefined ? "" : (env[pathKey] ?? "")).split(delimiter).filter((dir) => dir !== "");
-  const pathExtKey = Object.keys(env).find((key) => key.toLowerCase() === "pathext");
+  const dirs = (env[envKey(env, "PATH")] ?? "").split(delimiter).filter((dir) => dir !== "");
   // On Windows a command needs one of the PATHEXT extensions to run; elsewhere it needs the x bit.
   const windows = process.platform === "win32";
   const extensions = windows
-    ? (env[pathExtKey ?? "PATHEXT"] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((ext) => ext !== "")
+    ? (env[envKey(env, "PATHEXT")] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((ext) => ext !== "")
     : [""];
   for (const dir of dirs) {
     for (const extension of extensions) {

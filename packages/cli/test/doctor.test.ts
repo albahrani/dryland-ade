@@ -1,8 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TempRepo } from "./harness.ts";
+import { isolatedPath, stubCli, TempRepo, tempDir } from "./harness.ts";
 
 const DOCS = {
   "docs/agents/issue-tracker.md": "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n",
@@ -20,28 +19,15 @@ interface Check {
 
 /** A directory holding a runnable `dryland`, to put on PATH. */
 function dirWithDryland(): string {
-  const dir = mkdtempSync(join(tmpdir(), "dryland-bin-"));
+  const dir = tempDir("dryland-bin-");
   const name = process.platform === "win32" ? "dryland.cmd" : "dryland";
   writeFileSync(join(dir, name), "@echo off\n");
   chmodSync(join(dir, name), 0o755);
   return dir;
 }
 
-/** `PATH` with `dir` in front, under the spelling of the key the environment already uses. */
-function pathWith(dir: string, base: Record<string, string> = {}): Record<string, string> {
-  const key = Object.keys(process.env).find((name) => name.toLowerCase() === "path") ?? "PATH";
-  return { [key]: `${dir}${delimiter}${base[key] ?? process.env[key] ?? ""}` };
-}
-
-const withDrylandOnPath = () => pathWith(dirWithDryland());
-/** `PATH` minus any directory that already holds a `dryland`, so the check cannot be satisfied by the machine. */
-function withoutDrylandOnPath(): Record<string, string> {
-  const key = Object.keys(process.env).find((name) => name.toLowerCase() === "path") ?? "PATH";
-  const kept = (process.env[key] ?? "")
-    .split(delimiter)
-    .filter((dir) => !["dryland", "dryland.cmd", "dryland.exe", "dryland.bat"].some((n) => existsSync(join(dir, n))));
-  return { [key]: kept.join(delimiter) };
-}
+const withDrylandOnPath = () => isolatedPath(dirWithDryland());
+const withoutDrylandOnPath = () => isolatedPath(tempDir("dryland-empty-"));
 
 function doctor(repo: TempRepo, env: Record<string, string>, ...args: string[]) {
   return repo.run(["doctor", ...args], repo.path, env);
@@ -131,22 +117,22 @@ describe("dryland doctor", () => {
 
   it("does not count a directory named dryland as the launcher", async () => {
     const repo = TempRepo.create({ ...DOCS, ...SKILL });
-    const dir = mkdtempSync(join(tmpdir(), "dryland-dirbin-"));
+    const dir = tempDir("dryland-dirbin-");
     mkdirSync(join(dir, "dryland"));
     mkdirSync(join(dir, "dryland.cmd"));
 
-    const list = await checks(repo, pathWith(dir, withoutDrylandOnPath()));
+    const list = await checks(repo, isolatedPath(dir));
 
     expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
   });
 
   it.skipIf(process.platform === "win32")("does not count a dryland without the executable bit", async () => {
     const repo = TempRepo.create({ ...DOCS, ...SKILL });
-    const dir = mkdtempSync(join(tmpdir(), "dryland-noexec-"));
+    const dir = tempDir("dryland-noexec-");
     writeFileSync(join(dir, "dryland"), "#!/bin/sh\n");
     chmodSync(join(dir, "dryland"), 0o644);
 
-    const list = await checks(repo, pathWith(dir, withoutDrylandOnPath()));
+    const list = await checks(repo, isolatedPath(dir));
 
     expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
   });
@@ -163,5 +149,40 @@ describe("dryland doctor", () => {
     expect(result.stdout.match(/docs\/agents\/issue-tracker\.md/g)).toHaveLength(1);
     expect(result.stdout).toMatch(/OK\s+setup/);
     expect(result.stdout).toMatch(/FAIL\s+tracker/);
+  });
+
+  describe.each([
+    { tracker: "GitHub", cli: "gh" },
+    { tracker: "GitLab", cli: "glab" },
+  ])("with a $tracker tracker", ({ tracker, cli }) => {
+    const repo = () =>
+      TempRepo.create({ ...DOCS, ...SKILL, "docs/agents/issue-tracker.md": `# Issue tracker: ${tracker}\n` });
+    const withCli = (authExit: number) => {
+      const stub = stubCli(cli, authExit);
+      return { ...isolatedPath(dirWithDryland(), stub.dir), ...stub.env };
+    };
+
+    it("passes when the CLI is installed and logged in", async () => {
+      const result = await doctor(repo(), withCli(0));
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain(`OK    tracker  ${tracker}: \`${cli}\` is installed and logged in.`);
+    });
+
+    it("fails with an install step when the CLI is missing", async () => {
+      const result = await doctor(repo(), withDrylandOnPath());
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain(`FAIL  tracker  ${tracker} tracker, but \`${cli}\` is not installed.`);
+      expect(result.stdout).toContain(`Next: Install ${cli} from`);
+    });
+
+    it("fails with a login step when the CLI is logged out", async () => {
+      const result = await doctor(repo(), withCli(1));
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain(`FAIL  tracker  ${tracker} tracker, but \`${cli}\` is not logged in.`);
+      expect(result.stdout).toContain(`Next: Run \`${cli} auth login\`.`);
+    });
   });
 });

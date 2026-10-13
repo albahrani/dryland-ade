@@ -1,8 +1,18 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { envKey } from "@dryland/core";
 
 const BUNDLE = fileURLToPath(new URL("../dist/dryland.mjs", import.meta.url));
 
@@ -26,6 +36,43 @@ export function runDryland(args: string[], opts: { cwd: string; env?: Record<str
     child.on("error", reject);
     child.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? -1 }));
   });
+}
+
+/** A fresh empty directory under the temp dir. */
+export function tempDir(prefix: string): string {
+  return mkdtempSync(join(tmpdir(), prefix));
+}
+
+const WINDOWS = process.platform === "win32";
+
+/**
+ * A `PATH` env holding `dirs` and nothing else but the directory of `git`, which dryland needs.
+ * Unlike filtering the machine's `PATH`, nothing else on it can leak in.
+ */
+export function isolatedPath(...dirs: string[]): Record<string, string> {
+  const key = envKey(process.env, "PATH");
+  const gitName = WINDOWS ? "git.exe" : "git";
+  const gitDir = (process.env[key] ?? "").split(delimiter).find((dir) => dir !== "" && existsSync(join(dir, gitName)));
+  if (gitDir === undefined) throw new Error("git is not on PATH");
+  return { [key]: [...dirs, gitDir].join(delimiter) };
+}
+
+/**
+ * A directory holding a stand-in `name` CLI whose `--version` succeeds and whose `auth status` exits with
+ * `authExit`, with the env that makes it behave.
+ */
+export function stubCli(name: string, authExit: number): { dir: string; env: Record<string, string> } {
+  const dir = tempDir(`dryland-stub-${name}-`);
+  if (!WINDOWS) {
+    writeFileSync(join(dir, name), `#!/bin/sh\n[ "$1" = auth ] && exit ${authExit}\nexit 0\n`);
+    chmodSync(join(dir, name), 0o755);
+    return { dir, env: {} };
+  }
+  // CreateProcess only finds .exe files, so a copy of node stands in and a preload script picks its exit code.
+  copyFileSync(process.execPath, join(dir, `${name}.exe`));
+  const preload = join(dir, "stub.cjs");
+  writeFileSync(preload, `if (process.argv.some((a) => a.endsWith("auth"))) process.exit(${authExit});\n`);
+  return { dir, env: { NODE_OPTIONS: `--require=${preload.replaceAll("\\", "/")}` } };
 }
 
 function git(cwd: string, args: string[]): string {

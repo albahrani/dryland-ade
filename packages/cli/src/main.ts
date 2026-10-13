@@ -40,9 +40,11 @@ function formatWorktrees(entries: WorktreeEntry[]): string {
 
 function formatDoctor(report: DoctorReport): string {
   const width = Math.max(...report.checks.map((c) => c.id.length));
+  const prefix = (ok: boolean) => `${ok ? "OK  " : "FAIL"}  `;
+  const indent = " ".repeat(prefix(false).length + width);
   const lines = report.checks.flatMap((c) => [
-    `${c.ok ? "OK  " : "FAIL"}  ${c.id.padEnd(width)}  ${c.detail}`,
-    ...(c.nextAction === null ? [] : [`${" ".repeat(6 + width)}Next: ${c.nextAction}`]),
+    `${prefix(c.ok)}${c.id.padEnd(width)}  ${c.detail}`,
+    ...(c.nextAction === null ? [] : [`${indent}Next: ${c.nextAction}`]),
   ]);
   return `${lines.join("\n")}\n`;
 }

@@ -1,5 +1,5 @@
-import { access } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { exists } from "./env-fs.ts";
 import { DrylandError, requireOneLine } from "./errors.ts";
 import { ticketFile } from "./local-markdown.ts";
 import { findMainCheckout } from "./main-checkout.ts";
@@ -50,13 +50,6 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug.slice(0, SLUG_MAX).replace(/-+$/, "");
-}
-
-async function exists(path: string): Promise<boolean> {
-  return access(path).then(
-    () => true,
-    () => false,
-  );
 }
 
 async function gitIn(runner: ProcessRunner, cwd: string, args: string[], what: string): Promise<string> {
