@@ -1,7 +1,7 @@
 # Verify Copilot hook and trust setup end to end
 
 Type: task
-Status: open
+Status: resolved
 Blocked by:
 
 ## Question

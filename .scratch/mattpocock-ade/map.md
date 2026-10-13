@@ -52,6 +52,12 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 - [Packaging, distribution and testing](issues/14-packaging-and-testing.md): electron-builder, unsigned GitHub Releases, electron-updater latest/beta channels (macOS notify-only), ade launcher in install dir, 2s shutdown budget, Vitest-based test layers; see ADR 0004.
 
 - [Remaining screens](issues/15-remaining-screens.md): Settings (6 tabs), New map (agent choice only, pre-types `/wayfinder`), New ticket (`ade ticket create` behind confirm), Merge/PR in Source Control (dry-run checks, local merge or `gh`/`glab` PR, conflicts handed to the agent), project switcher with live-session counts; prototype in `prototype/views-and-ux/screens.js`.
+
+- [Product name and branding](issues/16-product-name.md): **Dryland ADE** (short: Dryland), binary `dryland`, npm scope `@dryland/*`, repo `dryland-ade`, appId `dev.dryland.ade` (placeholder owner); unofficial, community-made, with visible love for Matt Pocock's skills.
+
+- [Verify Copilot hook and trust setup end to end](issues/17-verify-copilot-worktree-hooks.md): a global env-gated `~/.copilot/hooks/<ade>.json` fires sessionStart/agentStop/sessionEnd under `copilot -p` (even in untrusted worktrees) and is inert without the env var; appending to `trustedFolders` is clean and reversible; interactive-mode trust prompt unverified; exact shapes in `research/hook-status-mapping.md`.
+
+- [GitHub project preparation and release checklist](issues/18-github-project-preparation.md): repo `dryland-ade`, squash to one clean initial commit after a secrets/path scan, nothing moved (skill-expected paths stay), standard OSS files + templates, SHA-pinned 3-OS CI and tag-driven release, `v0.1.0-beta.1` first, 1.0 after Windows smoke checklist, branch protection and Dependabot.
 
 ## Not yet specified
 

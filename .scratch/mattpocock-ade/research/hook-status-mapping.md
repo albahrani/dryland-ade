@@ -154,3 +154,24 @@ orchestrators surveyed in `multi-agent-hooks.md` already do) for the worktree ca
 - **Routing:** the hook file is global, so the script reads per-pane env vars (`ORCA_PANE_KEY`, `ORCA_AGENT_LAUNCH_TOKEN`, `ORCA_AGENT_HOOK_PORT`/`TOKEN`, `ORCA_WORKTREE_ID`) that Orca sets only on its own PTYs, then POSTs to `http://127.0.0.1:<port>/hook/copilot`. Outside an Orca pane it exits 0 (guard against blocking stdin). A POSIX spool fallback is used when the server is unreachable.
 - **Trust:** `src/main/agent-trust-presets.ts` `markCopilotFolderTrusted` appends the realpath of each new worktree to `trustedFolders` in `~/.copilot/config.json` (mode 0600, other keys preserved, skipped if the file is unparseable). Per its comments Copilot has no trust flag (checked against @github/copilot 1.0.32); this confirms our folder-trust diagnosis.
 - **Implication:** user-level hooks dir + env-gated script avoids needing worktree-local hooks and trust for hooks, but still needs the trust entry to avoid the prompt. It does write to user config (hooks dir file and `config.json`).
+
+## Verification (2026-10-13, Copilot CLI 1.0.95, Windows, ticket 17)
+
+Setup: temp git repo + `git worktree add` (untrusted), `~/.copilot/hooks/ade-test.json` written, `config.json` backed up first.
+
+Hook file shape that worked (`~/.copilot/hooks/<ade>.json`, `version: 1`, camelCase events, `powershell` key + `timeoutSec`, gated on an env var):
+
+```json
+{ "version": 1, "hooks": {
+  "sessionStart": [ { "type": "command", "timeoutSec": 5,
+    "powershell": "if ($env:ADE_PANE_KEY) { <report event to ade> }" } ],
+  "agentStop":    [ ...same shape... ],
+  "sessionEnd":   [ ...same shape... ] } }
+```
+
+Results:
+1. **Global hook fires** under `copilot -p` in a worktree: `sessionStart`, `agentStop`, `sessionEnd` all logged. **Inert** when `ADE_PANE_KEY` is unset (no output, no error). Coexists with another user hook file (`rtk-rewrite.json`).
+2. **Hooks fire even when the worktree is NOT in `trustedFolders`** under `-p`, so user-level hooks don't depend on trust (unlike the repo-level `.github/hooks` attempt above). `-p` never prompted for trust either way.
+3. **Trust append**: adding the worktree realpath (JSON-escaped backslashes) as the last `trustedFolders` entry left the file valid JSON with every other key untouched; hooks still fired. Reverting (restoring the backup / removing the one entry) returned the file to its prior state (28 entries).
+
+Not verified: interactive-mode trust prompt suppression and interactive hook firing (no headless way to drive the TUI here). Piping `-p` output through `Select -First N` closes the pipe early and truncates hook events; ADE should not do that. Also noted: `config.json.trusted-folders.lock` exists, so the ADE should respect/use that lock when editing, and tolerate Copilot rewriting the file.
