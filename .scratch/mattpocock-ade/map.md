@@ -91,6 +91,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Maps view and ticket/map tabs](issues/31-maps-view-and-ticket-map-tabs.md): Maps view with stacked progress bars and stats card, ticket and map editor tabs with a details header, persisted per project and live on disk edits, and one STATUS_META table.
 
+- [Embedded terminal session](issues/32-embedded-terminal-session.md): PTYs in the main process behind a PtyProvider seam (node-pty), shown with xterm.js in session tabs; killed on quit; called terminals until a worktree Session exists.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
