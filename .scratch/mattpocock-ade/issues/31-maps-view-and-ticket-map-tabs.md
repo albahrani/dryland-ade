@@ -23,3 +23,7 @@ The "Continue map" action on the stats card arrives with the New ticket and New 
 - [ ] Opening the same item twice focuses the existing tab
 - [ ] Open tabs are restored after a restart
 - [ ] Content in an open tab updates when the file changes on disk
+
+## Comments
+
+From the review of 30: label, icon, meaning and sort order for ticket status live in four Record<TicketStatus,...> tables (status.tsx, Legend.tsx, view-options.ts). The stacked progress bar here is the second consumer; merge them into one STATUS_META table (label, shape, colour, meaning, order) when adding it.
