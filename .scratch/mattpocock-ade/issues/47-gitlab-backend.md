@@ -22,3 +22,7 @@ Tested against recorded `glab` JSON fixtures through the process-runner interfac
 - [ ] On a non-Premium fixture with no body line and no way to tell, blockers are reported as unknown
 - [ ] Missing `glab` and logged-out `glab` each produce a non-zero exit and a message stating the next action
 - [ ] Tests run without network access
+
+## Comments
+
+From the review of 30: an open ticket whose blockers are 'unknown' is shown as status 'blocked' (consistent with the frontier rule, but story 17 says Dryland never guesses). Only GitLab without Premium produces 'unknown'; decide here, with real data, whether it needs a neutral status or stays blocked, and update the legend and the 'blocked' meaning in GLOSSARY.md (Ticket status) accordingly.
