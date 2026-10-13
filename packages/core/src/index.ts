@@ -2,6 +2,7 @@ export * from "./claim.ts";
 export * from "./doctor.ts";
 export * from "./env-fs.ts";
 export * from "./errors.ts";
+export * from "./item-detail.ts";
 export * from "./local-markdown.ts";
 export * from "./main-checkout.ts";
 export * from "./map-write.ts";

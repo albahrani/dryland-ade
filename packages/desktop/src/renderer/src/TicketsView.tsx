@@ -7,7 +7,9 @@ import {
   type TicketSort,
   type ViewOptions,
 } from "../../shared/view-options.ts";
-import { STATUS_LABEL, StatusIcon } from "./status.tsx";
+import { STATUS_META } from "../../shared/status-meta.ts";
+import { type ItemRef, tabKey } from "../../shared/tabs.ts";
+import { StatusIcon } from "./status.tsx";
 
 /** The ticket kinds a map lists after its fog, in workflow order. */
 const KINDS = [
@@ -27,12 +29,26 @@ function Blockers({ ticket }: { ticket: TreeTicket }) {
   return <span className="meta">blocked by {ticket.blockers.join(", ")}</span>;
 }
 
-function TicketRow({ ticket }: { ticket: TreeTicket }) {
+function TicketRow({
+  ticket,
+  active,
+  onOpen,
+}: {
+  ticket: TreeTicket;
+  active: boolean;
+  onOpen: (ref: ItemRef) => void;
+}) {
   return (
-    <li className="ticket">
+    <li className={active ? "ticket active" : "ticket"}>
       <StatusIcon status={ticket.status} />
       <span className="ticket-id">{ticket.id}</span>
-      <span className="ticket-title">{ticket.title}</span>
+      <button
+        className="ticket-title"
+        aria-current={active}
+        onClick={() => onOpen({ kind: "ticket", map: ticket.map, id: ticket.id })}
+      >
+        {ticket.title}
+      </button>
       {ticket.claimant !== null && <span className="meta">claimed by {ticket.claimant}</span>}
       <Blockers ticket={ticket} />
     </li>
@@ -44,20 +60,30 @@ function Branch({
   label,
   collapsed,
   toggle,
+  onOpen,
   children,
 }: {
   id: string;
   label: string;
   collapsed: Set<string>;
   toggle: (id: string) => void;
+  /** Adds an "Open" button that opens the branch's item in the tab area. */
+  onOpen?: () => void;
   children: React.ReactNode;
 }) {
   const closed = collapsed.has(id);
   return (
     <li className="branch">
-      <button className="branch-label" aria-expanded={!closed} onClick={() => toggle(id)}>
-        {closed ? "▸" : "▾"} {label}
-      </button>
+      <div className="branch-head">
+        <button className="branch-label" aria-expanded={!closed} onClick={() => toggle(id)}>
+          {closed ? "▸" : "▾"} {label}
+        </button>
+        {onOpen !== undefined && (
+          <button className="branch-open" aria-label={`Open map ${label}`} title="Open map" onClick={onOpen}>
+            ↗
+          </button>
+        )}
+      </div>
       {!closed && children}
     </li>
   );
@@ -105,7 +131,7 @@ function OptionsMenu({
       {OPEN_STATUSES.map((status) => (
         <label key={status}>
           <input type="checkbox" checked={options.statuses.includes(status)} onChange={() => toggleStatus(status)} />
-          Show {STATUS_LABEL[status].toLowerCase()}
+          Show {STATUS_META[status].label.toLowerCase()}
         </label>
       ))}
       <label>
@@ -128,13 +154,23 @@ function OptionsMenu({
   );
 }
 
-export function TicketsView({ tree }: { tree: TicketsTree }) {
+export function TicketsView({
+  tree,
+  activeKey,
+  onOpen,
+}: {
+  tree: TicketsTree;
+  /** The `tabKey` of the focused tab, if any. */
+  activeKey: string | null;
+  onOpen: (ref: ItemRef) => void;
+}) {
   const [options, setOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   // The "N done" lines are folded by default and expand on click.
   const [expandedDone, setExpandedDone] = useState<Set<string>>(new Set());
   const view = applyViewOptions(tree, options);
+  const isActive = (t: TreeTicket) => activeKey === tabKey({ kind: "ticket", map: t.map, id: t.id });
   const flip = (id: string) => (current: Set<string>) => {
     const next = new Set(current);
     if (!next.delete(id)) next.add(id);
@@ -178,7 +214,14 @@ export function TicketsView({ tree }: { tree: TicketsTree }) {
       {view.maps.length === 0 && <p className="empty">This project has no tickets yet.</p>}
       <ul className="tree">
         {view.maps.map((map) => (
-          <Branch key={map.name} id={map.name} label={map.title} collapsed={collapsed} toggle={toggle}>
+          <Branch
+            key={map.name}
+            id={map.name}
+            label={map.title}
+            collapsed={collapsed}
+            toggle={toggle}
+            onOpen={() => onOpen({ kind: "map", name: map.name })}
+          >
             <ul>
               {map.fog.length > 0 && (
                 <Branch id={`${map.name}/fog`} label={`Fog (${map.fog.length})`} collapsed={collapsed} toggle={toggle}>
@@ -196,7 +239,7 @@ export function TicketsView({ tree }: { tree: TicketsTree }) {
                   <Branch key={key} id={`${map.name}/${key}`} label={label} collapsed={collapsed} toggle={toggle}>
                     <ul>
                       {map[key].map((t) => (
-                        <TicketRow key={t.id} ticket={t} />
+                        <TicketRow key={t.id} ticket={t} active={isActive(t)} onOpen={onOpen} />
                       ))}
                     </ul>
                   </Branch>
@@ -214,7 +257,7 @@ export function TicketsView({ tree }: { tree: TicketsTree }) {
                   {expandedDone.has(map.name) && (
                     <ul>
                       {map.done.map((t) => (
-                        <TicketRow key={t.id} ticket={t} />
+                        <TicketRow key={t.id} ticket={t} active={isActive(t)} onOpen={onOpen} />
                       ))}
                     </ul>
                   )}

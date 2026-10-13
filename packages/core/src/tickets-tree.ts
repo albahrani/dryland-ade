@@ -39,6 +39,20 @@ function statusOf(ticket: Ticket, blockers: string[] | "unknown"): TicketStatus 
   return blockers === "unknown" || blockers.length > 0 ? "blocked" : "ready";
 }
 
+/** One ticket's row: its status and unresolved blockers read against `siblings`, the tickets of its map. */
+export function toTreeTicket(ticket: Ticket, siblings: Ticket[]): TreeTicket {
+  const blockers = unresolvedBlockers(ticket, siblings);
+  return {
+    id: ticket.id,
+    map: ticket.map,
+    title: ticket.title,
+    type: ticket.type,
+    status: statusOf(ticket, blockers),
+    claimant: ticket.claimant,
+    blockers,
+  };
+}
+
 /** Groups tickets by map, then by kind; `maps` supplies the map files read, keyed by map name. */
 export function buildTicketsTree(tickets: Ticket[], maps: Map<string, { title: string; fog: string[] }>): TicketsTree {
   const names = new Set([...maps.keys(), ...tickets.map((t) => t.map)]);
@@ -54,16 +68,7 @@ export function buildTicketsTree(tickets: Ticket[], maps: Map<string, { title: s
         done: [],
       };
       for (const ticket of own) {
-        const blockers = unresolvedBlockers(ticket, own);
-        const row: TreeTicket = {
-          id: ticket.id,
-          map: ticket.map,
-          title: ticket.title,
-          type: ticket.type,
-          status: statusOf(ticket, blockers),
-          claimant: ticket.claimant,
-          blockers,
-        };
+        const row = toTreeTicket(ticket, own);
         if (row.status === "done") node.done.push(row);
         else node[ticketKind(ticket)].push(row);
       }

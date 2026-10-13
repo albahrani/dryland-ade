@@ -1,12 +1,5 @@
-import type { TicketStatus } from "@dryland/core";
-import { STATUS_LABEL, StatusIcon } from "./status.tsx";
-
-const MEANING: Record<TicketStatus, string> = {
-  ready: "open, nothing blocks it and nobody holds it",
-  "in-progress": "claimed by a session or branch",
-  blocked: "waits on tickets that are not done, or on blockers the tracker cannot report",
-  done: "resolved; folded into one line per map",
-};
+import { STATUS_META, TICKET_STATUSES } from "../../shared/status-meta.ts";
+import { StatusIcon } from "./status.tsx";
 
 export function Legend({ onDismiss }: { onDismiss: () => void }) {
   return (
@@ -18,9 +11,9 @@ export function Legend({ onDismiss }: { onDismiss: () => void }) {
         </button>
       </div>
       <ul>
-        {(Object.keys(MEANING) as TicketStatus[]).map((status) => (
+        {TICKET_STATUSES.map((status) => (
           <li key={status}>
-            <StatusIcon status={status} /> <span>{STATUS_LABEL[status]}</span>: {MEANING[status]}
+            <StatusIcon status={status} /> <span>{STATUS_META[status].label}</span>: {STATUS_META[status].meaning}
           </li>
         ))}
       </ul>

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AppState, ProjectView } from "../../shared/api.ts";
+import { activeItem, closeTab, focusTab, type ItemRef, openTab, tabKey, type TabsState } from "../../shared/tabs.ts";
+import { ItemTab } from "./ItemTab.tsx";
 import { Legend } from "./Legend.tsx";
+import { MapsView } from "./MapsView.tsx";
 import { TicketsView } from "./TicketsView.tsx";
 
 type ActivityView = "tickets" | "maps" | "sessions";
@@ -11,7 +14,21 @@ const ACTIVITIES: { id: ActivityView; label: string; glyph: string }[] = [
   { id: "sessions", label: "Sessions", glyph: "▶" },
 ];
 
-function Sidebar({ view, project }: { view: ActivityView; project: ProjectView | null }) {
+function tabLabel(ref: ItemRef): string {
+  return ref.kind === "ticket" ? `${ref.map}/${ref.id}` : ref.name;
+}
+
+function Sidebar({
+  view,
+  project,
+  tabs,
+  onOpen,
+}: {
+  view: ActivityView;
+  project: ProjectView | null;
+  tabs: TabsState;
+  onOpen: (ref: ItemRef) => void;
+}) {
   if (project === null) return <p className="empty">Open a git repo to see its tickets.</p>;
   if (!project.tree.ok) {
     return (
@@ -21,7 +38,13 @@ function Sidebar({ view, project }: { view: ActivityView; project: ProjectView |
       </div>
     );
   }
-  if (view === "tickets") return <TicketsView tree={project.tree.tree} />;
+  if (view === "tickets") return <TicketsView tree={project.tree.tree} activeKey={tabs.active} onOpen={onOpen} />;
+  if (view === "maps") {
+    const active = activeItem(tabs);
+    return (
+      <MapsView tree={project.tree.tree} activeMap={active?.kind === "map" ? active.name : null} onOpen={onOpen} />
+    );
+  }
   return <p className="empty">The {view} view arrives in a later ticket.</p>;
 }
 
@@ -36,7 +59,12 @@ export function App() {
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed } = state;
+  const { project, legendDismissed, tabs } = state;
+  const setTabs = (next: TabsState) => {
+    setState({ ...state, tabs: next });
+    void window.dryland.saveTabs(next);
+  };
+  const activeTab = activeItem(tabs);
   const dismissLegend = () => {
     setState({ ...state, legendDismissed: true });
     void window.dryland.dismissLegend();
@@ -64,10 +92,32 @@ export function App() {
       </nav>
       <aside className="sidebar">
         {!legendDismissed && <Legend onDismiss={dismissLegend} />}
-        <Sidebar view={activity} project={project} />
+        <Sidebar view={activity} project={project} tabs={tabs} onOpen={(ref) => setTabs(openTab(tabs, ref))} />
       </aside>
       <main className="editor">
-        <p className="empty">Select a ticket to open it here.</p>
+        {tabs.open.length > 0 && (
+          <div className="tabbar" role="tablist" aria-label="Open items">
+            {tabs.open.map((tab) => (
+              <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
+                <button
+                  role="tab"
+                  aria-selected={tabKey(tab) === tabs.active}
+                  onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
+                >
+                  {tabLabel(tab)}
+                </button>
+                <button aria-label={`Close ${tabLabel(tab)}`} onClick={() => setTabs(closeTab(tabs, tabKey(tab)))}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {project !== null && activeTab !== undefined ? (
+          <ItemTab key={tabKey(activeTab)} item={activeTab} project={project} />
+        ) : (
+          <p className="empty">Select a ticket or map to open it here.</p>
+        )}
       </main>
       <aside className="right-side">
         <p className="empty">Explorer and Source Control</p>

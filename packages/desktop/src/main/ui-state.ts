@@ -1,18 +1,26 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { parseTabs, type TabsState } from "../shared/tabs.ts";
 
 /** The small local UI state Dryland keeps; the repo stays the source of truth for everything else. */
 export interface UiState {
   /** The project (repo path) open when the app last ran. */
   lastProject: string | null;
   legendDismissed: boolean;
+  /** The editor tabs open in each project, by project path. */
+  tabs: Record<string, TabsState>;
 }
 
-const DEFAULTS: UiState = { lastProject: null, legendDismissed: false };
+const DEFAULTS: UiState = { lastProject: null, legendDismissed: false, tabs: {} };
 
 export interface UiStateStore {
   read(): UiState;
   update(patch: Partial<UiState>): UiState;
+}
+
+function parseAllTabs(raw: unknown): Record<string, TabsState> {
+  if (raw === null || typeof raw !== "object") return {};
+  return Object.fromEntries(Object.entries(raw).map(([project, tabs]) => [project, parseTabs(tabs)]));
 }
 
 /** Reads each field on its own, so one wrong value never discards the others. */
@@ -27,6 +35,7 @@ function parse(text: string): UiState {
   return {
     lastProject: typeof raw.lastProject === "string" ? raw.lastProject : DEFAULTS.lastProject,
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
+    tabs: parseAllTabs(raw.tabs),
   };
 }
 

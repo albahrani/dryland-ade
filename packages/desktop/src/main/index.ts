@@ -1,7 +1,15 @@
 import { basename, join } from "node:path";
-import { DrylandError, findMainCheckout, nodeProcessRunner, readTicketsTree } from "@dryland/core";
+import {
+  DrylandError,
+  findMainCheckout,
+  nodeProcessRunner,
+  readMapDetail,
+  readTicketDetail,
+  readTicketsTree,
+} from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
-import type { AppState, ProjectView, TreeLoad } from "../shared/api.ts";
+import type { AppState, ItemContent, ProjectView, TreeLoad } from "../shared/api.ts";
+import { EMPTY_TABS, type ItemRef, parseTabs, type TabsState } from "../shared/tabs.ts";
 import { createUiStateStore } from "./ui-state.ts";
 import { watchProject } from "./watch-project.ts";
 
@@ -27,7 +35,25 @@ async function projectView(): Promise<{ view: ProjectView; mainCheckout: string 
 }
 
 async function currentState(): Promise<AppState> {
-  return { project: (await projectView())?.view ?? null, legendDismissed: store.read().legendDismissed };
+  const { legendDismissed, tabs } = store.read();
+  const view = (await projectView())?.view ?? null;
+  return { project: view, legendDismissed, tabs: (view && tabs[view.path]) || EMPTY_TABS };
+}
+
+async function readItem(ref: ItemRef): Promise<ItemContent> {
+  if (project === null) return { kind: "missing" };
+  try {
+    const mainCheckout = await findMainCheckout(nodeProcessRunner, project.path);
+    if (ref.kind === "map") {
+      const map = await readMapDetail(mainCheckout, ref.name);
+      return map === null ? { kind: "missing" } : { kind: "map", map };
+    }
+    const ticket = await readTicketDetail(mainCheckout, ref.map, ref.id);
+    return ticket === null ? { kind: "missing" } : { kind: "ticket", ticket };
+  } catch (error) {
+    if (!(error instanceof DrylandError)) throw error;
+    return { kind: "missing" };
+  }
 }
 
 /** Makes `path` the open project and starts watching its tracker files. Remembers it only if it loads. */
@@ -85,6 +111,12 @@ ipcMain.handle("project:open", async () => {
   await pickProject();
   return currentState();
 });
+ipcMain.handle("tabs:save", (_event, tabs: TabsState) => {
+  if (project === null) return;
+  const saved = store.read().tabs;
+  store.update({ tabs: { ...saved, [project.path]: parseTabs(tabs) } });
+});
+ipcMain.handle("item:read", (_event, ref: ItemRef) => readItem(ref));
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 
 void app.whenReady().then(async () => {

@@ -203,22 +203,6 @@ ul {
   font-style: italic;
 }
 
-.status-ready {
-  color: var(--ready);
-}
-
-.status-in-progress {
-  color: var(--progress);
-}
-
-.status-blocked {
-  color: var(--blocked);
-}
-
-.status-done {
-  color: var(--done);
-}
-
 .legend {
   margin: 8px;
   padding: 6px 10px;
@@ -235,4 +219,143 @@ ul {
 
 .legend ul {
   padding-left: 0;
+}
+
+.branch-head {
+  display: flex;
+  align-items: center;
+}
+
+.branch-open {
+  padding: 0 6px;
+  color: var(--fg-dim);
+}
+
+.ticket-title {
+  text-align: left;
+  padding: 0;
+}
+
+.ticket.active {
+  background: rgb(55 148 255 / 20%);
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  min-width: 80px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.map-list {
+  padding-left: 0;
+}
+
+.map-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+}
+
+.map-row[aria-pressed="true"] {
+  background: rgb(55 148 255 / 20%);
+}
+
+.stats-card {
+  margin: 8px;
+  padding: 8px 12px;
+  background: var(--bg-bar);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.stats-card h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.stats-card dl,
+.details-body {
+  margin: 0;
+}
+
+.stats-card dl > div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.stats-card dd,
+.details-body dd {
+  margin: 0;
+}
+
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.tabbar {
+  display: flex;
+  gap: 2px;
+  margin: -12px -12px 12px;
+  background: var(--bg-bar);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+}
+
+.tab[aria-current="true"] {
+  background: var(--bg);
+  border-bottom-color: var(--accent);
+}
+
+.tab button {
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.details {
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.details-toggle {
+  font-weight: 600;
+  text-align: left;
+}
+
+.details-body > div {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.details-body dt {
+  min-width: 90px;
+  color: var(--fg-dim);
+}
+
+.content {
+  max-width: 80ch;
+  line-height: 1.5;
+}
+
+.content blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
 }

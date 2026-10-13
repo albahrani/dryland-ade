@@ -1,4 +1,5 @@
 import type { TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
+import { STATUS_META } from "./status-meta.ts";
 
 export type TicketSort = "number" | "title" | "status";
 
@@ -20,12 +21,10 @@ export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
   showFog: true,
 };
 
-const STATUS_ORDER: Record<TicketStatus, number> = { ready: 0, "in-progress": 1, blocked: 2, done: 3 };
-
 const COMPARE: Record<TicketSort, (a: TreeTicket, b: TreeTicket) => number> = {
   number: (a, b) => Number(a.id) - Number(b.id),
   title: (a, b) => a.title.localeCompare(b.title),
-  status: (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || Number(a.id) - Number(b.id),
+  status: (a, b) => STATUS_META[a.status].order - STATUS_META[b.status].order || Number(a.id) - Number(b.id),
 };
 
 /** The tree as the user's view options show it. Returns a new tree and leaves `tree` untouched. */
