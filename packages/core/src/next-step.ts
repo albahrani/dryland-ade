@@ -53,13 +53,17 @@ const specFile = (map: string) => `.scratch/${map}/spec.md`;
 const ticketRef = (t: Ticket) => `${t.map}/${t.id}`;
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
+/** Whether the ticket has a `Spec:` header, the link a sliced ticket carries back to its spec. */
+const linksToSpec = (ticket: Ticket): boolean => Object.keys(ticket.raw).some((key) => key.toLowerCase() === "spec");
+
 /**
- * Whether a ticket is slice-of-the-spec work rather than a wayfinding decision. A ticket carrying a triage
- * role always is. A `task` is once its effort has a spec, unless it poses a `## Question`: that is how
- * wayfinding writes its decision tickets, and before a spec a task only unblocks a decision.
+ * Whether a ticket is slice-of-the-spec work rather than a wayfinding decision. A `Spec:` header or a triage
+ * role says so outright. Failing both, a `task` is once its effort has a spec, unless it poses a
+ * `## Question`: that is how wayfinding writes its decision tickets, and before a spec a task only unblocks
+ * a decision.
  */
 function isSliceOfSpec(ticket: Ticket, effort: EffortSnapshot): boolean {
-  if (ticket.triageRole !== null) return true;
+  if (linksToSpec(ticket) || ticket.triageRole !== null) return true;
   return effort.hasSpec && ticketKind(ticket) === "implementation" && !/^## Question/m.test(ticket.body);
 }
 

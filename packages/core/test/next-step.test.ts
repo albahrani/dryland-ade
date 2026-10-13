@@ -233,6 +233,17 @@ describe("nextSteps ordering and edges", () => {
     expect(steps.map((s) => s.ruleId)).toEqual(["spec-without-tickets"]);
   });
 
+  it("takes a Spec: header as a slice whatever the ticket type", () => {
+    const steps = nextSteps(
+      snapshot(
+        [effort("a", { spec: true })],
+        [ticket("a", "20", ["Type: research", "Status: resolved", "Spec: [spec](../spec.md)"])],
+      ),
+    );
+
+    expect(steps).toEqual([]);
+  });
+
   it("treats a task as wayfinding work until the effort has a spec", () => {
     const steps = nextSteps(snapshot([effort("a")], [ticket("a", "01", ["Type: task"])]));
 
