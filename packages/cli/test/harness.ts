@@ -43,7 +43,7 @@ export function tempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-const WINDOWS = process.platform === "win32";
+export const WINDOWS = process.platform === "win32";
 
 /**
  * A `PATH` env holding `dirs` and nothing else but the directory of `git`, which dryland needs.
@@ -54,6 +54,10 @@ export function isolatedPath(...dirs: string[]): Record<string, string> {
   const gitName = WINDOWS ? "git.exe" : "git";
   const gitDir = (process.env[key] ?? "").split(delimiter).find((dir) => dir !== "" && existsSync(join(dir, gitName)));
   if (gitDir === undefined) throw new Error("git is not on PATH");
+  // git must stay reachable, so a dryland beside it would make the "not on PATH" checks pass by accident.
+  const stray = ["dryland", "dryland.cmd", "dryland.exe", "dryland.bat"].find((n) => existsSync(join(gitDir, n)));
+  if (stray !== undefined)
+    throw new Error(`${stray} sits in git's directory ${gitDir}; isolatedPath cannot exclude it`);
   return { [key]: [...dirs, gitDir].join(delimiter) };
 }
 

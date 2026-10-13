@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { isolatedPath, stubCli, TempRepo, tempDir } from "./harness.ts";
+import { isolatedPath, stubCli, TempRepo, tempDir, WINDOWS } from "./harness.ts";
 
 const DOCS = {
   "docs/agents/issue-tracker.md": "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n",
@@ -20,7 +20,7 @@ interface Check {
 /** A directory holding a runnable `dryland`, to put on PATH. */
 function dirWithDryland(): string {
   const dir = tempDir("dryland-bin-");
-  const name = process.platform === "win32" ? "dryland.cmd" : "dryland";
+  const name = WINDOWS ? "dryland.cmd" : "dryland";
   writeFileSync(join(dir, name), "@echo off\n");
   chmodSync(join(dir, name), 0o755);
   return dir;
@@ -126,7 +126,7 @@ describe("dryland doctor", () => {
     expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
   });
 
-  it.skipIf(process.platform === "win32")("does not count a dryland without the executable bit", async () => {
+  it.skipIf(WINDOWS)("does not count a dryland without the executable bit", async () => {
     const repo = TempRepo.create({ ...DOCS, ...SKILL });
     const dir = tempDir("dryland-noexec-");
     writeFileSync(join(dir, "dryland"), "#!/bin/sh\n");
