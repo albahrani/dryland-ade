@@ -1,6 +1,6 @@
 import { DrylandError } from "./errors.ts";
 import { issuesDir, lineEnding, parseTicketFile, rewriteStatus, ticketNumbers } from "./local-markdown.ts";
-import { readMapFile } from "./map.ts";
+import { assertMapName, readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { TICKET_TYPES, type TicketType } from "./ticket.ts";
 import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
@@ -29,12 +29,7 @@ function slugOf(title: string): string {
 
 /** Everything is checked before the lock is taken, so a bad request never touches the tracker. */
 function validate(input: CreateTicketInput): { type: TicketType; title: string } {
-  if (!/^[^/\\\s.][^/\\\s]*$/.test(input.map)) {
-    throw new DrylandError(
-      `"${input.map}" is not a map name.`,
-      "Pass the name of a directory under .scratch/, e.g. --map shop.",
-    );
-  }
+  assertMapName(input.map);
   const title = input.title.trim();
   if (title === "" || /[\r\n]/.test(title)) {
     throw new DrylandError("A ticket title must be one non-empty line.", "Pass it as --title \"<short title>\".");

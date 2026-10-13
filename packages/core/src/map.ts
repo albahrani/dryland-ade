@@ -51,6 +51,16 @@ export function parseMap(name: string, markdown: string): MapModel {
   };
 }
 
+/** Rejects anything that is not the name of a directory directly under `.scratch/`. */
+export function assertMapName(name: string): void {
+  if (!/^[^/\\\s.][^/\\\s]*$/.test(name)) {
+    throw new DrylandError(
+      `"${name}" is not a map name.`,
+      "Pass the name of a directory under .scratch/, e.g. --map shop.",
+    );
+  }
+}
+
 export async function readMapFile(mainCheckout: string, name: string): Promise<MapModel> {
   const markdown = await readFile(join(mainCheckout, ".scratch", name, "map.md"), "utf8").catch(() => null);
   if (markdown === null) {

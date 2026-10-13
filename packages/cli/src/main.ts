@@ -1,8 +1,11 @@
 import {
+  blockTicket,
   branchHolder,
   claimTicket,
+  commentOnTicket,
   createTicket,
   DrylandError,
+  indexMap,
   listTickets,
   mapFrontier,
   nodeProcessRunner,
@@ -11,6 +14,7 @@ import {
   showMap,
   showTicket,
   ticketKind,
+  triageTicket,
   type MapView,
   type Ticket,
 } from "@dryland/core";
@@ -64,8 +68,13 @@ const USAGE = [
   "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
   "                             [--blocked-by <number>[,<number>...]] [--no-commit] [--json]",
   "       dryland ticket resolve <map>/<number> --answer <text> [--no-commit] [--json]",
+  "       dryland ticket block <map>/<number> [--add <number>[,<number>...]] [--remove <number>[,<number>...]]",
+  "                            [--no-commit] [--json]",
+  "       dryland ticket comment <map>/<number> --text <text> [--no-commit] [--json]",
+  "       dryland ticket triage <map>/<number> --role <role> [--no-commit] [--json]",
   "       dryland map show <map> [--json]",
   "       dryland map frontier <map> [--json]",
+  "       dryland map index <map> --title <title> --link <path> --gist <text> [--no-commit] [--json]",
   "",
 ].join("\n");
 
@@ -89,6 +98,14 @@ function required(flags: Flags, name: string): string {
     throw new DrylandError(`--${name} is required.`, `Add --${name} <value>; run \`dryland\` for usage.`);
   }
   return value;
+}
+
+/** The numbers of a comma-separated list option; `undefined` when the option was not given. */
+function numberList(flags: Flags, name: string): string[] | undefined {
+  return flags.values[name]
+    ?.split(",")
+    .map((number) => number.trim())
+    .filter((number) => number !== "");
 }
 
 /** `false` when the user passed `--no-commit`; otherwise git's `dryland.autoCommit` decides. */
@@ -174,6 +191,49 @@ const COMMANDS: Record<
       return { value: ticket, text: `Resolved ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
+  "ticket block": {
+    target: true,
+    options: ["add", "remove"],
+    run: async (target, flags) => {
+      const { ticket, warnings } = await blockTicket(
+        nodeProcessRunner,
+        process.cwd(),
+        target,
+        { add: numberList(flags, "add"), remove: numberList(flags, "remove") },
+        { autoCommit: autoCommit(flags) },
+      );
+      const blockers = ticket.blockers === "unknown" || ticket.blockers.length === 0 ? "none" : ticket.blockers.join(", ");
+      return { value: ticket, text: `${ticket.map}/${ticket.id} is now blocked by: ${blockers}.\n`, warnings };
+    },
+  },
+  "ticket comment": {
+    target: true,
+    options: ["text"],
+    run: async (target, flags) => {
+      const { ticket, warnings } = await commentOnTicket(
+        nodeProcessRunner,
+        process.cwd(),
+        target,
+        required(flags, "text"),
+        { autoCommit: autoCommit(flags) },
+      );
+      return { value: ticket, text: `Commented on ${ticket.map}/${ticket.id}.\n`, warnings };
+    },
+  },
+  "ticket triage": {
+    target: true,
+    options: ["role"],
+    run: async (target, flags) => {
+      const { ticket, warnings } = await triageTicket(
+        nodeProcessRunner,
+        process.cwd(),
+        target,
+        required(flags, "role"),
+        { autoCommit: autoCommit(flags) },
+      );
+      return { value: ticket, text: `Triaged ${ticket.map}/${ticket.id} as ${ticket.triageRole}.\n`, warnings };
+    },
+  },
   "map show": {
     target: true,
     run: async (target) => {
@@ -186,6 +246,20 @@ const COMMANDS: Record<
     run: async (target) => {
       const tickets = await mapFrontier(nodeProcessRunner, process.cwd(), target);
       return { value: tickets, text: formatTickets(tickets, "No frontier tickets.") };
+    },
+  },
+  "map index": {
+    target: true,
+    options: ["title", "link", "gist"],
+    run: async (target, flags) => {
+      const { value, warnings } = await indexMap(
+        nodeProcessRunner,
+        process.cwd(),
+        target,
+        { title: required(flags, "title"), link: required(flags, "link"), gist: required(flags, "gist") },
+        { autoCommit: autoCommit(flags) },
+      );
+      return { value, text: `Indexed "${flags.values["title"]}" in the ${target} map.\n`, warnings };
     },
   },
 };

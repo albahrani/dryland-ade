@@ -49,19 +49,22 @@ function claimAnnotation(claim: ClaimRecord): string {
 }
 
 /**
- * Rewrites only the header lines a claim, release or resolve touches: `Status:` and the Dryland annotation
- * line under it. A claim stores the previous status in the annotation, so a release can put it back; a
- * resolve replaces both. Everything else in the file, including line endings, is left as it was.
+ * Rewrites one header field of a ticket: `replace` gets the field's current value (`""` when absent) and
+ * returns the lines to put there, none to remove it. A field that is absent goes after the last header
+ * field, or under the title. With `dropAnnotations` the Dryland annotation lines of the header go too.
+ * Everything else in the file, including line endings, is left as it was.
  */
-export function rewriteStatus(
+function rewriteHeaderField(
   markdown: string,
-  change: { claim: Omit<ClaimRecord, "was"> } | { release: true } | { resolve: true },
+  field: string,
+  replace: (current: string) => string[],
+  options: { dropAnnotations: boolean } = { dropAnnotations: false },
 ): string {
   const eol = lineEnding(markdown);
   const lines = markdown.split(/\r?\n/);
   const titleIndex = lines.findIndex((line) => line.startsWith("# "));
 
-  let statusIndex = -1;
+  let fieldIndex = -1;
   let lastFieldIndex = titleIndex;
   const annotationIndexes = new Set<number>();
   for (let i = titleIndex + 1; i < lines.length; i++) {
@@ -74,29 +77,17 @@ export function rewriteStatus(
     }
     const match = FIELD_LINE.exec(line);
     if (match?.[1] === undefined) break;
-    if (match[1].toLowerCase() === "status" && statusIndex === -1) statusIndex = i;
+    if (match[1].toLowerCase() === field && fieldIndex === -1) fieldIndex = i;
     lastFieldIndex = i;
   }
 
-  const existing = readClaim(markdown);
-  const currentStatus = statusIndex === -1 ? "" : (FIELD_LINE.exec(lines[statusIndex] ?? "")?.[2] ?? "").trim();
-  let replacement: string[];
-  if ("claim" in change) {
-    replacement = ["Status: claimed", claimAnnotation({ ...change.claim, was: currentStatus })];
-  } else if ("resolve" in change) {
-    // Any claim annotation is dropped below, and the status it remembered is no longer wanted.
-    replacement = ["Status: resolved"];
-  } else {
-    const was = currentStatus.toLowerCase() === "claimed" ? (existing?.was ?? "") : currentStatus;
-    replacement = was === "" ? [] : [`Status: ${was}`];
-  }
-
-  // Without a `Status:` line the replacement goes after the last header field, or under the title.
-  const insertAfter = statusIndex === -1 ? lastFieldIndex : -1;
+  const current = fieldIndex === -1 ? "" : (FIELD_LINE.exec(lines[fieldIndex] ?? "")?.[2] ?? "").trim();
+  const replacement = replace(current);
+  const insertAfter = fieldIndex === -1 ? lastFieldIndex : -1;
   const out: string[] = [];
   lines.forEach((line, i) => {
-    if (!annotationIndexes.has(i)) {
-      if (i === statusIndex) out.push(...replacement);
+    if (!(options.dropAnnotations && annotationIndexes.has(i))) {
+      if (i === fieldIndex) out.push(...replacement);
       else out.push(line);
     }
     if (i === insertAfter && replacement.length > 0) {
@@ -105,6 +96,117 @@ export function rewriteStatus(
     }
   });
   return out.join(eol);
+}
+
+/**
+ * Rewrites only the header lines a claim, release, resolve or triage touches: `Status:` and the Dryland
+ * annotation line under it. A claim stores the previous status in the annotation, so a release can put it
+ * back; a resolve replaces both; `set` writes the given status.
+ */
+export function rewriteStatus(
+  markdown: string,
+  change: { claim: Omit<ClaimRecord, "was"> } | { release: true } | { resolve: true } | { set: string },
+): string {
+  const existing = readClaim(markdown);
+  return rewriteHeaderField(
+    markdown,
+    "status",
+    (currentStatus) => {
+      if ("claim" in change) return ["Status: claimed", claimAnnotation({ ...change.claim, was: currentStatus })];
+      if ("set" in change) return [`Status: ${change.set}`];
+      // Any claim annotation is dropped, and the status it remembered is no longer wanted.
+      if ("resolve" in change) return ["Status: resolved"];
+      const was = currentStatus.toLowerCase() === "claimed" ? (existing?.was ?? "") : currentStatus;
+      return was === "" ? [] : [`Status: ${was}`];
+    },
+    { dropAnnotations: true },
+  );
+}
+
+/** Rewrites only the `Blocked by:` header line: `ids` replace it, or remove it when empty. */
+export function rewriteBlockedBy(markdown: string, ids: string[]): string {
+  return rewriteHeaderField(markdown, "blocked by", () => (ids.length === 0 ? [] : [`Blocked by: ${ids.join(", ")}`]));
+}
+
+/**
+ * Appends `text` as the last entry of the section with this `## ` heading, creating the section at the end
+ * of the file when it is missing. Every other line, including line endings, is left as it was.
+ */
+export function appendToSection(markdown: string, heading: string, text: string): string {
+  const eol = lineEnding(markdown);
+  const lines = markdown.split(/\r?\n/);
+  const entry = text.trim().split(/\r?\n/);
+
+  let fenced = false;
+  let start = -1;
+  let end = lines.length;
+  lines.forEach((line, i) => {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    if (fenced || !line.startsWith("## ")) return;
+    if (start === -1 && line.slice(3).trim().toLowerCase() === heading.toLowerCase()) start = i;
+    else if (start !== -1 && end === lines.length) end = i;
+  });
+
+  if (start === -1) {
+    const body = lines.join("\n").replace(/\s+$/, "").split("\n");
+    return [...body, "", `## ${heading}`, "", ...entry, ""].join(eol);
+  }
+  let last = end - 1; // the last line of the section that has content
+  while (last > start && (lines[last] ?? "").trim() === "") last--;
+  const tail = lines.slice(end);
+  // A section that ends the file ends with one newline; one that precedes another keeps a blank line.
+  return [...lines.slice(0, last + 1), "", ...entry, "", ...tail].join(eol);
+}
+
+/**
+ * Appends one bullet to the `## Decisions so far` section, or creates the section at the end of the file.
+ * A lone "Nothing." placeholder gives way to the entry. Every other line is kept with its own line ending.
+ */
+export function appendDecision(markdown: string, entry: string): string {
+  const lines = markdown.split(/(?<=\n)/);
+  const fileEol = lineEnding(markdown);
+  const text = (line: string) => line.replace(/\r?\n$/, "");
+  const endingOf = (line: string) => /\r?\n$/.exec(line)?.[0] ?? fileEol;
+
+  let fenced = false;
+  let start = -1;
+  let end = lines.length;
+  lines.forEach((line, i) => {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    if (fenced || !line.startsWith("## ")) return;
+    if (start === -1 && text(line).slice(3).trim().toLowerCase() === "decisions so far") start = i;
+    else if (start !== -1 && end === lines.length) end = i;
+  });
+
+  if (start === -1) {
+    const last = lines.length - 1;
+    const body = lines.slice();
+    if (last >= 0 && !/\n$/.test(body[last] ?? "")) body[last] += fileEol;
+    return [...body, fileEol, `## Decisions so far${fileEol}`, fileEol, `${entry}${fileEol}`].join("");
+  }
+
+  const content = lines.slice(start + 1, end).map((line, i) => ({ line, index: start + 1 + i }));
+  const filled = content.filter(({ line }) => text(line).trim() !== "");
+  const first = filled[0];
+  const last = filled[filled.length - 1];
+  if (first === undefined || last === undefined) {
+    const heading = lines[start] ?? "";
+    const eol = endingOf(heading);
+    lines[start] = /\n$/.test(heading) ? heading : `${heading}${eol}`;
+    lines.splice(start + 1, 0, eol, `${entry}${eol}`);
+    return lines.join("");
+  }
+  // Only the bare placeholder of the map template gives way; a real decision that starts "None of..." stays.
+  if (first === last && /^(nothing|none)\.?$/i.test(text(first.line).trim())) {
+    lines[first.index] = `${entry}${endingOf(first.line)}`;
+    return lines.join("");
+  }
+  const eol = endingOf(last.line);
+  if (!/\n$/.test(last.line)) lines[last.index] = `${last.line}${eol}`;
+  // Keep the list's spacing: a blank line between entries stays between entries.
+  const loose = last.index - first.index + 1 > filled.length;
+  lines.splice(last.index + 1, 0, ...(loose ? [eol] : []), `${entry}${/\n$/.test(last.line) ? eol : ""}`);
+  return lines.join("");
 }
 
 /** Removes every HTML comment, e.g. the guidance comments in wayfinder's map template. */
