@@ -20,9 +20,47 @@ export interface RepoSnapshot {
   tickets: Ticket[];
   hasGlossary: boolean;
   adrCount: number;
-  git: null;
-  sessions: null;
-  skillSetup: null;
+  /** Coarse git state per Linked worktree; `null` when it has not been read, in which case no rule guesses. */
+  git: GitState | null;
+  /** Live Dryland sessions; `null` when unknown, in which case no claim is called stale. */
+  sessions: SessionSnapshot[] | null;
+  skillSetup: SkillSetupSnapshot | null;
+}
+
+/** A reference to a ticket: its map and number. */
+export interface TicketRef {
+  map: string;
+  id: string;
+}
+
+export interface SessionSnapshot {
+  id: string;
+  /** The ticket the session works on, `null` for a scratch session. */
+  ticket: TicketRef | null;
+  state: "launched" | "running" | "waiting" | "idle" | "ended";
+}
+
+/** What git says about the Linked worktree of one ticket. */
+export interface WorktreeGitState extends TicketRef {
+  exists: boolean;
+  aheadOfDefault: boolean;
+  merged: boolean;
+  /** Whether a PR or MR exists; `null` where the backend cannot say (it is optional). */
+  prExists: boolean | null;
+}
+
+export interface GitState {
+  worktrees: WorktreeGitState[];
+}
+
+export type FeatureVerdict = "ok" | "degraded" | "broken";
+
+export interface SkillSetupSnapshot {
+  setup: "default" | "default-with-extras" | "modified";
+  /** The Compatibility verdict per rule id; `null` when no valid verdict exists. */
+  verdict: Record<string, FeatureVerdict> | null;
+  /** Rule ids the user re-enabled although the verdict calls them broken. */
+  overrides: string[];
 }
 
 /** The artifact a step points at. */
@@ -30,7 +68,8 @@ export type StepTarget =
   | { kind: "repo" }
   | { kind: "map"; map: string }
   | { kind: "ticket"; map: string; id: string }
-  | { kind: "spec"; map: string };
+  | { kind: "spec"; map: string }
+  | { kind: "session"; id: string; ticket: TicketRef | null };
 
 /** One fact a step rests on: the artifact read, the field of it, and what it held. */
 export interface Evidence {
@@ -41,8 +80,8 @@ export interface Evidence {
 
 export interface NextStep {
   ruleId: string;
-  /** The skill command to pre-type. */
-  command: string;
+  /** The skill command to pre-type; `null` for a flag or a session needing attention, which has no skill. */
+  command: string | null;
   target: StepTarget;
   reason: string;
   evidence: Evidence[];
@@ -174,10 +213,240 @@ const specWithoutTickets: Rule = perEffort((effort, tickets) => {
   ];
 });
 
+const waitingSessions: Rule = (snapshot) =>
+  (snapshot.sessions ?? [])
+    .filter((session) => session.state === "waiting")
+    .map((session) => ({
+      ruleId: "waiting-session",
+      command: null,
+      target: { kind: "session", id: session.id, ticket: session.ticket },
+      reason: `Session ${session.id}${session.ticket === null ? "" : ` on ${session.ticket.map}/${session.ticket.id}`} is waiting for input.`,
+      evidence: [{ artifact: `session ${session.id}`, field: "state", value: "waiting" }],
+    }));
+
+/** A claim no live session holds is only flagged: releasing it is an explicit user action. */
+const staleClaims: Rule = (snapshot) => {
+  const { sessions } = snapshot;
+  if (sessions === null) return [];
+  return snapshot.tickets
+    .filter((t) => t.state === "claimed")
+    .sort((a, b) => a.map.localeCompare(b.map) || Number(a.id) - Number(b.id))
+    .flatMap((ticket) => {
+      const live = sessions.filter(
+        (s) => s.state !== "ended" && s.ticket?.map === ticket.map && s.ticket.id === ticket.id,
+      );
+      if (live.length > 0) return [];
+      return [
+        {
+          ruleId: "stale-claim",
+          command: null,
+          target: { kind: "ticket", map: ticket.map, id: ticket.id },
+          reason: `Ticket ${ticketRef(ticket)} is claimed, possibly stale: no live Dryland session holds it.`,
+          evidence: [
+            { artifact: ticketRef(ticket), field: "Status", value: "claimed" },
+            { artifact: "sessions", field: `live sessions on ${ticketRef(ticket)}`, value: "0" },
+          ],
+        },
+      ];
+    });
+};
+
+/** Whether every blocker of the ticket is known and resolved within `tickets`. */
+function isUnblocked(ticket: Ticket, tickets: Ticket[]): boolean {
+  if (ticket.blockers === "unknown") return false;
+  return ticket.blockers.every((blocker) =>
+    tickets.some((t) => t.state === "resolved" && Number(t.id) === Number(blocker)),
+  );
+}
+
+/** The ready-for-agent tickets of an effort that nothing blocks and nobody holds, lowest number first. */
+function readyTickets(tickets: Ticket[]): Ticket[] {
+  return tickets
+    .filter(
+      (t) => t.state === "open" && t.claimant === null && t.triageRole === "ready-for-agent" && isUnblocked(t, tickets),
+    )
+    .sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+const implementSpec: Rule = perEffort((effort, tickets) => {
+  const ready = readyTickets(tickets);
+  if (!effort.hasSpec || ready.length === 0) return [];
+  return [
+    {
+      ruleId: "implement-spec",
+      command: "/implement-spec",
+      target: { kind: "spec", map: effort.name },
+      reason: `The spec of ${effort.name} has ${count(ready.length, "ready-for-agent ticket")}.`,
+      evidence: [
+        { artifact: specFile(effort.name), field: "presence", value: "present" },
+        {
+          artifact: issuesDir(effort.name),
+          field: "ready-for-agent tickets",
+          value: ready.map((t) => t.id).join(", "),
+        },
+      ],
+    },
+  ];
+});
+
+const implementTickets: Rule = perEffort((effort, tickets) =>
+  readyTickets(tickets).map((ticket) => ({
+    ruleId: "implement-ticket",
+    command: `/implement ${ticketRef(ticket)}`,
+    target: { kind: "ticket", map: effort.name, id: ticket.id },
+    reason: `Ticket ${ticketRef(ticket)} "${ticket.title}" is ready-for-agent, unblocked and unclaimed.`,
+    evidence: [
+      { artifact: ticketRef(ticket), field: "triage role", value: "ready-for-agent" },
+      { artifact: ticketRef(ticket), field: "Blocked by", value: blockersText(ticket) },
+    ],
+  })),
+);
+
+const needsTriage: Rule = perEffort((effort, tickets) =>
+  tickets
+    .filter((t) => t.state !== "resolved" && t.triageRole === "needs-triage")
+    .sort((a, b) => Number(a.id) - Number(b.id))
+    .map((ticket) => ({
+      ruleId: "needs-triage",
+      command: "/triage",
+      target: { kind: "ticket", map: effort.name, id: ticket.id },
+      reason: `Ticket ${ticketRef(ticket)} "${ticket.title}" carries the needs-triage role.`,
+      evidence: [{ artifact: ticketRef(ticket), field: "triage role", value: "needs-triage" }],
+    })),
+);
+
+/** A backend that cannot report blockers is flagged, not guessed at: such a ticket is on no frontier. */
+const blockingUnknown: Rule = perEffort((effort, tickets) =>
+  tickets
+    .filter((t) => t.state === "open" && t.blockers === "unknown")
+    .sort((a, b) => Number(a.id) - Number(b.id))
+    .map((ticket) => ({
+      ruleId: "blocking-unknown",
+      command: null,
+      target: { kind: "ticket", map: effort.name, id: ticket.id },
+      reason: `Ticket ${ticketRef(ticket)} has blockers the tracker cannot report: blocking unknown.`,
+      evidence: [{ artifact: ticketRef(ticket), field: "Blocked by", value: "unknown" }],
+    })),
+);
+
+/** Resolved tickets whose Linked worktree still exists, paired with its git state, lowest number first. */
+function doneWorktrees(snapshot: RepoSnapshot): { ticket: Ticket; worktree: WorktreeGitState }[] {
+  return (snapshot.git?.worktrees ?? [])
+    .filter((w) => w.exists)
+    .flatMap((worktree) => {
+      const ticket = snapshot.tickets.find((t) => t.map === worktree.map && t.id === worktree.id);
+      return ticket?.state === "resolved" ? [{ ticket, worktree }] : [];
+    })
+    .sort((a, b) => a.ticket.map.localeCompare(b.ticket.map) || Number(a.ticket.id) - Number(b.ticket.id));
+}
+
+const worktreeLabel = (t: Ticket) => `worktree ${ticketRef(t)}`;
+
+/** Done work whose branch is ahead of the default branch and has no PR yet. */
+const awaitingPr = (snapshot: RepoSnapshot) =>
+  doneWorktrees(snapshot).filter(
+    ({ worktree }) => worktree.aheadOfDefault && !worktree.merged && worktree.prExists !== true,
+  );
+
+const reviewBeforePr: Rule = (snapshot) =>
+  awaitingPr(snapshot).map(({ ticket }) => ({
+    ruleId: "review-before-pr",
+    command: "/code-review",
+    target: { kind: "ticket", map: ticket.map, id: ticket.id },
+    reason: `Ticket ${ticketRef(ticket)} is resolved and its branch is ahead of the default branch: review it before the PR.`,
+    evidence: [
+      { artifact: ticketRef(ticket), field: "Status", value: "resolved" },
+      { artifact: worktreeLabel(ticket), field: "ahead of default branch", value: "yes" },
+    ],
+  }));
+
+const openPr: Rule = (snapshot) =>
+  awaitingPr(snapshot).map(({ ticket }) => ({
+    ruleId: "open-pr",
+    command: "/pr",
+    target: { kind: "ticket", map: ticket.map, id: ticket.id },
+    reason: `Ticket ${ticketRef(ticket)} is resolved and its branch is ahead of the default branch with no PR yet.`,
+    evidence: [
+      { artifact: ticketRef(ticket), field: "Status", value: "resolved" },
+      { artifact: worktreeLabel(ticket), field: "ahead of default branch", value: "yes" },
+      { artifact: worktreeLabel(ticket), field: "PR exists", value: "no or unknown" },
+    ],
+  }));
+
+const retro: Rule = (snapshot) =>
+  doneWorktrees(snapshot)
+    .filter(({ worktree }) => worktree.merged)
+    .map(({ ticket }) => ({
+      ruleId: "retro",
+      command: "/retro",
+      target: { kind: "ticket", map: ticket.map, id: ticket.id },
+      reason: `Ticket ${ticketRef(ticket)} is resolved and its branch is merged, so the feature can be reviewed in retrospect.`,
+      evidence: [
+        { artifact: ticketRef(ticket), field: "Status", value: "resolved" },
+        { artifact: worktreeLabel(ticket), field: "merged", value: "yes" },
+      ],
+    }));
+
 /** In priority order: the order of this list is the order of the result. */
-const RULES: Rule[] = [noSetupConfig, mapFrontier, fogOnly, clearedMap, specWithoutTickets];
+const RULES: Rule[] = [
+  noSetupConfig,
+  waitingSessions,
+  staleClaims,
+  mapFrontier,
+  implementSpec,
+  implementTickets,
+  fogOnly,
+  clearedMap,
+  needsTriage,
+  specWithoutTickets,
+  blockingUnknown,
+  reviewBeforePr,
+  openPr,
+  retro,
+];
+
+/**
+ * The only skills a rule ever recommends: those with a mechanical artifact trigger. Every other skill stays
+ * launchable by the user but is never a next step.
+ */
+export const RECOMMENDED_SKILLS = [
+  "/setup-matt-pocock-skills",
+  "/triage",
+  "/wayfinder",
+  "/to-spec",
+  "/to-tickets",
+  "/implement-spec",
+  "/implement",
+  "/code-review",
+  "/pr",
+  "/retro",
+] as const;
+
+/** A rule is off when the Compatibility verdict calls it broken and the user has not overridden that. */
+function isDisabled(snapshot: RepoSnapshot, ruleId: string): boolean {
+  const { skillSetup } = snapshot;
+  if (skillSetup === null || skillSetup.verdict === null) return false;
+  return skillSetup.verdict[ruleId] === "broken" && !skillSetup.overrides.includes(ruleId);
+}
 
 /** The ranked next steps of a repo snapshot, best first. Pure: the same snapshot gives the same list. */
 export function nextSteps(snapshot: RepoSnapshot): NextStep[] {
-  return RULES.flatMap((rule) => rule(snapshot));
+  return RULES.flatMap((rule) => rule(snapshot)).filter((step) => !isDisabled(snapshot, step.ruleId));
+}
+
+/** Why a ticket is not on the frontier because of blockers: the ones still unresolved, or that they are unknown. */
+export interface WhyNot {
+  /** Ids of the blockers that are not resolved; empty when the ticket is not blocked or its blockers are unknown. */
+  blockers: string[];
+  /** The tracker could not say what blocks the ticket, so nothing is listed rather than guessed. */
+  unknown: boolean;
+}
+
+/** "Why not X?": the unresolved blockers of `ref`, or `unknown` when its backend cannot report them. */
+export function whyNot(snapshot: RepoSnapshot, ref: TicketRef): WhyNot {
+  const siblings = snapshot.tickets.filter((t) => t.map === ref.map);
+  const ticket = siblings.find((t) => t.id === ref.id);
+  if (ticket === undefined || ticket.blockers === "unknown") return { blockers: [], unknown: ticket !== undefined };
+  const resolved = new Set(siblings.filter((t) => t.state === "resolved").map((t) => Number(t.id)));
+  return { blockers: ticket.blockers.filter((blocker) => !resolved.has(Number(blocker))), unknown: false };
 }
