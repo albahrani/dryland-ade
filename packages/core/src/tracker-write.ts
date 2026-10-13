@@ -155,7 +155,8 @@ async function writeAtomically(path: string, content: string): Promise<void> {
   }
 }
 
-async function defaultBranch(runner: ProcessRunner, mainCheckout: string): Promise<string | null> {
+/** The repo's default branch: origin's HEAD, else `init.defaultBranch`, `main` or `master`; `null` when none exists. */
+export async function defaultBranch(runner: ProcessRunner, mainCheckout: string): Promise<string | null> {
   const git = async (...args: string[]) => {
     const result = await runner.run("git", args, { cwd: mainCheckout });
     return result.exitCode === 0 ? result.stdout.trim() : "";

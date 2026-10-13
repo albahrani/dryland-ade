@@ -12,3 +12,4 @@ export * from "./tickets.ts";
 export * from "./tracker-write.ts";
 export * from "./tracker.ts";
 export * from "./triage-labels.ts";
+export * from "./worktree.ts";

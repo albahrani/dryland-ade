@@ -68,8 +68,12 @@ The repo's primary working tree, where local-markdown tracker state lives so eve
 _Avoid_: Root, master copy
 
 **Linked worktree**:
-A git worktree or branch tied to a ticket by naming convention or commit trailer.
+A git worktree or branch tied to a ticket by its `<map>/<NN>-<slug>` name, or failing that by a `Dryland-Ticket: <map>/<NN>` commit trailer.
 _Avoid_: Ticket branch
+
+**Scratch worktree**:
+A worktree the ADE made without a ticket, named `<map>/scratch-<slug>`, for exploratory work. It has no ticket to resolve before it can be pruned.
+_Avoid_: Temp worktree, sandbox
 
 **Unlinked branch**:
 A branch or worktree the ADE cannot tie to any ticket, because it matches neither the naming convention nor a commit trailer.

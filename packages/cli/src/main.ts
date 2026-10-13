@@ -4,11 +4,14 @@ import {
   claimTicket,
   commentOnTicket,
   createTicket,
+  createWorktree,
   DrylandError,
   indexMap,
   listTickets,
+  listWorktrees,
   mapFrontier,
   nodeProcessRunner,
+  pruneWorktree,
   releaseTicket,
   resolveTicket,
   showMap,
@@ -17,7 +20,21 @@ import {
   triageTicket,
   type MapView,
   type Ticket,
+  type WorktreeEntry,
 } from "@dryland/core";
+
+function formatWorktrees(entries: WorktreeEntry[]): string {
+  const label = (e: WorktreeEntry) => (e.main ? "(main checkout)" : (e.branch ?? "(detached)"));
+  const link = (e: WorktreeEntry) => {
+    if (e.main) return "-";
+    if (e.link.kind === "scratch") return "scratch";
+    if (e.link.kind === "unlinked") return "unlinked";
+    return e.link.kind === "name" ? e.link.ticket : `${e.link.ticket} (trailer)`;
+  };
+  const width = Math.max(...entries.map((e) => label(e).length));
+  const linkWidth = Math.max(...entries.map((e) => link(e).length));
+  return entries.map((e) => `${label(e).padEnd(width)}  ${link(e).padEnd(linkWidth)}  ${e.path}\n`).join("");
+}
 
 function formatTickets(tickets: Ticket[], empty = "No tickets."): string {
   if (tickets.length === 0) return `${empty}\n`;
@@ -75,6 +92,9 @@ const USAGE = [
   "       dryland map show <map> [--json]",
   "       dryland map frontier <map> [--json]",
   "       dryland map index <map> --title <title> --link <path> --gist <text> [--no-commit] [--json]",
+  "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
+  "       dryland worktree list [--json]",
+  "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
   "",
 ].join("\n");
 
@@ -87,6 +107,8 @@ interface Output {
 
 interface Flags {
   noCommit: boolean;
+  /** Command-specific switches given, by name without the leading `--`. */
+  switches: Set<string>;
   /** Options that take a value, by name without the leading `--`. */
   values: Record<string, string>;
 }
@@ -115,7 +137,10 @@ const autoCommit = (flags: Flags) => (flags.noCommit ? false : undefined);
 const COMMANDS: Record<
   string,
   {
-    target: boolean;
+    /** Whether it takes a target; `"optional"` allows one or none. */
+    target: boolean | "optional";
+    /** The switches (flags without a value, no `--`) the command accepts. */
+    switches?: string[];
     /** The value options (without `--`) the command accepts; any other is refused rather than ignored. */
     options?: string[];
     run: (target: string, flags: Flags) => Promise<Output>;
@@ -263,14 +288,45 @@ const COMMANDS: Record<
       return { value, text: `Indexed "${flags.values["title"]}" in the ${target} map.\n`, warnings };
     },
   },
+  "worktree create": {
+    target: "optional",
+    options: ["map", "slug"],
+    run: async (target, flags) => {
+      const created = await createWorktree(nodeProcessRunner, process.cwd(), {
+        ticket: target === "" ? undefined : target,
+        map: flags.values["map"],
+        slug: flags.values["slug"],
+      });
+      return { value: created, text: `Created worktree ${created.branch} at ${created.path}\n` };
+    },
+  },
+  "worktree list": {
+    target: false,
+    run: async () => {
+      const entries = await listWorktrees(nodeProcessRunner, process.cwd());
+      return { value: entries, text: formatWorktrees(entries) };
+    },
+  },
+  "worktree prune": {
+    target: true,
+    switches: ["yes", "session-attached"],
+    run: async (target, flags) => {
+      const pruned = await pruneWorktree(nodeProcessRunner, process.cwd(), target, {
+        yes: flags.switches.has("yes"),
+        sessionAttached: flags.switches.has("session-attached"),
+      });
+      return { value: pruned, text: `Removed worktree ${pruned.path} and branch ${pruned.branch}.\n` };
+    },
+  },
 };
 
 /** Every value option some command takes, so its value is never mistaken for a target. */
 const VALUE_OPTIONS = new Set(Object.values(COMMANDS).flatMap((command) => command.options ?? []));
+const SWITCHES = new Set(Object.values(COMMANDS).flatMap((command) => command.switches ?? []));
 
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
-  const flags: Flags = { noCommit: args.includes("--no-commit"), values: {} };
+  const flags: Flags = { noCommit: args.includes("--no-commit"), switches: new Set(), values: {} };
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
@@ -279,6 +335,8 @@ async function run(args: string[]): Promise<number> {
       const value = args[++i];
       if (value === undefined) throw new DrylandError(`--${name} needs a value.`, `Write it as --${name} <value>.`);
       flags.values[name] = value;
+    } else if (SWITCHES.has(name)) {
+      flags.switches.add(name);
     } else if (arg !== "--json" && arg !== "--no-commit") {
       positional.push(arg);
     }
@@ -286,9 +344,13 @@ async function run(args: string[]): Promise<number> {
   const [group, command, target] = positional;
   const entry = COMMANDS[`${group} ${command}`];
 
-  if (entry !== undefined && entry.target === (target !== undefined)) {
-    for (const name of Object.keys(flags.values)) {
-      if (!(entry.options ?? []).includes(name)) {
+  if (entry !== undefined && (entry.target === "optional" || entry.target === (target !== undefined))) {
+    const given = [
+      ...Object.keys(flags.values).map((name) => [name, entry.options ?? []] as const),
+      ...[...flags.switches].map((name) => [name, entry.switches ?? []] as const),
+    ];
+    for (const [name, accepted] of given) {
+      if (!accepted.includes(name)) {
         throw new DrylandError(
           `--${name} is not an option of \`dryland ${group} ${command}\`.`,
           "Remove it, or run `dryland` with no arguments for usage.",
