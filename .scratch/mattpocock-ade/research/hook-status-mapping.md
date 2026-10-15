@@ -258,3 +258,42 @@ Setup: `claude.exe --settings <file>` spawned through `node-pty` in a detached w
 - In the user's auto permission mode (run 1, no `--permission-mode`) the Write was approved without a dialog: `UserPromptSubmit → PreToolUse → PostToolUse → Stop → SubagentStop`, no `PermissionRequest`, no `idle_prompt` within 75 s, then `SessionEnd`.
 
 **Mapping**: the documented mapping holds and the adapter keeps it: running = `UserPromptSubmit`, `PreToolUse`, `PostToolUse`; waiting = `PermissionRequest`, `Notification:permission_prompt`, `Notification:elicitation_dialog` (the last two documented, not observed); idle = `Stop`, `Notification:idle_prompt`; ended = `SessionEnd`. `SessionStart` and `SubagentStop` are not mapped: launched comes from Dryland's spawn, and a subagent stopping says nothing about the session. Unlike Copilot, Claude Code's `SessionStart` fires at launch.
+
+## Waiting-signal verification (2026-10-15, Claude Code 2.1.300, Windows)
+
+Checks the open questions of `waiting-state-detection.md` with the same driver, now with `ask` and `plan` scenarios. Every event got a logging hook. `PreToolUse` also had the two candidate disjoint matchers, `^(?!(AskUserQuestion|ExitPlanMode)$).*` (logged as `[run]`) and `AskUserQuestion|ExitPlanMode` (`[wait]`).
+
+**Question, default mode** (`--permission-mode default`; the first question answered with Enter, the second cancelled with Esc)
+
+| t (s) | Event |
+| --- | --- |
+| 11.4 | `UserPromptSubmit` |
+| 13.6 | `PreToolUse(AskUserQuestion)`, `PreToolUse[wait]` |
+| 13.7 | `PermissionRequest(AskUserQuestion)`, as the question shows |
+| 19.7 | `Notification:permission_prompt`, 6 s later |
+| 21.8 | `PostToolUse(AskUserQuestion)`, 0.2 s after Enter |
+| 23.5 | `PreToolUse(AskUserQuestion)`, `PreToolUse[wait]`, `PermissionRequest(AskUserQuestion)` |
+| — | Esc: **no hook at all**, no `Stop`, no `idle_prompt` within 120 s; the screen shows "User declined to answer questions" and the input box |
+| 167.5 | `SessionEnd` on `/exit` |
+
+**Question, auto mode** (`--permission-mode auto`, the user's default): the same sequence, including `PermissionRequest(AskUserQuestion)` and the silent Esc.
+
+**Plan, plan mode** (`--permission-mode plan`; option "Yes, manually approve edits")
+
+| t (s) | Event |
+| --- | --- |
+| 13.8 | `PreToolUse(Write)`, `PreToolUse[run]`, `PostToolUse(Write)` (the plan file, no dialog) |
+| 16.3 | `PreToolUse(ExitPlanMode)`, `PreToolUse[wait]` |
+| 16.4 | `PermissionRequest(ExitPlanMode)` |
+| 22.4 | `Notification:permission_prompt` |
+| 24.6 | `PostToolUse(ExitPlanMode)`, 0.2 s after the choice |
+| 26.9 | `PreToolUse(Write)`, `PreToolUse[run]`, `PermissionRequest(Write)` |
+
+**Answers to the open questions**
+- `PermissionRequest` fires for `AskUserQuestion` (default and auto mode) and for `ExitPlanMode` (plan mode), as the dialog shows. The existing mapping therefore already reports both dialogs as waiting. The `PreToolUse` split is not needed, and the adapter keeps one unmatched `PreToolUse` hook.
+- The negative-lookahead matcher works in `--settings`: `[run]` fired for Write, ToolSearch and PowerShell and never for the two dialog tools; `[wait]` fired only for them. It stays on record in case a later CLI stops sending `PermissionRequest` for them.
+- `PostToolUse` arrives 0.2 s after a question is answered or a plan approved. Orca's keystroke fallback is not needed on 2.1.300.
+- Cancelling a question with Esc fires nothing, as Orca reports, so the session stays waiting until the next `UserPromptSubmit`. The user is the one who must act either way, so this is recorded as a known limit.
+- Not checked: a rejected plan (presumably silent like the Esc), `ExitPlanMode` under auto mode, and `Elicitation`, which needs an MCP server that elicits.
+
+**Mapping change**: added `PostToolUseFailure` → running (a tool that fails after an approved dialog sends no `PostToolUse`, so the session would otherwise stay waiting), `Elicitation` → waiting, `ElicitationResult` → running and `Notification:elicitation_url_dialog` → waiting. The last three come from the docs only.

@@ -71,13 +71,21 @@ export const CLAUDE_CODE: AgentAdapter = {
   ],
   hookInjection: { kind: "settings-flag", flag: "--settings" },
   // SessionStart (fires at launch) and SubagentStop (fires after Stop) are left out: neither changes the state.
+  // PermissionRequest also fires for AskUserQuestion and ExitPlanMode, in default, plan and auto mode, so their
+  // dialogs need no PreToolUse matcher of their own. A cancelled question fires nothing; the next prompt clears it.
   statusEvents: {
     UserPromptSubmit: "running",
     PreToolUse: "running",
     PostToolUse: "running",
+    // A tool that fails after its dialog was approved reports no PostToolUse.
+    PostToolUseFailure: "running",
     "Notification:permission_prompt": "waiting",
     "Notification:elicitation_dialog": "waiting",
+    "Notification:elicitation_url_dialog": "waiting",
     PermissionRequest: "waiting",
+    // An MCP server asking for input: at once, where its Notification comes about 6 s later.
+    Elicitation: "waiting",
+    ElicitationResult: "running",
     Stop: "idle",
     "Notification:idle_prompt": "idle",
     SessionEnd: "ended",
