@@ -97,6 +97,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Live reporting and the live-events panel](issues/35-live-reporting-and-live-events-panel.md): dryland status and every mutating ticket/map command POST authenticated live events to the app's 127.0.0.1 listener found via a per-user lock file; the app refreshes on ticket.changed and shows events in a three-mode panel.
 
+- [Claude Code session status](issues/36-claude-code-session-status.md): Claude Code is launched with --settings hooks (in Dryland's app dir) that call dryland status; verified against 2.1.300; the session state shows as a badge on its tab and ticket.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
