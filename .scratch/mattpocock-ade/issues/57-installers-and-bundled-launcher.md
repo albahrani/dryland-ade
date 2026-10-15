@@ -24,3 +24,7 @@ Putting `dryland` on the user's global `PATH` is opt-in: an NSIS checkbox on Win
 - [ ] `dryland doctor` can create and remove the `PATH` symlink on macOS/Linux
 - [ ] Uninstalling removes the app and the `PATH` entry
 - [ ] The CLI bundle is a single JS file
+
+## Comments
+
+From ticket 33: until this ticket lands, the app writes the dryland launcher (sh and .cmd) to <userData>/bin at every startup, pointing at out/main/dryland.js, the CLI bundle electron-vite builds beside the main process. It is put first on each session's PATH (packages/desktop/src/main/index.ts and launcher.ts). When the install-directory launcher arrives: point launcherDir at it, stop writing to userData/bin and delete what an earlier version left there, so a stale launcher never shadows the installed one. Check that ELECTRON_RUN_AS_NODE can load the CLI from inside the asar archive, or unpack it.

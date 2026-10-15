@@ -22,4 +22,9 @@ Also the opt-in auto-submit setting: when on, the pre-typed command is submitted
 - [ ] A hookless session still reaches "ended" reliably when the process exits
 - [ ] With auto-submit off (default), nothing is submitted; with it on, the command is submitted
 - [ ] The per-project auto-submit override wins over the global setting
+- [ ] A key the user types into a session before pre-typing starts cancels the pre-typed command and its auto-submit, so neither a mixed-up line nor anything the user did not see is ever submitted
 - [ ] Contract tests cover a best-effort entry with a fake-CLI stub
+
+## Comments
+
+From ticket 33: the pre-typer (packages/desktop/src/main/pretype.ts) and the user's keys both go through TerminalManager.write, so today a user who types during the first ~1.5 s gets their keys mixed with the pre-typed ones. With auto-submit off that only garbles the prompt. With it on, the mixed line would be submitted, hence the acceptance criterion above. The renderer's terminal:write IPC is the user's input path, so the main process can tell the session's pre-typer that the user has typed and have it stand down.
