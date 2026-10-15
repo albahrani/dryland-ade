@@ -1,10 +1,11 @@
-import type { TicketDetail } from "@dryland/core";
+import type { TicketDetail, TicketRef } from "@dryland/core";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import type { ItemContent, ProjectView } from "../../shared/api.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
 import type { DocumentRef } from "../../shared/tabs.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
+import { StartWork } from "./StartWork.tsx";
 import { StatusIcon } from "./status.tsx";
 
 /** Re-reads the item whenever the project view changes, so open tabs follow the files on disk. */
@@ -59,9 +60,20 @@ export interface HeaderState {
   onToggle: () => void;
 }
 
-function TicketContent({ ticket, header }: { ticket: TicketDetail; header: HeaderState }) {
+function TicketContent({
+  ticket,
+  header,
+  onStartWork,
+}: {
+  ticket: TicketDetail;
+  header: HeaderState;
+  onStartWork: StartWorkHandler;
+}) {
   return (
     <article>
+      {ticket.status !== "done" && (
+        <StartWork onStart={(agentId) => onStartWork({ map: ticket.map, id: ticket.id }, agentId)} />
+      )}
       <Details
         open={header.open}
         onToggle={header.onToggle}
@@ -100,12 +112,26 @@ function TicketContent({ ticket, header }: { ticket: TicketDetail; header: Heade
   );
 }
 
-export function ItemTab({ item, project, header }: { item: DocumentRef; project: ProjectView; header: HeaderState }) {
+export type StartWorkHandler = (ticket: TicketRef, agentId: string) => Promise<void>;
+
+export function ItemTab({
+  item,
+  project,
+  header,
+  onStartWork,
+}: {
+  item: DocumentRef;
+  project: ProjectView;
+  header: HeaderState;
+  onStartWork: StartWorkHandler;
+}) {
   const content = useItem(item, project);
   if (content === null) return null;
   const treeMap =
     item.kind === "map" && project.tree.ok ? project.tree.tree.maps.find((m) => m.name === item.name) : undefined;
-  if (content.kind === "ticket") return <TicketContent ticket={content.ticket} header={header} />;
+  if (content.kind === "ticket") {
+    return <TicketContent ticket={content.ticket} header={header} onStartWork={onStartWork} />;
+  }
   // A map known only through its tickets has no map.md: its details still show.
   if (content.kind === "missing" && treeMap === undefined) {
     return <p className="empty">This {item.kind} no longer exists. Close the tab.</p>;

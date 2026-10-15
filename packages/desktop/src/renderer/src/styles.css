@@ -368,6 +368,41 @@ ul {
   color: var(--fg-dim);
 }
 
+.start-work {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.start-work button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.start-work .unavailable {
+  color: var(--fg-dim);
+}
+
+.session-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  color: var(--fg-dim);
+}
+
+.session-header > div {
+  display: flex;
+  gap: 6px;
+}
+
+.session-header dd {
+  margin: 0;
+  color: var(--fg);
+}
+
 .content {
   max-width: 80ch;
   line-height: 1.5;

@@ -133,6 +133,26 @@ export async function createWorktree(
   }
 }
 
+/**
+ * The ticket's Linked worktree, named after it, when one is still on disk; otherwise a new one. Starting work
+ * again on a ticket so lands where the earlier work is.
+ */
+export async function worktreeForTicket(
+  runner: ProcessRunner,
+  cwd: string,
+  ticket: string,
+): Promise<WorktreeResult & { reused: boolean }> {
+  const mainCheckout = await findMainCheckout(runner, cwd);
+  const { entries, tickets } = await snapshotWorktrees(runner, mainCheckout);
+  const found = findTicket(tickets, parseTicketReference(ticket));
+  const ref = `${found.map}/${found.id}`;
+  for (const entry of entries) {
+    if (entry.link.kind !== "name" || entry.link.ticket !== ref || entry.branch === null) continue;
+    if (await exists(entry.path)) return { branch: entry.branch, path: entry.path, ticket: ref, reused: true };
+  }
+  return { ...(await createWorktree(runner, mainCheckout, { ticket: ref })), reused: false };
+}
+
 interface RawWorktree {
   path: string;
   branch: string | null;

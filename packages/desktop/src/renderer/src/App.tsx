@@ -1,5 +1,6 @@
+import type { TicketRef } from "@dryland/core";
 import { useEffect, useRef, useState } from "react";
-import type { AppState, ProjectView } from "../../shared/api.ts";
+import type { AppState, ProjectView, SessionInfo } from "../../shared/api.ts";
 import { activeItem, closeTab, focusTab, type ItemRef, openTab, tabKey, type TabsState } from "../../shared/tabs.ts";
 import { ItemTab } from "./ItemTab.tsx";
 import { Legend } from "./Legend.tsx";
@@ -51,6 +52,32 @@ function Sidebar({
   return <p className="empty">The {view} view arrives in a later ticket.</p>;
 }
 
+/** What a session tab says about its session: agent, ticket, worktree and id, as recorded at spawn. */
+function SessionHeader({ session }: { session: SessionInfo }) {
+  return (
+    <dl className="session-header" aria-label="Session">
+      <div>
+        <dt>Agent</dt>
+        <dd>{session.agent.name}</dd>
+      </div>
+      <div>
+        <dt>Ticket</dt>
+        <dd>
+          {session.ticket.map}/{session.ticket.id}
+        </dd>
+      </div>
+      <div>
+        <dt>Worktree</dt>
+        <dd title={session.worktree.path}>{session.worktree.branch}</dd>
+      </div>
+      <div>
+        <dt>Session</dt>
+        <dd title={session.id}>{session.id.slice(0, 8)}</dd>
+      </div>
+    </dl>
+  );
+}
+
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [activity, setActivity] = useState<ActivityView>("tickets");
@@ -61,6 +88,8 @@ export function App() {
   const [terminalTitles, setTerminalTitles] = useState<ReadonlyMap<string, string>>(new Map());
   const terminalsOpened = useRef(0);
   const [terminalError, setTerminalError] = useState<string | null>(null);
+  // Sessions this window started, by terminal id; not persisted, like the terminals they run in.
+  const [sessions, setSessions] = useState<ReadonlyMap<string, SessionInfo>>(new Map());
 
   useEffect(() => {
     void window.dryland.getState().then(setState);
@@ -93,7 +122,25 @@ export function App() {
     const kept = new Set(next.tabs.open.flatMap((tab) => (tab.kind === "terminal" ? [tab.id] : [])));
     for (const id of terminalTitles.keys()) if (!kept.has(id)) disposeTerminal(id);
     setTerminalTitles((current) => new Map([...current].filter(([id]) => kept.has(id))));
+    setSessions((current) => new Map([...current].filter(([id]) => kept.has(id))));
     setState(next);
+  };
+  /** Shows terminal `id` in a new, focused tab; registered first, so its first output is not dropped. */
+  const showTerminal = (id: string, title: string) => {
+    getOrCreateTerminal(id);
+    setTerminalTitles((current) => new Map(current).set(id, title));
+    setState((current) => current && { ...current, tabs: openTab(current.tabs, { kind: "terminal", id }) });
+  };
+  const startWork = async (ticket: TicketRef, agentId: string) => {
+    setTerminalError(null);
+    const result = await window.dryland.startWork(ticket, agentId);
+    if (!result.ok) {
+      setTerminalError(`${result.message} ${result.nextAction}`);
+      return;
+    }
+    const { session } = result;
+    setSessions((current) => new Map(current).set(session.terminalId, session));
+    showTerminal(session.terminalId, `${session.agent.name} ${session.ticket.map}/${session.ticket.id}`);
   };
   const newTerminal = async () => {
     setTerminalError(null);
@@ -105,14 +152,11 @@ export function App() {
       return;
     }
     if (id === null) return;
-    // Registered before anything else runs, so the shell's first output is not dropped.
-    getOrCreateTerminal(id);
     terminalsOpened.current += 1;
-    const title = `Terminal ${terminalsOpened.current}`;
-    setTerminalTitles((current) => new Map(current).set(id, title));
-    setState((current) => current && { ...current, tabs: openTab(current.tabs, { kind: "terminal", id }) });
+    showTerminal(id, `Terminal ${terminalsOpened.current}`);
   };
   const activeTab = activeItem(tabs);
+  const activeSession = activeTab?.kind === "terminal" ? sessions.get(activeTab.id) : undefined;
   const terminalIds = tabs.open.flatMap((tab) => (tab.kind === "terminal" ? [tab.id] : []));
   const dismissLegend = () => {
     setState({ ...state, legendDismissed: true });
@@ -170,6 +214,7 @@ export function App() {
             Could not start a terminal: {terminalError}
           </p>
         )}
+        {activeSession !== undefined && <SessionHeader session={activeSession} />}
         {terminalIds.map((id) => (
           <TerminalTab key={id} id={id} active={activeTab?.kind === "terminal" && activeTab.id === id} />
         ))}
@@ -178,6 +223,7 @@ export function App() {
             key={tabKey(activeTab)}
             item={activeTab}
             project={project}
+            onStartWork={startWork}
             header={{
               open: !collapsedHeaders.has(tabKey(activeTab)),
               onToggle: () =>

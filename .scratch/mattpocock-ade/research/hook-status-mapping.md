@@ -200,3 +200,24 @@ Setup: temp repo + `git worktree add`, env-gated global hook `~/.copilot/hooks/a
 - Waiting = `permissionRequest` / `notification(permission_prompt)`; idle = `agentStop` (don't rely on `agent_idle`); running = `userPromptSubmitted` / `preToolUse` / `postToolUse`; ended = `sessionEnd`.
 - `cwd` maps a session to its worktree (and so its ticket); `transcriptPath` is available if needed later.
 - Pre-seeding `trustedFolders` is what keeps a freshly created worktree from showing the trust prompt; otherwise the user sees it once per worktree.
+
+## Interactive launch verification (2026-10-15, Claude Code 2.1.300, Windows, ticket 33)
+
+Setup: `claude.exe` with no arguments spawned through `node-pty` (ConPTY, 120x40) and rendered with `@xterm/headless`. Three working directories: this repo (already trusted), a `git worktree` of it in the sibling `mattpocock-ide.worktrees/` directory Dryland uses, and a fresh `git init` repo under `%TEMP%` (never trusted). Nothing was ever submitted and the trust dialog was never answered, so nothing was written to `~/.claude.json`.
+
+**Pre-typed, unsubmitted command**
+- One `write("/implement demo/01")` of the whole string is **dropped** on Windows: the prompt stays empty, even after 5 s. A bracketed paste (`ESC[200~ … ESC[201~`) is dropped too.
+- One character per write, 15 to 20 ms apart, lands every time (5 of 5 runs): the prompt reads `❯ /implement demo/01`, the slash-command menu opens, and nothing is submitted without `\r`.
+- Typing before the input box exists loses the text. The box is drawn about 1.5 s after spawn, after which the CLI is silent; 500 ms of output quiet after the first output was the reliable readiness signal (5 of 5 runs, typing began at 1.55 to 1.59 s).
+- `CLAUDECODE=1` and the other `CLAUDE_CODE_*` variables inherited from a parent Claude Code session do not change any of this, so Dryland passes the environment through untouched. They do have one effect: when Dryland itself was started from inside a Claude Code session, the launched CLI shows "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker". Users who start Dryland normally never inherit it; the transcripts ticket should keep it in mind.
+
+**Trust prompt**
+- A worktree of a trusted repo is **not** prompted: Claude Code follows the main checkout's trust, so Dryland worktrees of a trusted project open straight to the input box.
+- An untrusted repo shows a full-screen dialog: "Accessing workspace: … Quick safety check: Is this a project you created or one you trust? … ❯ No, exit / Yes, I trust this folder · Enter to confirm · Esc to cancel". The default is **No, exit**.
+- Keystrokes typed while it shows are dropped, so a pre-typed command would be lost, and an Enter would exit. Spaces arrive as `ESC[1C` cursor moves, so the text, stripped of escapes, reads `Yes,Itrustthisfolder`; match it as `/trust\s*this\s*folder/i`. Moving the selection redraws both option lines, which still contain the phrase.
+
+**Implications for the adapter**
+- Launch `claude` with no arguments; pre-type one character at a time once the output has been quiet for 500 ms, and never while the quiet window holds a blocking prompt. After the user answers the dialog the CLI redraws to the input box, and the command is typed then.
+- Dryland does not answer the trust dialog and writes no trust entry for Claude Code: the user answers it once per untrusted project.
+
+**Through the built app** (Playwright driving the real CLI, same day): in a worktree of this trusted repo, "Start with Claude Code" on ticket 34 left `❯ /implement mattpocock-ade/34` in the input box, unsubmitted. In a worktree of an untrusted temp repo the trust dialog showed and, 3 s later, nothing had been typed.

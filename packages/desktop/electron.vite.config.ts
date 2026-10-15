@@ -4,7 +4,12 @@ import { defineConfig } from "electron-vite";
 
 export default defineConfig({
   // @dryland/core is workspace TypeScript source, so it is bundled rather than externalised.
-  main: { build: { rollupOptions: { input: { index: resolve("src/main/index.ts") } } } },
+  // The `dryland` CLI is built beside the main process, so the launcher can run it with the app's Electron.
+  main: {
+    build: {
+      rollupOptions: { input: { index: resolve("src/main/index.ts"), dryland: resolve("../cli/src/main.ts") } },
+    },
+  },
   preload: {
     build: {
       rollupOptions: {

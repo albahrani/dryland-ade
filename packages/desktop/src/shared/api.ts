@@ -1,4 +1,4 @@
-import type { MapDetail, TicketDetail, TicketsTree } from "@dryland/core";
+import type { MapDetail, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 
 /** The tickets tree of a project, or why it cannot be read and what to do about it. */
@@ -22,6 +22,33 @@ export interface AppState {
 export type ItemContent =
   { kind: "ticket"; ticket: TicketDetail } | { kind: "map"; map: MapDetail } | { kind: "missing" };
 
+/** An Agent CLI work can be started with, and whether it is installed. */
+export interface AgentAvailability {
+  id: string;
+  name: string;
+  available: boolean;
+  /** Why it is unavailable; `null` when it is available. */
+  reason: string | null;
+}
+
+/** A session Dryland started, as recorded at spawn. */
+export interface SessionInfo {
+  /** `DRYLAND_SESSION_ID` of the session. */
+  id: string;
+  /** The terminal it runs in, which is also its `DRYLAND_PANE_KEY`. */
+  terminalId: string;
+  agent: { id: string; name: string };
+  ticket: TicketRef;
+  worktree: { branch: string; path: string };
+  /** The skill command pre-typed at launch; `null` when no next step pointed at the ticket. */
+  command: string | null;
+  /** ISO timestamp of the spawn. */
+  startedAt: string;
+}
+
+/** The session work started, or why it could not start and what to do about it. */
+export type StartWorkResult = { ok: true; session: SessionInfo } | { ok: false; message: string; nextAction: string };
+
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {
   getState(): Promise<AppState>;
@@ -34,6 +61,10 @@ export interface DrylandApi {
   readItem(ref: DocumentRef): Promise<ItemContent>;
   /** Starts a shell in the open project's main checkout; resolves with its id, or `null` without a project. */
   openTerminal(): Promise<string | null>;
+  /** The Agent CLIs work can start with, and whether each is installed. */
+  listAgents(): Promise<AgentAvailability[]>;
+  /** Opens the Agent CLI in the ticket's worktree with its next-step command typed, in a new terminal. */
+  startWork(ticket: TicketRef, agentId: string): Promise<StartWorkResult>;
   writeTerminal(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
   /** Kills the terminal's process. */

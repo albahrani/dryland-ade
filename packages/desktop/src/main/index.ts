@@ -6,15 +6,18 @@ import {
   readMapDetail,
   readTicketDetail,
   readTicketsTree,
+  type TicketRef,
 } from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
-import type { AppState, ItemContent, ProjectView, TreeLoad } from "../shared/api.ts";
+import type { AppState, ItemContent, ProjectView, StartWorkResult, TreeLoad } from "../shared/api.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
+import { writeLauncher } from "./launcher.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
 import { createUiStateStore } from "./ui-state.ts";
 import { watchProject } from "./watch-project.ts";
+import { createWorkStarter } from "./work.ts";
 
 /** A terminal can print after its window is gone, between the window closing and the app quitting. */
 function sendToWindow(channel: string, ...args: unknown[]): void {
@@ -29,6 +32,9 @@ const terminals = createTerminalManager({
   onExit: (id, exitCode) => sendToWindow("terminal:exit", id, exitCode),
 });
 const store = createUiStateStore(join(app.getPath("userData"), "ui-state.json"));
+// Sessions find `dryland` here; ticket 57 moves the launcher to the install directory.
+const launcherDir = join(app.getPath("userData"), "bin");
+const work = createWorkStarter({ terminals, runner: nodeProcessRunner, env: process.env, launcherDir });
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
 let stopWatching: (() => void) | null = null;
@@ -141,11 +147,23 @@ ipcMain.handle("terminal:open", async () => {
   if (loaded === null) return null;
   return terminals.open({ cwd: loaded.mainCheckout ?? loaded.view.path });
 });
+ipcMain.handle("agents:list", () => work.listAgents());
+ipcMain.handle("work:start", async (_event, ticket: TicketRef, agentId: string): Promise<StartWorkResult> => {
+  if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
+  try {
+    return { ok: true, session: await work.startWork(project.path, ticket, agentId) };
+  } catch (error) {
+    if (!(error instanceof DrylandError)) throw error;
+    return { ok: false, message: error.message, nextAction: error.nextAction };
+  }
+});
 ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 ipcMain.on("terminal:close", (_event, id: string) => terminals.close(id));
 
 void app.whenReady().then(async () => {
+  // The CLI bundle is built next to this file; the launcher runs it with this very Electron binary.
+  writeLauncher(launcherDir, { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") });
   // The window opens first; a slow or missing last project fills in when it has loaded.
   buildMenu();
   createWindow();

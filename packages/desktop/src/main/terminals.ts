@@ -16,10 +16,16 @@ export interface OpenOptions {
   cwd: string;
   cols?: number;
   rows?: number;
+  /** The program to run instead of the shell, such as an Agent CLI. */
+  program?: ShellSpec;
+  /** Variables set on top of the inherited environment; `id` is the new terminal's id. */
+  env?: (id: string) => Record<string, string>;
+  /** Also receives the terminal's output. */
+  onOutput?: (data: string) => void;
 }
 
 export interface TerminalManager {
-  /** Starts a shell in `cwd` and returns the new terminal's id. */
+  /** Starts the shell, or `program`, in `cwd` and returns the new terminal's id. */
   open(options: OpenOptions): string;
   write(id: string, data: string): void;
   resize(id: string, cols: number, rows: number): void;
@@ -45,18 +51,21 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
   }
 
   return {
-    open({ cwd, cols = DEFAULT_COLS, rows = DEFAULT_ROWS }) {
+    open({ cwd, cols = DEFAULT_COLS, rows = DEFAULT_ROWS, program = options.shell, env, onOutput }) {
       const id = randomUUID();
       const pty = options.provider.spawn({
-        file: options.shell.file,
-        args: options.shell.args,
+        file: program.file,
+        args: program.args,
         cwd,
         cols,
         rows,
-        env: terminalEnv(),
+        env: { ...terminalEnv(), ...env?.(id) },
       });
       live.set(id, pty);
-      pty.onData((data) => options.onData(id, data));
+      pty.onData((data) => {
+        options.onData(id, data);
+        onOutput?.(data);
+      });
       pty.onExit((exitCode) => {
         if (live.get(id) !== pty) return;
         live.delete(id);

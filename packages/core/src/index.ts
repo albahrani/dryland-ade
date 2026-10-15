@@ -1,3 +1,4 @@
+export * from "./agent-adapter.ts";
 export * from "./claim.ts";
 export * from "./doctor.ts";
 export * from "./env-fs.ts";

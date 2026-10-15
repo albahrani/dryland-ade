@@ -1,6 +1,6 @@
-import { readdir, stat } from "node:fs/promises";
-import { delimiter, join } from "node:path";
-import { envKey, exists } from "./env-fs.ts";
+import { readdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { exists, findExecutable } from "./env-fs.ts";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
@@ -95,25 +95,9 @@ async function checkTracker(runner: ProcessRunner, mainCheckout: string): Promis
   return pass("tracker", `${name}: \`${cli}\` is installed and logged in.`);
 }
 
-async function isRunnable(path: string, windows: boolean): Promise<boolean> {
-  const info = await stat(path).catch(() => null);
-  if (info === null || !info.isFile()) return false;
-  return windows || (info.mode & 0o111) !== 0;
-}
-
 async function checkPath(env: Record<string, string | undefined>): Promise<DoctorCheck> {
-  const dirs = (env[envKey(env, "PATH")] ?? "").split(delimiter).filter((dir) => dir !== "");
-  // On Windows a command needs one of the PATHEXT extensions to run; elsewhere it needs the x bit.
-  const windows = process.platform === "win32";
-  const extensions = windows
-    ? (env[envKey(env, "PATHEXT")] ?? ".COM;.EXE;.BAT;.CMD").split(";").filter((ext) => ext !== "")
-    : [""];
-  for (const dir of dirs) {
-    for (const extension of extensions) {
-      if (await isRunnable(join(dir, `dryland${extension}`), windows))
-        return pass("path", `dryland is on PATH (${dir}).`);
-    }
-  }
+  const found = await findExecutable("dryland", env);
+  if (found !== null) return pass("path", `dryland is on PATH (${dirname(found)}).`);
   return fail(
     "path",
     "dryland is not on PATH.",

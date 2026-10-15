@@ -426,6 +426,18 @@ export function nextSteps(snapshot: RepoSnapshot): NextStep[] {
   return RULES.flatMap((rule) => rule(snapshot)).filter((step) => !isDisabled(snapshot, step.ruleId));
 }
 
+/**
+ * The skill command to pre-type when work starts on `ref`: that of the best next step pointing at the ticket.
+ * `null` when no step with a skill does, in which case nothing is typed.
+ */
+export function commandForTicket(steps: NextStep[], ref: TicketRef): string | null {
+  const step = steps.find(
+    ({ command, target }) =>
+      command !== null && target.kind === "ticket" && target.map === ref.map && target.id === ref.id,
+  );
+  return step?.command ?? null;
+}
+
 /** Why a ticket is not on the frontier because of blockers: the ones still unresolved, or that they are unknown. */
 export interface WhyNot {
   /** Ids of the blockers that are not resolved; empty when the ticket is not blocked or its blockers are unknown. */
