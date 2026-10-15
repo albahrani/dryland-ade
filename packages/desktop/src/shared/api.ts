@@ -101,7 +101,7 @@ export interface DrylandApi {
   /** Opens the Agent CLI in the ticket's worktree with its next-step command typed, in a new terminal. */
   startWork(ticket: TicketRef, agentId: string): Promise<StartWorkResult>;
   /** Runs a ticket action through `dryland` in the open project; asking for confirmation is the caller's part. */
-  runTicketAction(action: TicketAction): Promise<TicketActionResult>;
+  runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */
   dontAskAgain(type: ConfirmationType): Promise<void>;
   writeTerminal(id: string, data: string): void;

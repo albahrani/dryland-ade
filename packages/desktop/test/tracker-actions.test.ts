@@ -11,14 +11,15 @@ const ticket = { map: "shop", id: "02" };
 
 describe("trackerArgs", () => {
   it("turns each ticket action into its dryland command", () => {
-    expect(trackerArgs({ kind: "claim", ticket }, true)).toEqual(["ticket", "claim", "shop/02"]);
-    expect(trackerArgs({ kind: "release", ticket }, true)).toEqual(["ticket", "release", "shop/02"]);
+    expect(trackerArgs({ kind: "claim", ticket }, true)).toEqual(["ticket", "claim", "shop/02", "--commit"]);
+    expect(trackerArgs({ kind: "release", ticket }, true)).toEqual(["ticket", "release", "shop/02", "--commit"]);
     expect(trackerArgs({ kind: "resolve", ticket, answer: "Built it." }, true)).toEqual([
       "ticket",
       "resolve",
       "shop/02",
       "--answer",
       "Built it.",
+      "--commit",
     ]);
     expect(trackerArgs({ kind: "unblock", ticket: { map: "shop", id: "03" }, blocker: "02" }, true)).toEqual([
       "ticket",
@@ -26,10 +27,11 @@ describe("trackerArgs", () => {
       "shop/03",
       "--remove",
       "02",
+      "--commit",
     ]);
   });
 
-  it("asks dryland not to commit when auto-commit is off", () => {
+  it("tells dryland not to commit when auto-commit is off", () => {
     expect(trackerArgs({ kind: "claim", ticket }, false)).toEqual(["ticket", "claim", "shop/02", "--no-commit"]);
   });
 });

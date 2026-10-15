@@ -1,7 +1,16 @@
 import type { LiveEvent, TicketRef, TreeTicket } from "@dryland/core";
 import { useEffect, useRef, useState } from "react";
 import type { AppState, LiveEventsPanelMode, ProjectView, SessionInfo } from "../../shared/api.ts";
-import { activeItem, closeTab, focusTab, type ItemRef, openTab, tabKey, type TabsState } from "../../shared/tabs.ts";
+import {
+  activeItem,
+  closeTab,
+  focusTab,
+  type ItemRef,
+  openTab,
+  tabKey,
+  type TabsState,
+  ticketKey,
+} from "../../shared/tabs.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
 import { ItemTab } from "./ItemTab.tsx";
 import { Legend } from "./Legend.tsx";
@@ -213,7 +222,7 @@ export function App() {
   /** Runs an action through `dryland` and reports its error or warnings; resolves with whether it made the change. */
   const runAction = async (action: TicketAction): Promise<boolean> => {
     setNotice(null);
-    const result = await window.dryland.runTicketAction(action);
+    const result = await window.dryland.runTicketAction(action, settings.autoCommit);
     if (!result.ok) setNotice(`${result.message} ${result.nextAction}`);
     else if (result.warnings.length > 0) setNotice(result.warnings.join(" "));
     return result.ok;
@@ -221,7 +230,7 @@ export function App() {
   /** A ticket's own actions run at once; a general button asks first, unless the user said not to (ADR 0003). */
   const requestAction = async (action: TicketAction, source: ActionSource): Promise<boolean> => {
     if (source === "ticket" || settings.dontAsk["tracker-metadata"]) return runAction(action);
-    const ref = `${action.ticket.map}/${action.ticket.id}`;
+    const ref = ticketKey(action.ticket);
     setPending({
       action,
       type: "tracker-metadata",
@@ -282,7 +291,7 @@ export function App() {
           ticketSessions={ticketSessionMap}
           onOpen={(ref) => setTabs(openTab(tabs, ref))}
           onRelease={(ticket) =>
-            void requestAction({ kind: "release", ticket: { map: ticket.map, id: ticket.id } }, "button")
+            void requestAction({ kind: "release", ticket: { map: ticket.map, id: ticket.id } }, "general-button")
           }
         />
       </aside>

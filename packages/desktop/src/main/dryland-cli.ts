@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import type { TicketActionResult } from "../shared/api.ts";
 
 export interface DrylandCliOptions {
   /** The executable that runs the CLI: the app's Electron binary, which acts as Node with `ELECTRON_RUN_AS_NODE`. */
@@ -10,7 +11,7 @@ export interface DrylandCliOptions {
 }
 
 /** How a `dryland` command went: its warnings, or its error and the next action it names. */
-export type DrylandRun = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
+export type DrylandRun = TicketActionResult;
 
 export interface DrylandCli {
   /**

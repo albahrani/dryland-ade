@@ -139,6 +139,17 @@ describe("dryland ticket claim commits", () => {
     expect(status.sort()).toEqual(["?? untracked.md", "M  other.md", "M notes.md"]);
   });
 
+  it("commits with --commit even when git's dryland.autoCommit is false", async () => {
+    const repo = shopRepo();
+    repo.git("config", "dryland.autoCommit", "false");
+
+    const result = await repo.run(["ticket", "claim", "shop/01", "--commit"], repo.path, { DRYLAND_SESSION_ID: "s" });
+
+    expect(result.exitCode).toBe(0);
+    expect(repo.log()[0]).toBe("Claim shop/01 for s");
+    expect(repo.git("status", "--porcelain")).toBe("");
+  });
+
   it("changes the file but makes no commit with --no-commit", async () => {
     const repo = shopRepo();
     const before = repo.git("rev-parse", "HEAD");

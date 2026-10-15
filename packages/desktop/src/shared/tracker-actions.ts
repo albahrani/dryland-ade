@@ -12,7 +12,7 @@ export type TicketAction =
   | { kind: "unblock"; ticket: TicketRef; blocker: string };
 
 /** Where an action was started: a ticket's own actions never ask, a general button does. */
-export type ActionSource = "ticket" | "button";
+export type ActionSource = "ticket" | "general-button";
 
 /**
  * The kinds of confirmed write, each with its own "do not ask again" flag. Only `tracker-metadata` is asked for so
@@ -34,7 +34,7 @@ export const CONFIRMATION_LABELS: Record<ConfirmationType, string> = {
 export type DontAsk = Record<ConfirmationType, boolean>;
 export const ASK_ALWAYS: DontAsk = { "tracker-metadata": false, "user-config": false, "prose-annotation": false };
 
-/** The `dryland` arguments of an action; `--no-commit` when auto-commit is off. */
+/** The `dryland` arguments of an action, saying whether to commit, so the app's setting wins over git's. */
 export function trackerArgs(action: TicketAction, autoCommit: boolean): string[] {
   const ref = ticketKey(action.ticket);
   const args = ((): string[] => {
@@ -48,7 +48,7 @@ export function trackerArgs(action: TicketAction, autoCommit: boolean): string[]
         return ["ticket", "block", ref, "--remove", action.blocker];
     }
   })();
-  return autoCommit ? args : [...args, "--no-commit"];
+  return [...args, autoCommit ? "--commit" : "--no-commit"];
 }
 
 /** A `dryland` command as it would be typed, for a confirmation to name exactly. */

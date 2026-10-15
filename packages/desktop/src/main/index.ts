@@ -27,7 +27,7 @@ import {
   type TicketActionResult,
   type TreeLoad,
 } from "../shared/api.ts";
-import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
+import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState, ticketKey } from "../shared/tabs.ts";
 import {
   ASK_ALWAYS,
   autoCommitFor,
@@ -134,7 +134,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
     const ranked = nextUpMarkers(steps, Infinity);
     const nextUp = { markers: ranked.slice(0, NEXT_UP_COUNT), ranked };
     const staleClaims = steps.flatMap(({ ruleId, target }) =>
-      ruleId === "stale-claim" && target.kind === "ticket" ? [`${target.map}/${target.id}`] : [],
+      ruleId === "stale-claim" && target.kind === "ticket" ? [ticketKey(target)] : [],
     );
     return { tree: { ok: true, tree, nextUp, staleClaims }, mainCheckout };
   } catch (error) {
@@ -323,19 +323,18 @@ ipcMain.handle("work:start", async (_event, ticket: TicketRef, agentId: string):
     return { ok: false, message: error.message, nextAction: error.nextAction };
   }
 });
-ipcMain.handle("tracker:run", async (_event, action: unknown): Promise<TicketActionResult> => {
-  if (!isTicketAction(action))
+ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): Promise<TicketActionResult> => {
+  if (!isTicketAction(action) || typeof commit !== "boolean")
     return { ok: false, message: "That is not a ticket action.", nextAction: "Retry from the ticket." };
   if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
-  // `dryland` finds the main checkout from the project itself.
-  const result = await dryland.run(trackerArgs(action, autoCommit(project.path)), { cwd: project.path });
+  // Commits as the renderer said, so a confirmation names exactly what runs; `dryland` finds the main checkout.
+  const result = await dryland.run(trackerArgs(action, commit), { cwd: project.path });
   void refresh();
   return result;
 });
 ipcMain.handle("confirmations:dont-ask", (_event, type: unknown) => {
   if (!isConfirmationType(type)) return;
-  store.update({ dontAsk: { ...store.read().dontAsk, [type]: true } });
-  sendSettings();
+  changeSettings({ dontAsk: { ...store.read().dontAsk, [type]: true } });
 });
 ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));

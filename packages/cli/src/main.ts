@@ -107,18 +107,18 @@ function formatMap(map: MapView): string {
 const USAGE = [
   "Usage: dryland ticket list [--json]",
   "       dryland ticket show <map>/<number> [--json]",
-  "       dryland ticket claim <map>/<number> [--no-commit] [--json]",
-  "       dryland ticket release <map>/<number> [--no-commit] [--json]",
+  "       dryland ticket claim <map>/<number> [--commit | --no-commit] [--json]",
+  "       dryland ticket release <map>/<number> [--commit | --no-commit] [--json]",
   "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
-  "                             [--blocked-by <number>[,<number>...]] [--no-commit] [--json]",
-  "       dryland ticket resolve <map>/<number> --answer <text> [--no-commit] [--json]",
+  "                             [--blocked-by <number>[,<number>...]] [--commit | --no-commit] [--json]",
+  "       dryland ticket resolve <map>/<number> --answer <text> [--commit | --no-commit] [--json]",
   "       dryland ticket block <map>/<number> [--add <number>[,<number>...]] [--remove <number>[,<number>...]]",
-  "                            [--no-commit] [--json]",
-  "       dryland ticket comment <map>/<number> --text <text> [--no-commit] [--json]",
-  "       dryland ticket triage <map>/<number> --role <role> [--no-commit] [--json]",
+  "                            [--commit | --no-commit] [--json]",
+  "       dryland ticket comment <map>/<number> --text <text> [--commit | --no-commit] [--json]",
+  "       dryland ticket triage <map>/<number> --role <role> [--commit | --no-commit] [--json]",
   "       dryland map show <map> [--json]",
   "       dryland map frontier <map> [--json]",
-  "       dryland map index <map> --title <title> --link <path> --gist <text> [--no-commit] [--json]",
+  "       dryland map index <map> --title <title> --link <path> --gist <text> [--commit | --no-commit] [--json]",
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
@@ -137,7 +137,8 @@ interface Output {
 }
 
 interface Flags {
-  noCommit: boolean;
+  /** `true` with `--commit`, `false` with `--no-commit`, `undefined` to let git's `dryland.autoCommit` decide. */
+  commit: boolean | undefined;
   /** Command-specific switches given, by name without the leading `--`. */
   switches: Set<string>;
   /** Options that take a value, by name without the leading `--`. */
@@ -190,8 +191,8 @@ const changedTicket = (value: unknown): Omit<TicketChangedPayload, "command"> =>
   return { ticket: `${ticket.map}/${ticket.id}` };
 };
 
-/** `false` when the user passed `--no-commit`; otherwise git's `dryland.autoCommit` decides. */
-const autoCommit = (flags: Flags) => (flags.noCommit ? false : undefined);
+/** Whether to commit: `--commit` or `--no-commit` when given, so the app's setting wins; otherwise git's `dryland.autoCommit` decides. */
+const autoCommit = (flags: Flags) => flags.commit;
 
 /** Every command: whether it takes a target (a ticket or map), and what it prints. */
 const COMMANDS: Record<
@@ -423,7 +424,11 @@ const SWITCHES = new Set(Object.values(COMMANDS).flatMap((command) => command.sw
 
 async function run(args: string[]): Promise<number> {
   const json = args.includes("--json");
-  const flags: Flags = { noCommit: args.includes("--no-commit"), switches: new Set(), values: {} };
+  if (args.includes("--commit") && args.includes("--no-commit")) {
+    throw new DrylandError("--commit and --no-commit contradict each other.", "Pass one of them, or neither.");
+  }
+  const commit = args.includes("--commit") ? true : args.includes("--no-commit") ? false : undefined;
+  const flags: Flags = { commit, switches: new Set(), values: {} };
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
@@ -434,7 +439,7 @@ async function run(args: string[]): Promise<number> {
       flags.values[name] = value;
     } else if (SWITCHES.has(name)) {
       flags.switches.add(name);
-    } else if (arg !== "--json" && arg !== "--no-commit") {
+    } else if (!["--json", "--commit", "--no-commit"].includes(arg)) {
       positional.push(arg);
     }
   }

@@ -24,6 +24,7 @@ export function TicketActions({
   const [busy, setBusy] = useState(false);
   if (ticket.status === "done") return null;
   const ref = { map: ticket.map, id: ticket.id };
+  const staleClaim = ticket.status === "in-progress" && stale;
   const run = async (action: TicketAction) => {
     setBusy(true);
     try {
@@ -36,7 +37,7 @@ export function TicketActions({
 
   return (
     <section className="ticket-actions" aria-label="Ticket actions">
-      {ticket.status === "in-progress" && stale && (
+      {staleClaim && (
         <p className="stale-claim" role="status">
           Claimed by {ticket.claimant ?? "someone"}, possibly stale: no live Dryland session holds it. It stays claimed
           until you release it.
@@ -48,7 +49,7 @@ export function TicketActions({
             Claim
           </button>
         )}
-        {ticket.status === "in-progress" && stale && (
+        {staleClaim && (
           <button disabled={busy} onClick={() => void run({ kind: "release", ticket: ref })}>
             Release
           </button>

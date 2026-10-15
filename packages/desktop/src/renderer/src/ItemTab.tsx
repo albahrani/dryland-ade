@@ -5,7 +5,7 @@ import type { ItemContent, ProjectView } from "../../shared/api.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
 import { mapMarker, NO_NEXT_UP, type NextUp, ticketMarker, whyNotText } from "../../shared/next-up.ts";
 import { NextUpExplanation, NextUpStar } from "./NextUp.tsx";
-import type { DocumentRef } from "../../shared/tabs.ts";
+import { type DocumentRef, ticketKey } from "../../shared/tabs.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
 import { StartWork } from "./StartWork.tsx";
 import { StatusIcon } from "./status.tsx";
@@ -190,7 +190,7 @@ export function ItemTab({
         header={header}
         nextUp={nextUp}
         treeTicket={treeTicket}
-        stale={project.tree.ok && project.tree.staleClaims.includes(`${map}/${id}`)}
+        stale={project.tree.ok && project.tree.staleClaims.includes(ticketKey(content.ticket))}
         onStartWork={onStartWork}
         onAction={onTicketAction}
       />
