@@ -95,6 +95,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Start work with Claude Code](issues/33-start-work-with-claude-code.md): Start with Claude Code creates or reuses the ticket's worktree and opens the CLI there with the next-step command typed one key at a time and never submitted, held back while a trust dialog shows; a declarative Agent adapter and a dryland launcher on the session PATH.
 
+- [Live reporting and the live-events panel](issues/35-live-reporting-and-live-events-panel.md): dryland status and every mutating ticket/map command POST authenticated live events to the app's 127.0.0.1 listener found via a per-user lock file; the app refreshes on ticket.changed and shows events in a three-mode panel.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
