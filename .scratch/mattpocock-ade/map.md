@@ -101,6 +101,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Tracker lock race behind the flaky parallel create test](issues/68-diagnose-the-flaky-parallel-ticket-create-test.md): A stale-lock breaker could remove a live lock; breakers now take turns and re-read before removing.
 
+- [Next-up markers and explanations](issues/34-next-up-markers-and-explanations.md): The top three next-step items carry a gold bar and star with the reason on hover, the item tab explains rule and evidence, and unmarked tickets answer 'Why not this?'.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
