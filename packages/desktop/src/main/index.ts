@@ -25,6 +25,7 @@ import {
   type TreeLoad,
 } from "../shared/api.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
+import { latestOnly } from "./latest-only.ts";
 import { writeLauncher } from "./launcher.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
@@ -75,6 +76,8 @@ function terminalEnded(id: string): void {
   if (session === undefined) return;
   status.exited(session.id);
   sendSessionStates();
+  // Its commits landed in a worktree the file watcher does not see; the git-fed next steps may have moved.
+  void refresh();
 }
 
 /** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
@@ -143,10 +146,10 @@ async function openProject(path: string): Promise<void> {
   if (loaded?.mainCheckout) stopWatching = watchProject(loaded.mainCheckout, () => void refresh());
 }
 
-async function refresh(): Promise<void> {
-  const loaded = await projectView();
-  if (loaded !== null) window?.webContents.send("project:changed", loaded.view);
-}
+/** Re-reads the project and sends it to the window; a read overtaken by a newer one is dropped, not sent late. */
+const refresh = latestOnly(projectView, (loaded) => {
+  if (loaded !== null) sendToWindow("project:changed", loaded.view);
+});
 
 async function pickProject(): Promise<void> {
   if (window === null) return;
@@ -171,6 +174,8 @@ function createWindow(): void {
     webPreferences: { preload: join(import.meta.dirname, "../preload/index.cjs"), sandbox: true },
   });
   window.on("closed", () => (window = null));
+  // Git state behind the next steps changes outside the watched tracker files, e.g. a commit made in a terminal.
+  window.on("focus", () => void refresh());
   if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
