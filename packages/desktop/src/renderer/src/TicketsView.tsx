@@ -1,4 +1,4 @@
-import type { TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
+import type { NextUpMarker, TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
 import { useState } from "react";
 import {
   applyViewOptions,
@@ -9,6 +9,8 @@ import {
 } from "../../shared/view-options.ts";
 import { STATUS_META } from "../../shared/status-meta.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
+import { mapMarker, type NextUp, ticketMarker } from "../../shared/next-up.ts";
+import { NextUpStar } from "./NextUp.tsx";
 import type { TicketSession } from "../../shared/session-meta.ts";
 import { type ItemRef, tabKey, ticketKey } from "../../shared/tabs.ts";
 import { SessionBadge, StatusIcon } from "./status.tsx";
@@ -35,15 +37,19 @@ function TicketRow({
   ticket,
   active,
   session,
+  marker,
   onOpen,
 }: {
   ticket: TreeTicket;
   active: boolean;
   session: TicketSession | undefined;
+  marker: NextUpMarker | undefined;
   onOpen: (ref: ItemRef) => void;
 }) {
+  const classes = ["ticket", active && "active", marker !== undefined && "next-up"].filter(Boolean).join(" ");
   return (
-    <li className={active ? "ticket active" : "ticket"}>
+    <li className={classes} title={marker?.step.reason}>
+      {marker !== undefined && <NextUpStar marker={marker} />}
       <StatusIcon status={ticket.status} />
       {session !== undefined && <SessionBadge agent={session.agent} state={session.state} />}
       <span className="ticket-id">{ticket.id}</span>
@@ -60,12 +66,19 @@ function TicketRow({
   );
 }
 
+/** A done ticket can be next (a PR, a retro); while its group is folded, its marker shows on the fold. */
+function FoldedMarker({ tickets, nextUp }: { tickets: TreeTicket[]; nextUp: NextUp }) {
+  const marker = tickets.map((t) => ticketMarker(nextUp, t.map, t.id)).find((m) => m !== undefined);
+  return marker === undefined ? null : <NextUpStar marker={marker} />;
+}
+
 function Branch({
   id,
   label,
   collapsed,
   toggle,
   onOpen,
+  marker,
   children,
 }: {
   id: string;
@@ -74,12 +87,15 @@ function Branch({
   toggle: (id: string) => void;
   /** Adds an "Open" button that opens the branch's item in the tab area. */
   onOpen?: () => void;
+  /** The Next-up marker on the branch's own item, a map. */
+  marker?: NextUpMarker;
   children: React.ReactNode;
 }) {
   const closed = collapsed.has(id);
   return (
     <li className="branch">
-      <div className="branch-head">
+      <div className={marker === undefined ? "branch-head" : "branch-head next-up"}>
+        {marker !== undefined && <NextUpStar marker={marker} />}
         <button className="branch-label" aria-expanded={!closed} onClick={() => toggle(id)}>
           {closed ? "▸" : "▾"} {label}
         </button>
@@ -163,6 +179,7 @@ export function TicketsView({
   tree,
   activeKey,
   sessions,
+  nextUp,
   onOpen,
 }: {
   tree: TicketsTree;
@@ -170,6 +187,7 @@ export function TicketsView({
   activeKey: string | null;
   /** The session working on each ticket, by `map/id`. */
   sessions: ReadonlyMap<string, TicketSession>;
+  nextUp: NextUp;
   onOpen: (ref: ItemRef) => void;
 }) {
   const [options, setOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
@@ -179,6 +197,16 @@ export function TicketsView({
   const [expandedDone, setExpandedDone] = useState<Set<string>>(new Set());
   const view = applyViewOptions(tree, options);
   const isActive = (t: TreeTicket) => activeKey === tabKey({ kind: "ticket", map: t.map, id: t.id });
+  const renderRow = (t: TreeTicket) => (
+    <TicketRow
+      key={t.id}
+      ticket={t}
+      active={isActive(t)}
+      session={sessions.get(ticketKey(t))}
+      marker={ticketMarker(nextUp, t.map, t.id)}
+      onOpen={onOpen}
+    />
+  );
   const flip = (id: string) => (current: Set<string>) => {
     const next = new Set(current);
     if (!next.delete(id)) next.add(id);
@@ -229,6 +257,7 @@ export function TicketsView({
             collapsed={collapsed}
             toggle={toggle}
             onOpen={() => onOpen({ kind: "map", name: map.name })}
+            marker={mapMarker(nextUp, map.name)}
           >
             <ul>
               {map.fog.length > 0 && (
@@ -245,17 +274,7 @@ export function TicketsView({
               {KINDS.map(({ key, label }) =>
                 map[key].length === 0 ? null : (
                   <Branch key={key} id={`${map.name}/${key}`} label={label} collapsed={collapsed} toggle={toggle}>
-                    <ul>
-                      {map[key].map((t) => (
-                        <TicketRow
-                          key={t.id}
-                          ticket={t}
-                          active={isActive(t)}
-                          session={sessions.get(ticketKey(t))}
-                          onOpen={onOpen}
-                        />
-                      ))}
-                    </ul>
+                    <ul>{map[key].map(renderRow)}</ul>
                   </Branch>
                 ),
               )}
@@ -268,19 +287,8 @@ export function TicketsView({
                   >
                     {expandedDone.has(map.name) ? "▾" : "▸"} {map.done.length} done
                   </button>
-                  {expandedDone.has(map.name) && (
-                    <ul>
-                      {map.done.map((t) => (
-                        <TicketRow
-                          key={t.id}
-                          ticket={t}
-                          active={isActive(t)}
-                          session={sessions.get(ticketKey(t))}
-                          onOpen={onOpen}
-                        />
-                      ))}
-                    </ul>
-                  )}
+                  {!expandedDone.has(map.name) && <FoldedMarker tickets={map.done} nextUp={nextUp} />}
+                  {expandedDone.has(map.name) && <ul>{map.done.map(renderRow)}</ul>}
                 </li>
               )}
             </ul>

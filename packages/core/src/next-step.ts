@@ -454,3 +454,49 @@ export function whyNot(snapshot: RepoSnapshot, ref: TicketRef): WhyNot {
   const unresolved = unresolvedBlockers(ticket, siblings);
   return unresolved === "unknown" ? { blockers: [], unknown: true } : { blockers: unresolved, unknown: false };
 }
+
+/** An item in the Tickets and Maps views a Next-up marker can sit on. */
+export type MarkedItem = { kind: "ticket"; map: string; id: string } | { kind: "map"; map: string };
+
+/** A Next-up marker: the item it sits on and the best next step pointing at that item. */
+export interface NextUpMarker {
+  item: MarkedItem;
+  step: NextStep;
+}
+
+/** How many items carry a Next-up marker: enough to offer a choice, few enough to stand out. */
+export const NEXT_UP_COUNT = 3;
+
+/**
+ * The item a step's marker sits on. A spec belongs to its map, and a waiting session to its ticket; the repo and
+ * a scratch session have no item in the views, so their steps carry no marker.
+ */
+function markedItem(target: StepTarget): MarkedItem | null {
+  switch (target.kind) {
+    case "ticket":
+      return { kind: "ticket", map: target.map, id: target.id };
+    case "map":
+    case "spec":
+      return { kind: "map", map: target.map };
+    case "session":
+      return target.ticket === null ? null : { kind: "ticket", map: target.ticket.map, id: target.ticket.id };
+    case "repo":
+      return null;
+  }
+}
+
+const itemKey = (item: MarkedItem) => (item.kind === "map" ? `map:${item.map}` : `ticket:${item.map}/${item.id}`);
+
+/**
+ * The Next-up markers of ranked steps: the first `count` distinct items, each with its best step, best first. With
+ * an infinite `count`, every item some step points at, which is how far down an unmarked item ranks.
+ */
+export function nextUpMarkers(steps: NextStep[], count = NEXT_UP_COUNT): NextUpMarker[] {
+  const markers = new Map<string, NextUpMarker>();
+  for (const step of steps) {
+    if (markers.size === count) break;
+    const item = markedItem(step.target);
+    if (item !== null && !markers.has(itemKey(item))) markers.set(itemKey(item), { item, step });
+  }
+  return [...markers.values()];
+}

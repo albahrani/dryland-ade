@@ -1,8 +1,6 @@
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { parseMap, unresolvedBlockers } from "./map.ts";
+import { unresolvedBlockers } from "./map.ts";
+import type { EffortSnapshot } from "./next-step.ts";
 import { byTicketNumber, type Ticket, type TicketType, ticketKind } from "./ticket.ts";
-import { readTickets } from "./tickets.ts";
 
 /** What a ticket's row shows as its icon: ready, in progress, blocked or done. */
 export type TicketStatus = "ready" | "in-progress" | "blocked" | "done";
@@ -53,9 +51,16 @@ export function toTreeTicket(ticket: Ticket, siblings: Ticket[]): TreeTicket {
   };
 }
 
-/** Groups tickets by map, then by kind; `maps` supplies the map files read, keyed by map name. */
-export function buildTicketsTree(tickets: Ticket[], maps: Map<string, { title: string; fog: string[] }>): TicketsTree {
-  const names = new Set([...maps.keys(), ...tickets.map((t) => t.map)]);
+/**
+ * Groups tickets by map, then by kind. Every effort with a map file, a spec or a ticket is a map of the tree, so a
+ * Next-up marker on a spec-only effort has a row to sit on.
+ */
+export function buildTicketsTree(tickets: Ticket[], efforts: EffortSnapshot[]): TicketsTree {
+  const maps = new Map(efforts.flatMap((e) => (e.map === null ? [] : [[e.name, e.map] as const])));
+  const names = new Set([
+    ...efforts.filter((e) => e.map !== null || e.hasSpec).map((e) => e.name),
+    ...tickets.map((t) => t.map),
+  ]);
   return {
     maps: [...names].sort().map((name) => {
       const own = tickets.filter((t) => t.map === name).sort(byTicketNumber);
@@ -75,19 +80,4 @@ export function buildTicketsTree(tickets: Ticket[], maps: Map<string, { title: s
       return node;
     }),
   };
-}
-
-/** Reads every map and ticket of the main checkout into the tree the Tickets view shows. */
-export async function readTicketsTree(mainCheckout: string): Promise<TicketsTree> {
-  const tickets = await readTickets(mainCheckout);
-  const scratch = join(mainCheckout, ".scratch");
-  const entries = await readdir(scratch, { withFileTypes: true }).catch(() => []);
-  const maps = new Map<string, { title: string; fog: string[] }>();
-  for (const entry of entries.filter((e) => e.isDirectory())) {
-    const text = await readFile(join(scratch, entry.name, "map.md"), "utf8").catch(() => null);
-    if (text === null) continue;
-    const { title, fog } = parseMap(entry.name, text);
-    maps.set(entry.name, { title, fog });
-  }
-  return buildTicketsTree(tickets, maps);
 }

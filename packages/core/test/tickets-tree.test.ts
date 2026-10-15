@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readTicketsTree } from "../src/index.ts";
+import { nodeProcessRunner, readProjectState } from "../src/index.ts";
+
+const readTicketsTree = async (root: string) => (await readProjectState(nodeProcessRunner, root)).tree;
 
 const TRACKER = "# Issue tracker: Local markdown\n";
 
@@ -17,7 +19,7 @@ function checkout(files: Record<string, string>): string {
 
 const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\n## Question\n\nQ\n`;
 
-describe("readTicketsTree", () => {
+describe("the tickets tree of readProjectState", () => {
   it("groups tickets by map, then by kind, and lists the map's fog", async () => {
     const root = checkout({
       ".scratch/shop/map.md": "# Map: Shop\n\n## Destination\n\nSell.\n\n## Not yet specified\n\n- Payments\n",

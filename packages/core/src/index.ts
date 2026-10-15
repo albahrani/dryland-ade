@@ -1,6 +1,7 @@
 export * from "./agent-adapter.ts";
 export * from "./claim.ts";
 export * from "./doctor.ts";
+export * from "./efforts.ts";
 export * from "./env-fs.ts";
 export * from "./errors.ts";
 export * from "./item-detail.ts";
@@ -11,6 +12,7 @@ export * from "./map-write.ts";
 export * from "./map.ts";
 export * from "./next-step.ts";
 export * from "./process-runner.ts";
+export * from "./project-state.ts";
 export * from "./repo-snapshot.ts";
 export * from "./ticket-edit.ts";
 export * from "./ticket.ts";

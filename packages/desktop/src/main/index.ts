@@ -5,10 +5,13 @@ import {
   type LiveEvent,
   type LiveListener,
   liveLockFile,
+  NEXT_UP_COUNT,
+  nextSteps,
+  nextUpMarkers,
   nodeProcessRunner,
   readMapDetail,
+  readProjectState,
   readTicketDetail,
-  readTicketsTree,
   startLiveListener,
   type TicketRef,
 } from "@dryland/core";
@@ -84,7 +87,11 @@ function onLiveEvent(event: LiveEvent): void {
 async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: string | null }> {
   try {
     const mainCheckout = await findMainCheckout(nodeProcessRunner, path);
-    return { tree: { ok: true, tree: await readTicketsTree(mainCheckout) }, mainCheckout };
+    // One pass over the tracker files feeds both the tree and the rule engine, so markers and rows never disagree.
+    const { tree, snapshot } = await readProjectState(nodeProcessRunner, mainCheckout);
+    const ranked = nextUpMarkers(nextSteps(snapshot), Infinity);
+    const nextUp = { markers: ranked.slice(0, NEXT_UP_COUNT), ranked };
+    return { tree: { ok: true, tree, nextUp }, mainCheckout };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
     return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: null };

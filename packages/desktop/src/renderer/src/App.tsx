@@ -50,12 +50,15 @@ function Sidebar({
       </div>
     );
   }
+  const { tree, nextUp } = project.tree;
   if (view === "tickets")
-    return <TicketsView tree={project.tree.tree} activeKey={tabs.active} sessions={ticketSessions} onOpen={onOpen} />;
+    return (
+      <TicketsView tree={tree} activeKey={tabs.active} sessions={ticketSessions} nextUp={nextUp} onOpen={onOpen} />
+    );
   if (view === "maps") {
     const active = activeItem(tabs);
     return (
-      <MapsView tree={project.tree.tree} activeMap={active?.kind === "map" ? active.name : null} onOpen={onOpen} />
+      <MapsView tree={tree} activeMap={active?.kind === "map" ? active.name : null} nextUp={nextUp} onOpen={onOpen} />
     );
   }
   return <p className="empty">The {view} view arrives in a later ticket.</p>;

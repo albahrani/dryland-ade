@@ -16,6 +16,12 @@ export function Legend({ onDismiss }: { onDismiss: () => void }) {
             <StatusIcon status={status} /> <span>{STATUS_META[status].label}</span>: {STATUS_META[status].meaning}
           </li>
         ))}
+        <li>
+          <span className="next-up-star" aria-hidden="true">
+            ★
+          </span>{" "}
+          <span>Next up</span>: the item a next step points at; hover for why
+        </li>
       </ul>
     </aside>
   );

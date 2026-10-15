@@ -1,8 +1,10 @@
 import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
+import type { NextUp } from "./next-up.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 
-/** The tickets tree of a project, or why it cannot be read and what to do about it. */
-export type TreeLoad = { ok: true; tree: TicketsTree } | { ok: false; message: string; nextAction: string };
+/** The tickets tree of a project with its next steps, or why it cannot be read and what to do about it. */
+export type TreeLoad =
+  { ok: true; tree: TicketsTree; nextUp: NextUp } | { ok: false; message: string; nextAction: string };
 
 export interface ProjectView {
   /** The path the user opened. */
