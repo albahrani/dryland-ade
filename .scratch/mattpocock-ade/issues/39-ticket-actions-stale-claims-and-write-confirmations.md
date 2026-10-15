@@ -1,7 +1,8 @@
 # Ticket actions, stale claims and write confirmations
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-15T14:48:52.694Z","was":"ready-for-agent"}} -->
 Blocked by: 34, 35, 36
 
 Spec: [spec](../spec.md), user stories 15, 30, 31, 61, 63 to 66. "Write policy and skill setup". ADR 0003.
