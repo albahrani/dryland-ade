@@ -1,7 +1,8 @@
 # Live reporting and the live-events panel
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-15T08:49:22.322Z","was":"ready-for-agent"}} -->
 Blocked by: 24, 25, 30
 
 Spec: [spec](../spec.md), user stories 23, 53, 68. "Live reporting". ADR 0008.
