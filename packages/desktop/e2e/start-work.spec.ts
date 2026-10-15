@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 
 const windows = process.platform === "win32";
@@ -33,9 +33,14 @@ function fixtureRepo(): string {
   return repo;
 }
 
+/** The hook side of a fake Claude Code, shared with the CLI's contract tests. */
+const FAKE_HOOKS = resolve("../cli/test/fake-claude-hooks.mjs").replaceAll("\\", "/");
+
 /**
  * A fake `claude`: prints where it runs and what Dryland gave it, runs `dryland ticket list` the way an agent
- * would, then echoes each key it receives and reports an Enter as SUBMITTED.
+ * would, then echoes each key it receives and reports an Enter as SUBMITTED. Like the real CLI it fires the hooks
+ * of its `--settings`: UserPromptSubmit on Enter, a permission prompt on `!`, Stop on `~`, and on `#` SessionEnd
+ * before it exits. None of those keys is in a pre-typed command.
  */
 function stubAgent(): string {
   const dir = mkdtempSync(join(tmpdir(), "dryland-e2e-agent-"));
@@ -49,9 +54,15 @@ function stubAgent(): string {
       "console.log(`agent-ready cwd=${basename(process.cwd())}`);",
       "console.log(`session=${set('DRYLAND_SESSION_ID')} pane=${set('DRYLAND_PANE_KEY')} port=${set('DRYLAND_PORT')} token=${set('DRYLAND_TOKEN')}`);",
       "console.log(execSync('dryland ticket list', { encoding: 'utf8' }));",
+      `const hooks = require(${JSON.stringify(FAKE_HOOKS)});`,
+      "const settings = hooks.settingsFrom(process.argv.slice(2));",
       "process.stdin.setRawMode(true);",
       "process.stdin.on('data', (d) => {",
       "  const keys = d.toString();",
+      "  if (keys.includes('\\r')) hooks.fire(settings, 'UserPromptSubmit');",
+      "  if (keys.includes('!')) ['PermissionRequest', 'Notification:permission_prompt'].forEach((e) => hooks.fire(settings, e));",
+      "  if (keys.includes('~')) hooks.fire(settings, 'Stop');",
+      "  if (keys.includes('#')) { hooks.fire(settings, 'SessionEnd'); process.exit(0); }",
       "  process.stdout.write(keys.includes('\\r') ? '\\r\\nSUBMITTED\\r\\n' : keys);",
       "});",
     ].join("\n"),
@@ -108,6 +119,35 @@ test("starts Claude Code on a ticket in its worktree with the next-step command 
   const header = window.getByLabel("Session", { exact: true });
   await expect(header).toContainText("Claude Code");
   await expect(header).toContainText("shop/02-grill");
+  await app.close();
+});
+
+test("shows the session's state from Claude Code's hooks on its tab and on its ticket", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/implement shop/02");
+  const badges = (state: string) => [
+    window.getByRole("tablist").getByRole("img", { name: `Claude Code: ${state}` }),
+    window.getByRole("region", { name: "Tickets" }).getByRole("img", { name: `Claude Code: ${state}` }),
+  ];
+  const expectState = async (state: string) => {
+    for (const badge of badges(state)) {
+      await expect(badge).toBeVisible();
+      await expect(badge).toHaveAttribute("title", `Claude Code: ${state}`);
+    }
+  };
+
+  await expectState("launched");
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.press("Enter");
+  await expectState("working");
+  await window.keyboard.type("!");
+  await expectState("waiting for you");
+  await window.keyboard.type("~");
+  await expectState("idle");
+  await window.keyboard.type("#");
+  await expectState("ended");
   await app.close();
 });
 

@@ -230,3 +230,31 @@ Setup: `claude.exe` with no arguments spawned through `node-pty` (ConPTY, 120x40
 **Parent-session variables**: of the variables a running Claude Code session gives its children, `CLAUDE_CODE_CHILD_SESSION` alone turns transcript saving off in a launched CLI. Removing it, `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_SESSION_ATTENDED`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN` and `CLAUDE_PID` gives a normal top-level session. The adapter lists them as `parentSessionEnv`, and Dryland removes them from every session it starts. The user's own `CLAUDE_CODE_*` settings, such as `CLAUDE_CODE_USE_BEDROCK`, pass through.
 
 **Through the built app** (Playwright driving the real CLI, same day): in a worktree of this trusted repo, "Start with Claude Code" on ticket 34 left `❯ /implement mattpocock-ade/34` in the input box, unsubmitted. In a worktree of an untrusted temp repo the trust dialog showed and, 3 s later, nothing had been typed.
+
+## Status hook verification (2026-10-15, Claude Code 2.1.300, Windows, ticket 36)
+
+Setup: `claude.exe --settings <file>` spawned through `node-pty` in a detached worktree of this trusted repo, with the parent-session variables removed and `DRYLAND_SESSION_ID` set. The settings file registered a command hook, with no matcher, for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SubagentStop` and `SessionEnd`. Each hook logged its event and stdin. The driver typed "Use the Write tool to create a file named x.txt containing the word hello. Do nothing else.", pressed Enter, approved the permission dialog after 3 s, waited, then typed `/exit`. Nothing was written to user-level Claude config; the worktree was removed afterwards.
+
+**Injection**
+- Hooks from `--settings` fire alongside the user's own hooks; the user's settings are untouched.
+- On Windows the hook commands run in Git Bash (`SHELL` is `C:\Program Files\Git\bin\bash.exe`), so a bare `dryland` resolves to the POSIX launcher. Hooks inherit the PTY environment, `DRYLAND_SESSION_ID` included.
+- A `dryland status` hook with no app running takes about 80 ms through the Electron launcher.
+
+**Observed order, default permission mode** (run 2, `--permission-mode default`)
+
+| t (s) | Event | Payload detail |
+| --- | --- | --- |
+| 0.0 | `SessionStart` | `source: "startup"`, at launch, before any prompt |
+| 4.5 | `UserPromptSubmit` | |
+| 6.4 | `PreToolUse` | `tool_name: "Write"` |
+| 6.5 | `PermissionRequest` | `tool_name: "Write"`, as the dialog shows |
+| 9.8 | `PostToolUse` | after approval |
+| 10.9 | `Stop` | |
+| 13.2 | `SubagentStop` | after `Stop`, from a background helper; not a state change |
+| 71.0 | `Notification` | `notification_type: "idle_prompt"`, 60 s after `Stop`, "Claude is waiting for your input" |
+| 71.8 | `SessionEnd` | `reason: "prompt_input_exit"` on `/exit` |
+
+- `Notification:permission_prompt` did not fire in the 3 s the dialog was open; `PermissionRequest` is the immediate waiting signal.
+- In the user's auto permission mode (run 1, no `--permission-mode`) the Write was approved without a dialog: `UserPromptSubmit → PreToolUse → PostToolUse → Stop → SubagentStop`, no `PermissionRequest`, no `idle_prompt` within 75 s, then `SessionEnd`.
+
+**Mapping**: the documented mapping holds and the adapter keeps it: running = `UserPromptSubmit`, `PreToolUse`, `PostToolUse`; waiting = `PermissionRequest`, `Notification:permission_prompt`, `Notification:elicitation_dialog` (the last two documented, not observed); idle = `Stop`, `Notification:idle_prompt`; ended = `SessionEnd`. `SessionStart` and `SubagentStop` are not mapped: launched comes from Dryland's spawn, and a subagent stopping says nothing about the session. Unlike Copilot, Claude Code's `SessionStart` fires at launch.

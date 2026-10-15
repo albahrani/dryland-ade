@@ -1,4 +1,4 @@
-import type { LiveEvent, MapDetail, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
+import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 
 /** The tickets tree of a project, or why it cannot be read and what to do about it. */
@@ -21,6 +21,8 @@ export interface AppState {
   project: ProjectView | null;
   legendDismissed: boolean;
   liveEventsPanel: LiveEventsPanelMode;
+  /** The state of each session this app started, by session id. */
+  sessionStates: Readonly<Record<string, SessionState>>;
   /** The editor tabs last open in `project`. */
   tabs: TabsState;
 }
@@ -86,4 +88,6 @@ export interface DrylandApi {
   onProjectChanged(callback: (project: ProjectView) => void): () => void;
   /** Called with every live event the app receives. Returns an unsubscribe function. */
   onLiveEvent(callback: (event: LiveEvent) => void): () => void;
+  /** Called with every session's state whenever one changes. Returns an unsubscribe function. */
+  onSessionStates(callback: (states: Readonly<Record<string, SessionState>>) => void): () => void;
 }

@@ -44,7 +44,7 @@ export interface AgentAdapter {
 
 /**
  * Claude Code. Launch and every blocking dialog listed are verified against 2.1.300 on Windows (research notes,
- * ticket 33); the status mapping is from documentation until the status ticket verifies it.
+ * ticket 33), and so are the status hooks injected with `--settings` and their mapping (ticket 36).
  */
 export const CLAUDE_CODE: AgentAdapter = {
   id: "claude-code",
@@ -69,6 +69,7 @@ export const CLAUDE_CODE: AgentAdapter = {
     "CLAUDE_PID",
   ],
   hookInjection: { kind: "settings-flag", flag: "--settings" },
+  // SessionStart (fires at launch) and SubagentStop (fires after Stop) are left out: neither changes the state.
   statusEvents: {
     UserPromptSubmit: "running",
     PreToolUse: "running",
@@ -88,6 +89,29 @@ export const AGENT_ADAPTERS: readonly AgentAdapter[] = [CLAUDE_CODE];
 /** A rule engine command, such as `/implement shop/02`, written the way the adapter's CLI invokes skills. */
 export function skillCommand(adapter: AgentAdapter, command: string): string {
   return adapter.skillPrefix + command.replace(/^\//, "");
+}
+
+/** A Claude Code `hooks` settings entry: command hooks for the events a matcher selects. */
+interface HookGroup {
+  matcher?: string;
+  hooks: { type: "command"; command: string; timeout: number }[];
+}
+
+/**
+ * The settings a `settings-flag` adapter's CLI is launched with: for each native event in `statusEvents`, a hook
+ * that reports the session state with `dryland status`. `Event:subtype` becomes a matcher on the subtype. `null`
+ * for an adapter whose hooks are not injected at launch.
+ */
+export function hookSettings(adapter: AgentAdapter): { hooks: Record<string, HookGroup[]> } | null {
+  if (adapter.hookInjection.kind !== "settings-flag") return null;
+  const hooks: Record<string, HookGroup[]> = {};
+  for (const [event, state] of Object.entries(adapter.statusEvents)) {
+    const [name = event, subtype] = event.split(":");
+    // `dryland status` gives up on an app that does not answer well within this; seconds, as Claude Code counts.
+    const group: HookGroup = { hooks: [{ type: "command", command: `dryland status session.${state}`, timeout: 5 }] };
+    (hooks[name] ??= []).push(subtype === undefined ? group : { matcher: subtype, ...group });
+  }
+  return { hooks };
 }
 
 /** Terminal output as plain text: OSC and CSI sequences, other escapes and all whitespace removed. */

@@ -1,4 +1,4 @@
-import type { TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
+import type { SessionState, TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
 import { useState } from "react";
 import {
   applyViewOptions,
@@ -10,7 +10,7 @@ import {
 import { STATUS_META } from "../../shared/status-meta.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
 import { type ItemRef, tabKey } from "../../shared/tabs.ts";
-import { StatusIcon } from "./status.tsx";
+import { SessionBadge, StatusIcon } from "./status.tsx";
 
 /** The ticket kinds a map lists after its fog, in workflow order. */
 const KINDS = [
@@ -30,18 +30,27 @@ function Blockers({ ticket }: { ticket: TreeTicket }) {
   return <span className="meta">{ticket.blockers === "unknown" ? `blocked by: ${text}` : `blocked by ${text}`}</span>;
 }
 
+/** The session working on a ticket, as its badge shows it. */
+export interface TicketSession {
+  agent: string;
+  state: SessionState;
+}
+
 function TicketRow({
   ticket,
   active,
+  session,
   onOpen,
 }: {
   ticket: TreeTicket;
   active: boolean;
+  session: TicketSession | undefined;
   onOpen: (ref: ItemRef) => void;
 }) {
   return (
     <li className={active ? "ticket active" : "ticket"}>
       <StatusIcon status={ticket.status} />
+      {session !== undefined && <SessionBadge agent={session.agent} state={session.state} />}
       <span className="ticket-id">{ticket.id}</span>
       <button
         className="ticket-title"
@@ -158,11 +167,14 @@ function OptionsMenu({
 export function TicketsView({
   tree,
   activeKey,
+  sessions,
   onOpen,
 }: {
   tree: TicketsTree;
   /** The `tabKey` of the focused tab, if any. */
   activeKey: string | null;
+  /** The session working on each ticket, by `map/id`. */
+  sessions: ReadonlyMap<string, TicketSession>;
   onOpen: (ref: ItemRef) => void;
 }) {
   const [options, setOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
@@ -240,7 +252,13 @@ export function TicketsView({
                   <Branch key={key} id={`${map.name}/${key}`} label={label} collapsed={collapsed} toggle={toggle}>
                     <ul>
                       {map[key].map((t) => (
-                        <TicketRow key={t.id} ticket={t} active={isActive(t)} onOpen={onOpen} />
+                        <TicketRow
+                          key={t.id}
+                          ticket={t}
+                          active={isActive(t)}
+                          session={sessions.get(`${t.map}/${t.id}`)}
+                          onOpen={onOpen}
+                        />
                       ))}
                     </ul>
                   </Branch>
@@ -258,7 +276,13 @@ export function TicketsView({
                   {expandedDone.has(map.name) && (
                     <ul>
                       {map.done.map((t) => (
-                        <TicketRow key={t.id} ticket={t} active={isActive(t)} onOpen={onOpen} />
+                        <TicketRow
+                          key={t.id}
+                          ticket={t}
+                          active={isActive(t)}
+                          session={sessions.get(`${t.map}/${t.id}`)}
+                          onOpen={onOpen}
+                        />
                       ))}
                     </ul>
                   )}

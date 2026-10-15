@@ -40,6 +40,15 @@ export function runDryland(args: string[], opts: { cwd: string; env?: Record<str
   });
 }
 
+/** A directory holding a `dryland` command that runs the bundle, as the app's launcher puts one on `PATH`. */
+export function drylandOnPath(): string {
+  const dir = mkdtempSync(join(tmpdir(), "dryland-launcher-"));
+  writeFileSync(join(dir, "dryland"), `#!/bin/sh\nexec "${process.execPath}" "${BUNDLE}" "$@"\n`);
+  chmodSync(join(dir, "dryland"), 0o755);
+  writeFileSync(join(dir, "dryland.cmd"), `@"${process.execPath}" "${BUNDLE}" %*\r\n`);
+  return dir;
+}
+
 /** A fresh empty directory under the temp dir. */
 export function tempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));

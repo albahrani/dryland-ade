@@ -8,7 +8,8 @@ import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
 import { disposeTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
-import { TicketsView } from "./TicketsView.tsx";
+import { SessionBadge } from "./status.tsx";
+import { type TicketSession, TicketsView } from "./TicketsView.tsx";
 
 type ActivityView = "tickets" | "maps" | "sessions";
 
@@ -30,11 +31,13 @@ function Sidebar({
   view,
   project,
   tabs,
+  ticketSessions,
   onOpen,
 }: {
   view: ActivityView;
   project: ProjectView | null;
   tabs: TabsState;
+  ticketSessions: ReadonlyMap<string, TicketSession>;
   onOpen: (ref: ItemRef) => void;
 }) {
   if (project === null) return <p className="empty">Open a git repo to see its tickets.</p>;
@@ -46,7 +49,8 @@ function Sidebar({
       </div>
     );
   }
-  if (view === "tickets") return <TicketsView tree={project.tree.tree} activeKey={tabs.active} onOpen={onOpen} />;
+  if (view === "tickets")
+    return <TicketsView tree={project.tree.tree} activeKey={tabs.active} sessions={ticketSessions} onOpen={onOpen} />;
   if (view === "maps") {
     const active = activeItem(tabs);
     return (
@@ -104,6 +108,9 @@ export function App() {
       setState((current) => current && { ...current, project }),
     );
     const stopTerminals = routeTerminalEvents();
+    const stopSessionStates = window.dryland.onSessionStates((sessionStates) =>
+      setState((current) => current && { ...current, sessionStates }),
+    );
     const stopLive = window.dryland.onLiveEvent((event) =>
       setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
     );
@@ -111,11 +118,20 @@ export function App() {
       stopProject();
       stopTerminals();
       stopLive();
+      stopSessionStates();
     };
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel } = state;
+  const { project, legendDismissed, tabs, liveEventsPanel, sessionStates } = state;
+  const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
+  // A ticket shows its newest session; sessions are kept in the order they started.
+  const ticketSessions = new Map<string, TicketSession>(
+    [...sessions.values()].map((s) => [
+      `${s.ticket.map}/${s.ticket.id}`,
+      { agent: s.agent.name, state: sessionState(s) },
+    ]),
+  );
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
   const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
     setState({ ...state, liveEventsPanel: mode });
@@ -204,25 +220,35 @@ export function App() {
       </nav>
       <aside className="sidebar">
         {!legendDismissed && <Legend onDismiss={dismissLegend} />}
-        <Sidebar view={activity} project={project} tabs={tabs} onOpen={(ref) => setTabs(openTab(tabs, ref))} />
+        <Sidebar
+          view={activity}
+          project={project}
+          tabs={tabs}
+          ticketSessions={ticketSessions}
+          onOpen={(ref) => setTabs(openTab(tabs, ref))}
+        />
       </aside>
       <main className="editor">
         {tabs.open.length > 0 && (
           <div className="tabbar" role="tablist" aria-label="Open items">
-            {tabs.open.map((tab) => (
-              <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
-                <button
-                  role="tab"
-                  aria-selected={tabKey(tab) === tabs.active}
-                  onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
-                >
-                  {tabLabel(tab, terminalTitles)}
-                </button>
-                <button aria-label={`Close ${tabLabel(tab, terminalTitles)}`} onClick={() => closeItem(tab)}>
-                  ×
-                </button>
-              </span>
-            ))}
+            {tabs.open.map((tab) => {
+              const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
+              return (
+                <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
+                  {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
+                  <button
+                    role="tab"
+                    aria-selected={tabKey(tab) === tabs.active}
+                    onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
+                  >
+                    {tabLabel(tab, terminalTitles)}
+                  </button>
+                  <button aria-label={`Close ${tabLabel(tab, terminalTitles)}`} onClick={() => closeItem(tab)}>
+                    ×
+                  </button>
+                </span>
+              );
+            })}
           </div>
         )}
         {terminalError !== null && (

@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { DrylandError, nodeProcessRunner } from "@dryland/core";
+import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
 import { createTerminalManager } from "../src/main/terminals.ts";
 import { createWorkStarter } from "../src/main/work.ts";
@@ -24,6 +24,7 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}) {
   // The app hands terminals and the work starter the same environment, its own.
   const env = { PATH: path, HOME: "/home/test", ...inherited };
   const provider = new FakePtyProvider();
+  const hooksDir = join(mkdtempSync(join(tmpdir(), "dryland-app-")), "hooks");
   const terminals = createTerminalManager({
     provider,
     shell: { file: "/bin/fake-sh", args: [] },
@@ -36,9 +37,10 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}) {
     runner: nodeProcessRunner,
     env,
     launcherDir: "/opt/dryland/bin",
+    hooksDir,
     pretype: { quietMs: 20, charDelayMs: 0 },
   });
-  return { provider, starter };
+  return { provider, starter, hooksDir };
 }
 
 const typed = (pty: { written: string[] } | undefined) => pty?.written.join("") ?? "";
@@ -59,13 +61,25 @@ describe("starting work on a ticket", () => {
     expect(session.worktree.branch).toBe("shop/02-grill");
     expect(existsSync(join(session.worktree.path, ".scratch/shop/issues/02-grill.md"))).toBe(true);
     const options = provider.spawned[0]?.options;
-    expect(options).toMatchObject({ file: bin.claude, args: [], cwd: session.worktree.path });
+    expect(options).toMatchObject({ file: bin.claude, cwd: session.worktree.path });
     expect(options?.env).toMatchObject({
       DRYLAND_SESSION_ID: session.id,
       DRYLAND_PANE_KEY: session.terminalId,
       HOME: "/home/test",
     });
     expect(options?.env.PATH?.split(delimiter)).toEqual(["/opt/dryland/bin", bin.dir]);
+  });
+
+  it("launches Claude Code with its status hooks from Dryland's own settings file, writing no user config", async () => {
+    const home = mkdtempSync(join(tmpdir(), "dryland-home-"));
+    const { provider, starter, hooksDir } = setup(undefined, { HOME: home, USERPROFILE: home });
+
+    await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+
+    const settingsFile = join(hooksDir, "claude-code.json");
+    expect(provider.spawned[0]?.options.args).toEqual(["--settings", settingsFile]);
+    expect(JSON.parse(readFileSync(settingsFile, "utf8"))).toEqual(hookSettings(CLAUDE_CODE));
+    expect(readdirSync(home)).toEqual([]);
   });
 
   it("runs under the user's own login: it adds only the session's identity, no credentials", async () => {

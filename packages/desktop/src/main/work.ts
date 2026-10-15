@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { delimiter, extname } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { delimiter, extname, join } from "node:path";
 import {
   AGENT_ADAPTERS,
   type AgentAdapter,
@@ -9,6 +10,7 @@ import {
   envKey,
   findExecutable,
   findMainCheckout,
+  hookSettings,
   nextSteps,
   type ProcessRunner,
   readRepoSnapshot,
@@ -29,6 +31,8 @@ export interface WorkStarterOptions {
   env: Record<string, string | undefined>;
   /** The directory holding the `dryland` launcher, put first on every session's `PATH`. */
   launcherDir: string;
+  /** Dryland's own directory for the settings files that inject status hooks; never the user's CLI config. */
+  hooksDir: string;
   pretype?: PretypeTiming;
 }
 
@@ -45,15 +49,28 @@ export interface WorkStarter {
 }
 
 /** Windows runs a `.cmd` or `.bat` only through `cmd.exe`; anything else is spawned directly. */
-function programFor(executable: string, adapter: AgentAdapter, env: Record<string, string | undefined>): ShellSpec {
+function programFor(executable: string, args: string[], env: Record<string, string | undefined>): ShellSpec {
   if (process.platform === "win32" && [".cmd", ".bat"].includes(extname(executable).toLowerCase())) {
-    return { file: env[envKey(env, "ComSpec")] || "cmd.exe", args: ["/d", "/c", executable, ...adapter.launchArgs] };
+    return { file: env[envKey(env, "ComSpec")] || "cmd.exe", args: ["/d", "/c", executable, ...args] };
   }
-  return { file: executable, args: [...adapter.launchArgs] };
+  return { file: executable, args };
+}
+
+/**
+ * The adapter's launch arguments, plus its settings flag naming a file in `hooksDir` that holds the status hooks,
+ * written fresh on every launch. A file rather than inline JSON, which `cmd.exe` would mangle.
+ */
+function launchArgs(adapter: AgentAdapter, hooksDir: string): string[] {
+  const settings = hookSettings(adapter);
+  if (settings === null || adapter.hookInjection.kind !== "settings-flag") return [...adapter.launchArgs];
+  mkdirSync(hooksDir, { recursive: true });
+  const file = join(hooksDir, `${adapter.id}.json`);
+  writeFileSync(file, JSON.stringify(settings, null, 2));
+  return [...adapter.launchArgs, adapter.hookInjection.flag, file];
 }
 
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
-  const { terminals, runner, env, launcherDir, pretype = PRETYPE_TIMING } = options;
+  const { terminals, runner, env, launcherDir, hooksDir, pretype = PRETYPE_TIMING } = options;
   const started: SessionInfo[] = [];
 
   function adapterFor(agentId: string): AgentAdapter {
@@ -116,7 +133,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
             });
       terminalId = terminals.open({
         cwd: worktree.path,
-        program: programFor(executable, adapter, env),
+        program: programFor(executable, launchArgs(adapter, hooksDir), env),
         env: (id) => sessionEnv(adapter, sessionId, id),
         onOutput: pretyper,
       });

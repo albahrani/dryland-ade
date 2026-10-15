@@ -1,4 +1,4 @@
-import type { LiveEvent } from "@dryland/core";
+import type { LiveEvent, SessionState } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
 import type { DrylandApi, ProjectView } from "../shared/api.ts";
 
@@ -34,6 +34,11 @@ const api: DrylandApi = {
     const listener = (_event: unknown, event: LiveEvent) => callback(event);
     ipcRenderer.on("live:event", listener);
     return () => ipcRenderer.removeListener("live:event", listener);
+  },
+  onSessionStates(callback) {
+    const listener = (_event: unknown, states: Readonly<Record<string, SessionState>>) => callback(states);
+    ipcRenderer.on("sessions:states", listener);
+    return () => ipcRenderer.removeListener("sessions:states", listener);
   },
 };
 

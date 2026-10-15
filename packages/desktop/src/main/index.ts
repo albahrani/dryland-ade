@@ -21,6 +21,7 @@ import {
   type StartWorkResult,
   type TreeLoad,
 } from "../shared/api.ts";
+import { createSessionStatus } from "../shared/session-status.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
 import { writeLauncher } from "./launcher.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
@@ -42,20 +43,37 @@ const terminals = createTerminalManager({
   shell: resolveShell(process.platform, process.env),
   env: ptyEnv,
   onData: (id, data) => sendToWindow("terminal:data", id, data),
-  onExit: (id, exitCode) => sendToWindow("terminal:exit", id, exitCode),
+  onExit: (id, exitCode) => {
+    sendToWindow("terminal:exit", id, exitCode);
+    const session = work.sessions().find((s) => s.terminalId === id);
+    if (session !== undefined) {
+      status.exited(session.id);
+      sendSessionStates();
+    }
+  },
 });
 const store = createUiStateStore(join(app.getPath("userData"), "ui-state.json"));
 // Sessions find `dryland` here; ticket 57 moves the launcher to the install directory.
 const launcherDir = join(app.getPath("userData"), "bin");
-const work = createWorkStarter({ terminals, runner: nodeProcessRunner, env: ptyEnv, launcherDir });
+const work = createWorkStarter({
+  terminals,
+  runner: nodeProcessRunner,
+  env: ptyEnv,
+  launcherDir,
+  hooksDir: join(app.getPath("userData"), "hooks"),
+});
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
 let stopWatching: (() => void) | null = null;
 let live: LiveListener | null = null;
 
 /** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
+const status = createSessionStatus();
+const sendSessionStates = () => sendToWindow("sessions:states", status.states());
+
 function onLiveEvent(event: LiveEvent): void {
   sendToWindow("live:event", event);
+  if (status.apply(event)) sendSessionStates();
   if (event.kind === "ticket.changed") void refresh();
 }
 
@@ -78,7 +96,13 @@ async function projectView(): Promise<{ view: ProjectView; mainCheckout: string 
 async function currentState(): Promise<AppState> {
   const { legendDismissed, tabs, liveEventsPanel } = store.read();
   const view = (await projectView())?.view ?? null;
-  return { project: view, legendDismissed, liveEventsPanel, tabs: (view && tabs[view.path]) || EMPTY_TABS };
+  return {
+    project: view,
+    legendDismissed,
+    liveEventsPanel,
+    tabs: (view && tabs[view.path]) || EMPTY_TABS,
+    sessionStates: status.states(),
+  };
 }
 
 async function readItem(ref: DocumentRef): Promise<ItemContent> {
@@ -174,7 +198,10 @@ ipcMain.handle("agents:list", () => work.listAgents());
 ipcMain.handle("work:start", async (_event, ticket: TicketRef, agentId: string): Promise<StartWorkResult> => {
   if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
   try {
-    return { ok: true, session: await work.startWork(project.path, ticket, agentId) };
+    const session = await work.startWork(project.path, ticket, agentId);
+    status.launched(session.id);
+    sendSessionStates();
+    return { ok: true, session };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
     return { ok: false, message: error.message, nextAction: error.nextAction };
