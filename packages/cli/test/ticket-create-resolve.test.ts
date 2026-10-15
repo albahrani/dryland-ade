@@ -51,9 +51,13 @@ describe("dryland ticket create", () => {
       ),
     );
 
-    expect(results.map((r) => r.exitCode)).toEqual(Array(6).fill(0));
+    // Each failure carries its own stderr, so a rare failure under load says why.
+    for (const [i, result] of results.entries()) expect(result.exitCode, `create ${i}: ${result.stderr}`).toBe(0);
     const listed = JSON.parse((await repo.run(["ticket", "list", "--json"])).stdout) as { id: string }[];
-    expect(listed.map((t) => t.id)).toEqual(["01", "02", "03", "04", "05", "06", "07"]);
+    expect(
+      listed.map((t) => t.id),
+      `git log: ${repo.log().join(" | ")}`,
+    ).toEqual(["01", "02", "03", "04", "05", "06", "07"]);
   });
 
   it("fails for an unknown map and states the next action", async () => {
