@@ -93,6 +93,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Embedded terminal session](issues/32-embedded-terminal-session.md): PTYs in the main process behind a PtyProvider seam (node-pty), shown with xterm.js in session tabs; killed on quit; called terminals until a worktree Session exists.
 
+- [Start work with Claude Code](issues/33-start-work-with-claude-code.md): Start with Claude Code creates or reuses the ticket's worktree and opens the CLI there with the next-step command typed one key at a time and never submitted, held back while a trust dialog shows; a declarative Agent adapter and a dryland launcher on the session PATH.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
