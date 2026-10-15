@@ -1,7 +1,8 @@
 # Claude Code session status
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-15T09:13:57.435Z","was":"ready-for-agent"}} -->
 Blocked by: 33, 35
 
 Spec: [spec](../spec.md), user stories 46, 87. "Agent adapters" (status mapping table). ADR 0006. Earlier research: `research/hook-status-mapping.md`.
