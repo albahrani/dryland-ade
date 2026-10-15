@@ -54,43 +54,73 @@ interface LockInfo {
   at: number;
 }
 
-async function readLock(lockPath: string): Promise<LockInfo | null> {
+/**
+ * The lock's holder; `missing` when there is no lock file, `busy` when it could not be read right now (Windows
+ * refuses to open a file that is being deleted), `corrupt` when it was read but is not a lock.
+ */
+async function readLock(lockPath: string): Promise<LockInfo | "missing" | "busy" | "corrupt"> {
+  let text: string;
   try {
-    const info = JSON.parse(await readFile(lockPath, "utf8")) as Partial<LockInfo>;
+    text = await readFile(lockPath, "utf8");
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT" ? "missing" : "busy";
+  }
+  try {
+    const info = JSON.parse(text) as Partial<LockInfo>;
     if (typeof info.pid === "number" && typeof info.token === "string" && typeof info.at === "number") {
       return { pid: info.pid, token: info.token, at: info.at };
     }
   } catch {
-    // Missing or unreadable: treated as no readable holder.
+    // Not JSON: reported as corrupt below.
   }
-  return null;
+  return "corrupt";
+}
+
+/** Whether the lock `seen` at `lockPath` was left by a writer that is gone. */
+async function isStale(lockPath: string, seen: LockInfo | "corrupt"): Promise<boolean> {
+  if (seen !== "corrupt") return !pidAlive(seen.pid) || Date.now() - seen.at >= LOCK_MAX_AGE_MS;
+  // Lock files are written whole before they are linked into place, so only a crash or corruption leaves one
+  // that does not parse; it is left alone until it is old enough that no writer can still be busy with it.
+  const info = await stat(lockPath).catch(() => null);
+  return info !== null && Date.now() - info.mtimeMs >= UNREADABLE_LOCK_MS;
+}
+
+/**
+ * Runs `breakLock` as the only breaker of `lockPath`, or returns `false` while another breaker has its turn. A breaker
+ * that crashed mid-turn leaves its file behind; one older than a turn could ever take is removed.
+ */
+async function asOnlyBreaker(lockPath: string, breakLock: () => Promise<boolean>): Promise<boolean> {
+  const turn = `${lockPath}.break`;
+  try {
+    await writeFile(turn, String(process.pid), { flag: "wx" }); // atomic, and fails if another breaker has it
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") return false;
+    const info = await stat(turn).catch(() => null);
+    if (info !== null && Date.now() - info.mtimeMs >= UNREADABLE_LOCK_MS) await rm(turn, { force: true });
+    return false;
+  }
+  try {
+    return await breakLock();
+  } finally {
+    await rm(turn, { force: true });
+  }
 }
 
 /** Removes the lock if its holder is gone. Returns whether the lock may be free now. */
 async function breakStaleLock(lockPath: string): Promise<boolean> {
   const seen = await readLock(lockPath);
-  if (seen === null) {
-    // Gone already (free to take), or present but unreadable: only a crash or corruption leaves that.
-    const info = await stat(lockPath).catch(() => null);
-    if (info === null) return true;
-    if (Date.now() - info.mtimeMs < UNREADABLE_LOCK_MS) return false;
+  if (seen === "missing") return true;
+  if (seen === "busy" || !(await isStale(lockPath, seen))) return false;
+  // What was read may already have been released and replaced by a live holder, so it is read again during the
+  // breaker's turn. A stale lock cannot change then: its holder is gone, other breakers wait, and writers only
+  // take a lock that does not exist.
+  return asOnlyBreaker(lockPath, async () => {
+    const current = await readLock(lockPath);
+    if (current === "missing") return true;
+    if (current === "busy" || !(await isStale(lockPath, current))) return false;
     await rm(lockPath, { force: true });
     return true;
-  }
-  if (pidAlive(seen.pid) && Date.now() - seen.at < LOCK_MAX_AGE_MS) return false;
-  // Rename is atomic, so exactly one breaker takes the file; the others see it vanish.
-  const taken = `${lockPath}.stale-${randomUUID()}`;
-  try {
-    await rename(lockPath, taken);
-  } catch {
-    return true;
-  }
-  if ((await readLock(taken))?.token !== seen.token) {
-    // The stale lock was replaced between our read and our rename, so we took a live one: put it back.
-    await link(taken, lockPath).catch(() => undefined);
-  }
-  await rm(taken, { force: true });
-  return true;
+  });
 }
 
 /** Takes the tracker lock, waiting for a live holder. Returns the function that releases it. */
@@ -115,7 +145,15 @@ async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
     await rm(pending, { force: true });
   }
   return async () => {
-    if ((await readLock(lockPath))?.token === token) await rm(lockPath, { force: true });
+    // A momentarily unreadable lock is retried: left in place, ours would hold everyone off until it went stale.
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const seen = await readLock(lockPath);
+      if (seen !== "busy") {
+        if (typeof seen !== "string" && seen.token === token) await rm(lockPath, { force: true });
+        return;
+      }
+      await sleep(25);
+    }
   };
 }
 
