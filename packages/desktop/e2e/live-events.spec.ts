@@ -59,9 +59,12 @@ test("shows ticket changes and session events from outside terminals, in a panel
   await expect(panel).toContainText("ticket claim shop/02");
 
   // Session events show too, newest last.
-  dryland(repo, ["status", "session.waiting"], { DRYLAND_SESSION_ID: "session-b" });
+  dryland(repo, ["status", "session.waiting", "--payload", '{"reason":"permission"}'], {
+    DRYLAND_SESSION_ID: "session-b",
+  });
   await expect(panel.getByRole("listitem")).toHaveCount(2);
   await expect(panel.getByRole("listitem").last()).toContainText("session.waiting");
+  await expect(panel.getByRole("listitem").last()).toContainText('{"reason":"permission"}');
   await expect(panel.getByRole("listitem").last()).toContainText("session-b");
 
   // One line shows only the newest event; hidden shows nothing; the status bar brings it back.

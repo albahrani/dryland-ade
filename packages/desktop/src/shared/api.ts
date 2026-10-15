@@ -14,6 +14,8 @@ export interface ProjectView {
 /** How much of the live-events panel shows: all of it, its newest line, or nothing. */
 export const LIVE_EVENTS_PANEL_MODES = ["expanded", "line", "hidden"] as const;
 export type LiveEventsPanelMode = (typeof LIVE_EVENTS_PANEL_MODES)[number];
+export const isLiveEventsPanelMode = (value: unknown): value is LiveEventsPanelMode =>
+  LIVE_EVENTS_PANEL_MODES.includes(value as LiveEventsPanelMode);
 
 export interface AppState {
   project: ProjectView | null;

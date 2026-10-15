@@ -7,6 +7,7 @@ import {
   createWorktree,
   DrylandError,
   indexMap,
+  isLiveEventKind,
   LIVE_EVENT_KINDS,
   listTickets,
   listWorktrees,
@@ -26,6 +27,7 @@ import {
   type LiveEventKind,
   type MapView,
   type Ticket,
+  type TicketChangedPayload,
   type WorktreeEntry,
 } from "@dryland/core";
 
@@ -173,7 +175,7 @@ function parsePayload(text: string | undefined): unknown {
  * Tells the running app about `kind`, for the session in `DRYLAND_SESSION_ID` unless `session` names one.
  * Fire-and-forget: with no app running, or one that does not answer, nothing happens.
  */
-function report(kind: LiveEventKind, payload?: unknown, session?: string): Promise<boolean> {
+function reportLiveEvent(kind: LiveEventKind, payload?: unknown, session?: string): Promise<boolean> {
   const event: LiveEvent = {
     session_id: session ?? process.env["DRYLAND_SESSION_ID"] ?? "",
     kind,
@@ -183,7 +185,7 @@ function report(kind: LiveEventKind, payload?: unknown, session?: string): Promi
 }
 
 /** What a command that returns the changed ticket changed. */
-const changedTicket = (value: unknown) => {
+const changedTicket = (value: unknown): Omit<TicketChangedPayload, "command"> => {
   const ticket = value as Ticket;
   return { ticket: `${ticket.map}/${ticket.id}` };
 };
@@ -205,7 +207,7 @@ const COMMANDS: Record<
      * Set on commands that change tickets or maps: what changed, from the command's value and target. After the
      * command succeeds the app is told with a `ticket.changed` live event, whatever the tracker backend.
      */
-    changed?: (value: unknown, target: string) => Record<string, string>;
+    changed?: (value: unknown, target: string) => Omit<TicketChangedPayload, "command">;
     run: (target: string, flags: Flags) => Promise<Output>;
   }
 > = {
@@ -363,10 +365,10 @@ const COMMANDS: Record<
     target: true,
     options: ["session", "payload"],
     run: async (kind, flags) => {
-      if (!LIVE_EVENT_KINDS.includes(kind as LiveEventKind)) {
+      if (!isLiveEventKind(kind)) {
         throw new DrylandError(`"${kind}" is not a live event kind.`, `Use one of: ${LIVE_EVENT_KINDS.join(", ")}.`);
       }
-      const sent = await report(kind as LiveEventKind, parsePayload(flags.values["payload"]), flags.values["session"]);
+      const sent = await reportLiveEvent(kind, parsePayload(flags.values["payload"]), flags.values["session"]);
       return { value: { sent }, text: "" };
     },
   },
@@ -457,7 +459,8 @@ async function run(args: string[]): Promise<number> {
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
     if (entry.changed !== undefined) {
-      await report("ticket.changed", { command: commandName, ...entry.changed(value, target ?? "") });
+      const payload: TicketChangedPayload = { command: commandName, ...entry.changed(value, target ?? "") };
+      await reportLiveEvent("ticket.changed", payload);
     }
     return exitCode;
   }

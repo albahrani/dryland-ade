@@ -15,9 +15,8 @@ import {
 import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
 import {
   type AppState,
+  isLiveEventsPanelMode,
   type ItemContent,
-  LIVE_EVENTS_PANEL_MODES,
-  type LiveEventsPanelMode,
   type ProjectView,
   type StartWorkResult,
   type TreeLoad,
@@ -163,8 +162,8 @@ ipcMain.handle("tabs:save", (_event, tabs: TabsState) => {
 });
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
-ipcMain.handle("live-events:mode", (_event, mode: LiveEventsPanelMode) => {
-  if (LIVE_EVENTS_PANEL_MODES.includes(mode)) store.update({ liveEventsPanel: mode });
+ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
+  if (isLiveEventsPanelMode(mode)) store.update({ liveEventsPanel: mode });
 });
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();

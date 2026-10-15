@@ -1,11 +1,13 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync, rmSync } from "node:fs";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { createServer, request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
+/** Every kind of live event: a session's state changes, and `ticket.changed` for any Dryland write. */
 export const LIVE_EVENT_KINDS = [
   "session.started",
   "session.running",
@@ -17,8 +19,12 @@ export const LIVE_EVENT_KINDS = [
 
 export type LiveEventKind = (typeof LIVE_EVENT_KINDS)[number];
 
+export const isLiveEventKind = (value: unknown): value is LiveEventKind =>
+  LIVE_EVENT_KINDS.includes(value as LiveEventKind);
+
 /** What `dryland` tells the running app; shown live and never stored (ADR 0008). */
 export interface LiveEvent {
+  /** `DRYLAND_SESSION_ID` of the session it came from; empty from a terminal outside any session. */
   session_id: string;
   kind: LiveEventKind;
   /** ISO timestamp of when the event happened. */
@@ -26,16 +32,25 @@ export interface LiveEvent {
   payload?: unknown;
 }
 
+/** The payload of `ticket.changed`: the command that wrote, and the ticket (`map/id`) or map it changed. */
+export interface TicketChangedPayload {
+  command: string;
+  ticket?: string;
+  map?: string;
+}
+
+type Env = Record<string, string | undefined>;
+
 /** Where the running app writes its port and token, read by `dryland` to reach it. */
 export function liveLockFile(
-  env: Record<string, string | undefined> = process.env,
+  env: Env = process.env,
   platform: NodeJS.Platform = process.platform,
   home: string = homedir(),
 ): string {
   return join(env["DRYLAND_APP_DIR"] || appDir(env, platform, home), "live.json");
 }
 
-function appDir(env: Record<string, string | undefined>, platform: NodeJS.Platform, home: string): string {
+function appDir(env: Env, platform: NodeJS.Platform, home: string): string {
   if (platform === "win32") return join(env["LOCALAPPDATA"] || join(home, "AppData", "Local"), "Dryland");
   if (platform === "darwin") return join(home, "Library", "Application Support", "Dryland");
   return join(env["XDG_STATE_HOME"] || join(home, ".local", "state"), "dryland");
@@ -46,8 +61,8 @@ export function parseLiveEvent(value: unknown): LiveEvent | null {
   if (value === null || typeof value !== "object") return null;
   const { session_id, kind, timestamp, payload } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || typeof timestamp !== "string") return null;
-  if (!LIVE_EVENT_KINDS.includes(kind as LiveEventKind)) return null;
-  const event: LiveEvent = { session_id, kind: kind as LiveEventKind, timestamp };
+  if (!isLiveEventKind(kind)) return null;
+  const event: LiveEvent = { session_id, kind, timestamp };
   return payload === undefined ? event : { ...event, payload };
 }
 
@@ -128,7 +143,21 @@ export async function startLiveListener({ lockFile, onEvent }: LiveListenerOptio
   // Renamed into place, so `dryland` never reads half a lock file.
   const temp = `${lockFile}.${token}.tmp`;
   await writeFile(temp, JSON.stringify({ port, token } satisfies Endpoint));
-  await rename(temp, lockFile);
+  // Windows refuses to replace a file `dryland` has open for a moment; retry briefly.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(temp, lockFile);
+      break;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (attempt >= 20 || (code !== "EPERM" && code !== "EACCES" && code !== "EBUSY")) {
+        server.close();
+        await rm(temp, { force: true });
+        throw error;
+      }
+      await sleep(25);
+    }
+  }
   return {
     host: HOST,
     port,
@@ -145,30 +174,40 @@ export async function startLiveListener({ lockFile, onEvent }: LiveListenerOptio
 }
 
 /** The app that spawned this terminal, as it set `DRYLAND_PORT` and `DRYLAND_TOKEN`. */
-function endpointFromEnv(env: Record<string, string | undefined>): Endpoint | null {
+function endpointFromEnv(env: Env): Endpoint | null {
   const port = Number(env["DRYLAND_PORT"]);
   const token = env["DRYLAND_TOKEN"];
   return Number.isInteger(port) && port > 0 && token ? { port, token } : null;
 }
 
 export interface SendOptions {
-  env?: Record<string, string | undefined>;
+  env?: Env;
   /** How long to wait for the app before giving up. */
   timeoutMs?: number;
 }
 
-/** Sends `event` to the running app. Resolves `false`, never rejects, when it cannot be delivered. */
+/**
+ * Sends `event` to the running app: the one that spawned this terminal, else the one the lock file names.
+ * Resolves `false`, never rejects, when it cannot be delivered.
+ */
 export async function sendLiveEvent(
   event: LiveEvent,
-  { env = process.env, timeoutMs = 500 }: SendOptions = {},
+  { env = process.env, timeoutMs = 300 }: SendOptions = {},
 ): Promise<boolean> {
-  const endpoint = endpointFromEnv(env) ?? readEndpoint(liveLockFile(env));
-  if (endpoint === null) return false;
   const body = JSON.stringify(event);
+  const fromEnv = endpointFromEnv(env);
+  if (fromEnv !== null && (await post(fromEnv, body, timeoutMs))) return true;
+  // A terminal can outlive the app that set its env; the lock file names the app running now.
+  const fromLock = readEndpoint(liveLockFile(env));
+  if (fromLock === null || (fromLock.port === fromEnv?.port && fromLock.token === fromEnv.token)) return false;
+  return post(fromLock, body, timeoutMs);
+}
+
+function post(endpoint: Endpoint, body: string, timeoutMs: number): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     const req = request(
       {
-        host: "127.0.0.1",
+        host: HOST,
         port: endpoint.port,
         method: "POST",
         path: "/events",

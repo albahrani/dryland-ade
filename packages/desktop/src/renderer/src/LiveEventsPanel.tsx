@@ -1,15 +1,15 @@
-import type { LiveEvent } from "@dryland/core";
+import type { LiveEvent, TicketChangedPayload } from "@dryland/core";
 import { useEffect, useRef } from "react";
 import type { LiveEventsPanelMode } from "../../shared/api.ts";
 
-/** What an event says in one line: a Dryland write names its command and target, a session event its kind. */
+/** What an event says in one line: a Dryland write names its command and target, a session event its payload. */
 function describe(event: LiveEvent): string {
-  const payload = (event.payload ?? {}) as Record<string, unknown>;
-  if (event.kind === "ticket.changed" && typeof payload["command"] === "string") {
-    const target = payload["ticket"] ?? payload["map"];
-    return typeof target === "string" ? `${payload["command"]} ${target}` : payload["command"];
+  if (event.payload === undefined) return "";
+  if (event.kind === "ticket.changed") {
+    const { command, ticket, map } = event.payload as TicketChangedPayload;
+    if (typeof command === "string") return [command, ticket ?? map].filter((part) => part !== undefined).join(" ");
   }
-  return "";
+  return JSON.stringify(event.payload);
 }
 
 function time(timestamp: string): string {

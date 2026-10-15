@@ -47,6 +47,17 @@ describe("live reporting", () => {
     expect(received).toEqual([EVENT]);
   });
 
+  it("falls back to the lock file when DRYLAND_PORT points at an app that has gone", async () => {
+    const dir = appDir();
+    const { listener: gone } = await listen(appDir());
+    await gone.close();
+    const { received } = await listen(dir);
+    const env = { DRYLAND_APP_DIR: dir, DRYLAND_PORT: String(gone.port), DRYLAND_TOKEN: gone.token };
+
+    await expect(sendLiveEvent(EVENT, { env })).resolves.toBe(true);
+    expect(received).toEqual([EVENT]);
+  });
+
   it("rejects a request without the listener's token and does not pass it on", async () => {
     const { listener, received } = await listen(appDir());
 

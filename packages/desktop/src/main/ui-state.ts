@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { LIVE_EVENTS_PANEL_MODES, type LiveEventsPanelMode } from "../shared/api.ts";
+import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
 
 /** The small local UI state Dryland keeps; the repo stays the source of truth for everything else. */
@@ -38,9 +38,7 @@ function parse(text: string): UiState {
     lastProject: typeof raw.lastProject === "string" ? raw.lastProject : DEFAULTS.lastProject,
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
     tabs: parseAllTabs(raw.tabs),
-    liveEventsPanel: LIVE_EVENTS_PANEL_MODES.includes(raw.liveEventsPanel as LiveEventsPanelMode)
-      ? (raw.liveEventsPanel as LiveEventsPanelMode)
-      : DEFAULTS.liveEventsPanel,
+    liveEventsPanel: isLiveEventsPanelMode(raw.liveEventsPanel) ? raw.liveEventsPanel : DEFAULTS.liveEventsPanel,
   };
 }
 
