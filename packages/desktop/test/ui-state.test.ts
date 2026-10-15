@@ -6,6 +6,13 @@ import { createUiStateStore } from "../src/main/ui-state.ts";
 
 const stateFile = () => join(mkdtempSync(join(tmpdir(), "dryland-ui-")), "nested", "ui-state.json");
 
+/** Auto-commit on everywhere, and every confirmation asked. */
+const SETTINGS_DEFAULTS = {
+  autoCommit: true,
+  projectAutoCommit: {},
+  dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
+};
+
 describe("ui state store", () => {
   it("starts with no project and the legend showing", () => {
     expect(createUiStateStore(stateFile()).read()).toEqual({
@@ -13,6 +20,7 @@ describe("ui state store", () => {
       legendDismissed: false,
       tabs: {},
       liveEventsPanel: "expanded",
+      ...SETTINGS_DEFAULTS,
     });
   });
 
@@ -27,6 +35,7 @@ describe("ui state store", () => {
       legendDismissed: true,
       tabs: {},
       liveEventsPanel: "expanded",
+      ...SETTINGS_DEFAULTS,
     });
   });
 
@@ -39,6 +48,7 @@ describe("ui state store", () => {
       legendDismissed: false,
       tabs: {},
       liveEventsPanel: "expanded",
+      ...SETTINGS_DEFAULTS,
     });
 
     writeFileSync(file, JSON.stringify({ lastProject: 7, legendDismissed: "yes" }));
@@ -47,6 +57,7 @@ describe("ui state store", () => {
       legendDismissed: false,
       tabs: {},
       liveEventsPanel: "expanded",
+      ...SETTINGS_DEFAULTS,
     });
   });
 
@@ -72,5 +83,38 @@ describe("ui state store", () => {
 
     writeFileSync(file, JSON.stringify({ liveEventsPanel: "sideways" }));
     expect(createUiStateStore(file).read().liveEventsPanel).toBe("expanded");
+  });
+
+  it("remembers each confirmation type's 'do not ask again' on its own, and its reset", () => {
+    const file = stateFile();
+    const store = createUiStateStore(file);
+    store.update({ dontAsk: { ...store.read().dontAsk, "tracker-metadata": true } });
+    expect(createUiStateStore(file).read().dontAsk).toEqual({
+      "tracker-metadata": true,
+      "user-config": false,
+      "prose-annotation": false,
+    });
+
+    writeFileSync(file, JSON.stringify({ dontAsk: { "tracker-metadata": "yes", "user-config": true, other: true } }));
+    expect(createUiStateStore(file).read().dontAsk).toEqual({
+      "tracker-metadata": false,
+      "user-config": true,
+      "prose-annotation": false,
+    });
+  });
+
+  it("remembers auto-commit globally and per project, dropping overrides that are not on or off", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ autoCommit: false, projectAutoCommit: { "/repos/shop": true } });
+    expect(createUiStateStore(file).read()).toMatchObject({
+      autoCommit: false,
+      projectAutoCommit: { "/repos/shop": true },
+    });
+
+    writeFileSync(file, JSON.stringify({ autoCommit: "no", projectAutoCommit: { "/repos/shop": false, "/a": 1 } }));
+    expect(createUiStateStore(file).read()).toMatchObject({
+      autoCommit: true,
+      projectAutoCommit: { "/repos/shop": false },
+    });
   });
 });

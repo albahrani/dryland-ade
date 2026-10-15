@@ -25,7 +25,11 @@ export function fixtureRepo(): string {
   }
   const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
   git("init", "-q", "-b", "main");
+  // `dryland` commits its tracker writes here.
+  git("config", "user.name", "Test");
+  git("config", "user.email", "test@example.com");
+  git("config", "commit.gpgsign", "false");
   git("add", ".");
-  git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "Fixture");
+  git("commit", "-q", "-m", "Fixture");
   return repo;
 }

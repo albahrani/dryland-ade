@@ -1,7 +1,8 @@
-import type { LiveEvent, TicketRef } from "@dryland/core";
+import type { LiveEvent, TicketRef, TreeTicket } from "@dryland/core";
 import { useEffect, useRef, useState } from "react";
 import type { AppState, LiveEventsPanelMode, ProjectView, SessionInfo } from "../../shared/api.ts";
 import { activeItem, closeTab, focusTab, type ItemRef, openTab, tabKey, type TabsState } from "../../shared/tabs.ts";
+import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
 import { ItemTab } from "./ItemTab.tsx";
 import { Legend } from "./Legend.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
@@ -11,6 +12,7 @@ import { disposeTerminal, getOrCreateTerminal, routeTerminalEvents } from "./ter
 import { SessionBadge } from "./status.tsx";
 import { TicketsView } from "./TicketsView.tsx";
 import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts";
+import { type ActionSource, commandLine, type TicketAction, trackerArgs } from "../../shared/tracker-actions.ts";
 
 type ActivityView = "tickets" | "maps" | "sessions";
 
@@ -34,12 +36,14 @@ function Sidebar({
   tabs,
   ticketSessions,
   onOpen,
+  onRelease,
 }: {
   view: ActivityView;
   project: ProjectView | null;
   tabs: TabsState;
   ticketSessions: ReadonlyMap<string, TicketSession>;
   onOpen: (ref: ItemRef) => void;
+  onRelease: (ticket: TreeTicket) => void;
 }) {
   if (project === null) return <p className="empty">Open a git repo to see its tickets.</p>;
   if (!project.tree.ok) {
@@ -50,10 +54,18 @@ function Sidebar({
       </div>
     );
   }
-  const { tree, nextUp } = project.tree;
+  const { tree, nextUp, staleClaims } = project.tree;
   if (view === "tickets")
     return (
-      <TicketsView tree={tree} activeKey={tabs.active} sessions={ticketSessions} nextUp={nextUp} onOpen={onOpen} />
+      <TicketsView
+        tree={tree}
+        activeKey={tabs.active}
+        sessions={ticketSessions}
+        nextUp={nextUp}
+        staleClaims={staleClaims}
+        onOpen={onOpen}
+        onRelease={onRelease}
+      />
     );
   if (view === "maps") {
     const active = activeItem(tabs);
@@ -105,6 +117,10 @@ export function App() {
   const [terminalError, setTerminalError] = useState<string | null>(null);
   // Sessions this window started, by terminal id; not persisted, like the terminals they run in.
   const [sessions, setSessions] = useState<ReadonlyMap<string, SessionInfo>>(new Map());
+  // A write from a general button, waiting for the user to confirm it.
+  const [pending, setPending] = useState<(PendingWrite & { action: TicketAction }) | null>(null);
+  // What the last tracker write or session start reported: its error, or the warnings it ran with.
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     void window.dryland.getState().then((loaded) => {
@@ -116,6 +132,9 @@ export function App() {
       setState((current) => current && { ...current, project }),
     );
     const stopTerminals = routeTerminalEvents();
+    const stopSettings = window.dryland.onSettingsChanged((settings) =>
+      setState((current) => current && { ...current, settings }),
+    );
     const stopSessionStates = window.dryland.onSessionStates((sessionStates) =>
       setState((current) => current && { ...current, sessionStates }),
     );
@@ -127,11 +146,12 @@ export function App() {
       stopTerminals();
       stopLive();
       stopSessionStates();
+      stopSettings();
     };
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel, sessionStates } = state;
+  const { project, legendDismissed, tabs, liveEventsPanel, sessionStates, settings } = state;
   const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
   const ticketSessionMap = ticketSessions([...sessions.values()], sessionStates);
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
@@ -172,7 +192,8 @@ export function App() {
       setTerminalError(`${result.message} ${result.nextAction}`);
       return;
     }
-    const { session } = result;
+    const { session, warnings } = result;
+    setNotice(warnings.length === 0 ? null : warnings.join(" "));
     setSessions((current) => new Map(current).set(session.terminalId, session));
     showTerminal(session.terminalId, `${session.agent.name} ${session.ticket.map}/${session.ticket.id}`);
   };
@@ -188,6 +209,38 @@ export function App() {
     if (id === null) return;
     terminalsOpened.current += 1;
     showTerminal(id, `Terminal ${terminalsOpened.current}`);
+  };
+  /** Runs an action through `dryland` and reports its error or warnings; resolves with whether it made the change. */
+  const runAction = async (action: TicketAction): Promise<boolean> => {
+    setNotice(null);
+    const result = await window.dryland.runTicketAction(action);
+    if (!result.ok) setNotice(`${result.message} ${result.nextAction}`);
+    else if (result.warnings.length > 0) setNotice(result.warnings.join(" "));
+    return result.ok;
+  };
+  /** A ticket's own actions run at once; a general button asks first, unless the user said not to (ADR 0003). */
+  const requestAction = async (action: TicketAction, source: ActionSource): Promise<boolean> => {
+    if (source === "ticket" || settings.dontAsk["tracker-metadata"]) return runAction(action);
+    const ref = `${action.ticket.map}/${action.ticket.id}`;
+    setPending({
+      action,
+      type: "tracker-metadata",
+      text:
+        action.kind === "release"
+          ? `Release the claim on ${ref}? Its status goes back to what it was before.`
+          : `Change ${ref}?`,
+      command: commandLine(trackerArgs(action, settings.autoCommit)),
+    });
+    return false;
+  };
+  const confirmPending = (dontAskAgain: boolean) => {
+    if (pending === null) return;
+    setPending(null);
+    if (dontAskAgain) {
+      setState({ ...state, settings: { ...settings, dontAsk: { ...settings.dontAsk, [pending.type]: true } } });
+      void window.dryland.dontAskAgain(pending.type);
+    }
+    void runAction(pending.action);
   };
   const activeTab = activeItem(tabs);
   const activeSession = activeTab?.kind === "terminal" ? sessions.get(activeTab.id) : undefined;
@@ -228,6 +281,9 @@ export function App() {
           tabs={tabs}
           ticketSessions={ticketSessionMap}
           onOpen={(ref) => setTabs(openTab(tabs, ref))}
+          onRelease={(ticket) =>
+            void requestAction({ kind: "release", ticket: { map: ticket.map, id: ticket.id } }, "button")
+          }
         />
       </aside>
       <main className="editor">
@@ -258,6 +314,14 @@ export function App() {
             Could not start a terminal: {terminalError}
           </p>
         )}
+        {notice !== null && (
+          <p className="notice" role="alert">
+            {notice}
+            <button aria-label="Dismiss" onClick={() => setNotice(null)}>
+              ×
+            </button>
+          </p>
+        )}
         {activeSession !== undefined && <SessionHeader session={activeSession} />}
         {terminalIds.map((id) => (
           <TerminalTab key={id} id={id} active={activeTab?.kind === "terminal" && activeTab.id === id} />
@@ -268,6 +332,7 @@ export function App() {
             item={activeTab}
             project={project}
             onStartWork={startWork}
+            onTicketAction={(action) => requestAction(action, "ticket")}
             header={{
               open: !collapsedHeaders.has(tabKey(activeTab)),
               onToggle: () =>
@@ -285,6 +350,9 @@ export function App() {
       <aside className="right-side">
         <p className="empty">Explorer and Source Control</p>
       </aside>
+      {pending !== null && (
+        <ConfirmWrite pending={pending} onConfirm={confirmPending} onCancel={() => setPending(null)} />
+      )}
       <LiveEventsPanel events={liveEvents} mode={liveEventsPanel} onMode={setLiveEventsPanel} />
       <footer className="statusbar">
         <button

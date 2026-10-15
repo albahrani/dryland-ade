@@ -9,6 +9,7 @@ import type { DocumentRef } from "../../shared/tabs.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
 import { StartWork } from "./StartWork.tsx";
 import { StatusIcon } from "./status.tsx";
+import { TicketActions, type TicketActionHandler } from "./TicketActions.tsx";
 
 /** Re-reads the item whenever the project view changes, so open tabs follow the files on disk. */
 function useItem(ref: DocumentRef, project: ProjectView): ItemContent | null {
@@ -95,14 +96,19 @@ function TicketContent({
   header,
   nextUp,
   treeTicket,
+  stale,
   onStartWork,
+  onAction,
 }: {
   ticket: TicketDetail;
   header: HeaderState;
   nextUp: NextUp;
   /** The ticket's row in the tree, which "Why not this?" reads. */
   treeTicket: TreeTicket | undefined;
+  /** Whether its claim is held by no live Dryland session. */
+  stale: boolean;
   onStartWork: StartWorkHandler;
+  onAction: TicketActionHandler;
 }) {
   const marker = ticketMarker(nextUp, ticket.map, ticket.id);
   return (
@@ -110,6 +116,7 @@ function TicketContent({
       {ticket.status !== "done" && (
         <StartWork onStart={(agentId) => onStartWork({ map: ticket.map, id: ticket.id }, agentId)} />
       )}
+      <TicketActions ticket={ticket} stale={stale} onAction={onAction} />
       <Details
         open={header.open}
         onToggle={header.onToggle}
@@ -122,7 +129,10 @@ function TicketContent({
       >
         <Field name="Status">{ticket.status}</Field>
         <Field name="Type">{ticket.type}</Field>
-        <Field name="Claimant">{ticket.claimant ?? "none"}</Field>
+        <Field name="Claimant">
+          {ticket.claimant ?? (ticket.status === "in-progress" ? "unknown" : "none")}
+          {stale && " (possibly stale)"}
+        </Field>
         <Field name="Blocked by">{formatBlockers(ticket.blockers) ?? "none"}</Field>
         <Field name="Map">{ticket.mapTitle}</Field>
       </Details>
@@ -157,11 +167,13 @@ export function ItemTab({
   project,
   header,
   onStartWork,
+  onTicketAction,
 }: {
   item: DocumentRef;
   project: ProjectView;
   header: HeaderState;
   onStartWork: StartWorkHandler;
+  onTicketAction: TicketActionHandler;
 }) {
   const content = useItem(item, project);
   if (content === null) return null;
@@ -178,7 +190,9 @@ export function ItemTab({
         header={header}
         nextUp={nextUp}
         treeTicket={treeTicket}
+        stale={project.tree.ok && project.tree.staleClaims.includes(`${map}/${id}`)}
         onStartWork={onStartWork}
+        onAction={onTicketAction}
       />
     );
   }

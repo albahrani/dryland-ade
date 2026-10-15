@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
+import { createDrylandCli } from "../src/main/dryland-cli.ts";
 import { createTerminalManager } from "../src/main/terminals.ts";
 import { createWorkStarter } from "../src/main/work.ts";
 import { FakePtyProvider } from "./fake-pty.ts";
@@ -20,9 +22,23 @@ function stubBin(): { dir: string; claude: string } {
   return { dir, claude };
 }
 
-function setup(path = stubBin().dir, inherited: Record<string, string> = {}) {
+/** The real `dryland` bundle, built by the test suite's global setup; Node stands in for the app's Electron. */
+const CLI = fileURLToPath(new URL("../../cli/dist/dryland.mjs", import.meta.url));
+
+function setup(path = stubBin().dir, inherited: Record<string, string> = {}, autoCommit = true) {
   // The app hands terminals and the work starter the same environment, its own.
   const env = { PATH: path, HOME: "/home/test", ...inherited };
+  // `dryland` runs with the test's own environment, which finds git; no app listens for it.
+  const dryland = createDrylandCli({
+    runtime: process.execPath,
+    cli: CLI,
+    env: {
+      ...process.env,
+      DRYLAND_PORT: undefined,
+      DRYLAND_TOKEN: undefined,
+      DRYLAND_APP_DIR: mkdtempSync(join(tmpdir(), "dryland-no-app-")),
+    },
+  });
   const provider = new FakePtyProvider();
   const hooksDir = join(mkdtempSync(join(tmpdir(), "dryland-app-")), "hooks");
   const terminals = createTerminalManager({
@@ -38,10 +54,15 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}) {
     env,
     launcherDir: "/opt/dryland/bin",
     hooksDir,
+    dryland,
+    autoCommit: () => autoCommit,
     pretype: { quietMs: 20, charDelayMs: 0 },
   });
-  return { provider, starter, hooksDir };
+  return { provider, starter, hooksDir, dryland };
 }
+
+const git = (repo: string, ...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
+const grill = (repo: string) => readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8");
 
 const typed = (pty: { written: string[] } | undefined) => pty?.written.join("") ?? "";
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,7 +77,7 @@ describe("starting work on a ticket", () => {
     const bin = stubBin();
     const { provider, starter } = setup(bin.dir);
 
-    const session = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
 
     expect(session.worktree.branch).toBe("shop/02-grill");
     expect(existsSync(join(session.worktree.path, ".scratch/shop/issues/02-grill.md"))).toBe(true);
@@ -106,7 +127,7 @@ describe("starting work on a ticket", () => {
 
   it("types the next-step command once the CLI has gone quiet, one key at a time, without submitting", async () => {
     const { provider, starter } = setup();
-    const session = await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
     const pty = provider.spawned[0];
 
     pty?.emit("Claude Code v2\r\n❯ ");
@@ -132,7 +153,7 @@ describe("starting work on a ticket", () => {
 
   it("types nothing when no next step points at the ticket", async () => {
     const { provider, starter } = setup();
-    const session = await starter.startWork(fixtureRepo(), { map: "shop", id: "03" }, "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), { map: "shop", id: "03" }, "claude-code");
     provider.spawned[0]?.emit("❯ ");
     await pause(80);
     expect(session.command).toBeNull();
@@ -142,15 +163,15 @@ describe("starting work on a ticket", () => {
   it("reuses the ticket's worktree when work starts on it again", async () => {
     const repo = fixtureRepo();
     const { starter } = setup();
-    const first = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
-    const second = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session: first } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session: second } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
     expect(second.worktree).toEqual(first.worktree);
     expect(worktreeCount(repo)).toBe(2);
   });
 
   it("records session, worktree and ticket at spawn", async () => {
     const { starter } = setup();
-    const session = await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
     expect(starter.sessions()).toEqual([session]);
     expect(session).toMatchObject({
       agent: { id: "claude-code", name: "Claude Code" },
@@ -168,6 +189,42 @@ describe("starting work on a ticket", () => {
     await expect(starter.startWork(repo, { map: "shop", id: "02" }, "claude-code")).rejects.toThrow(DrylandError);
     expect(provider.spawned).toEqual([]);
     expect(worktreeCount(repo)).toBe(1);
+  });
+
+  it("claims the ticket for the session, and still types the command the unclaimed ticket called for", async () => {
+    const repo = fixtureRepo();
+    const { provider, starter } = setup();
+
+    const { session, warnings } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+
+    expect(warnings).toEqual([]);
+    expect(grill(repo)).toContain(`"holder":"${session.id}"`);
+    expect(git(repo, "log", "-1", "--format=%s")).toBe(`Claim shop/02 for ${session.id}`);
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/implement shop/02"));
+  });
+
+  it("claims without committing when auto-commit is off", async () => {
+    const repo = fixtureRepo();
+    const head = git(repo, "rev-parse", "HEAD");
+    const { starter } = setup(undefined, {}, false);
+
+    const { session } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+
+    expect(grill(repo)).toContain(`"holder":"${session.id}"`);
+    expect(git(repo, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  it("starts anyway on a ticket someone else holds, leaving their claim alone and saying so", async () => {
+    const repo = fixtureRepo();
+    const { provider, starter, dryland } = setup();
+    await dryland.run(["ticket", "claim", "shop/02"], { cwd: repo, sessionId: "someone-else" });
+
+    const { warnings } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+
+    expect(warnings).toEqual([expect.stringContaining("already claimed by someone-else")]);
+    expect(grill(repo)).toContain('"holder":"someone-else"');
+    expect(provider.spawned).toHaveLength(1);
   });
 
   it("lists an installed Agent CLI as available", async () => {

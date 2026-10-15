@@ -38,13 +38,18 @@ function TicketRow({
   active,
   session,
   marker,
+  stale,
   onOpen,
+  onRelease,
 }: {
   ticket: TreeTicket;
   active: boolean;
   session: TicketSession | undefined;
   marker: NextUpMarker | undefined;
+  /** Whether its claim is held by no live Dryland session. */
+  stale: boolean;
   onOpen: (ref: ItemRef) => void;
+  onRelease: (ticket: TreeTicket) => void;
 }) {
   const classes = ["ticket", active && "active", marker !== undefined && "next-up"].filter(Boolean).join(" ");
   return (
@@ -60,7 +65,22 @@ function TicketRow({
       >
         {ticket.title}
       </button>
-      {ticket.claimant !== null && <span className="meta">claimed by {ticket.claimant}</span>}
+      {stale ? (
+        <>
+          <span className="meta stale">
+            claimed{ticket.claimant === null ? "" : ` by ${ticket.claimant}`}, possibly stale
+          </span>
+          <button
+            className="row-action"
+            aria-label={`Release ${ticket.map}/${ticket.id}`}
+            onClick={() => onRelease(ticket)}
+          >
+            Release
+          </button>
+        </>
+      ) : (
+        ticket.claimant !== null && <span className="meta">claimed by {ticket.claimant}</span>
+      )}
       <Blockers ticket={ticket} />
     </li>
   );
@@ -180,7 +200,9 @@ export function TicketsView({
   activeKey,
   sessions,
   nextUp,
+  staleClaims,
   onOpen,
+  onRelease,
 }: {
   tree: TicketsTree;
   /** The `tabKey` of the focused tab, if any. */
@@ -188,7 +210,11 @@ export function TicketsView({
   /** The session working on each ticket, by `map/id`. */
   sessions: ReadonlyMap<string, TicketSession>;
   nextUp: NextUp;
+  /** The `map/id` of every claim no live Dryland session holds. */
+  staleClaims: readonly string[];
   onOpen: (ref: ItemRef) => void;
+  /** Releases a possibly stale claim; a general button, so it asks for confirmation first. */
+  onRelease: (ticket: TreeTicket) => void;
 }) {
   const [options, setOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -204,7 +230,9 @@ export function TicketsView({
       active={isActive(t)}
       session={sessions.get(ticketKey(t))}
       marker={ticketMarker(nextUp, t.map, t.id)}
+      stale={staleClaims.includes(ticketKey(t))}
       onOpen={onOpen}
+      onRelease={onRelease}
     />
   );
   const flip = (id: string) => (current: Set<string>) => {

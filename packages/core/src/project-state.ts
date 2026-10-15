@@ -1,5 +1,5 @@
 import { readEfforts } from "./efforts.ts";
-import type { RepoSnapshot } from "./next-step.ts";
+import type { RepoSnapshot, SessionSnapshot } from "./next-step.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { readRepoSnapshot } from "./repo-snapshot.ts";
 import { readTickets } from "./tickets.ts";
@@ -11,12 +11,19 @@ export interface ProjectState {
   snapshot: RepoSnapshot;
 }
 
-/** Reads tickets and efforts once and builds both the tickets tree and the repo snapshot from them. */
-export async function readProjectState(runner: ProcessRunner, mainCheckout: string): Promise<ProjectState> {
+/**
+ * Reads tickets and efforts once and builds both the tickets tree and the repo snapshot from them. `sessions` are the
+ * live Dryland sessions; without them no claim is called stale.
+ */
+export async function readProjectState(
+  runner: ProcessRunner,
+  mainCheckout: string,
+  sessions: SessionSnapshot[] | null = null,
+): Promise<ProjectState> {
   const tickets = await readTickets(mainCheckout);
   const efforts = await readEfforts(mainCheckout);
   return {
     tree: buildTicketsTree(tickets, efforts),
-    snapshot: await readRepoSnapshot(runner, mainCheckout, tickets, efforts),
+    snapshot: await readRepoSnapshot(runner, mainCheckout, tickets, efforts, sessions),
   };
 }

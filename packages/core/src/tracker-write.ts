@@ -230,6 +230,8 @@ export async function writeTracker<T>(
   try {
     const { changes, message, value, warnings: produced = [] } = await produce(mainCheckout);
     warnings.push(...produced);
+    // Nothing to change, such as a claim its holder already has: nothing is written or committed.
+    if (changes.length === 0) return { value, warnings };
     for (const change of changes) {
       const target = join(mainCheckout, change.path);
       await removeLeftoverTemps(dirname(target));

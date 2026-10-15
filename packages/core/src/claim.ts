@@ -17,17 +17,28 @@ export async function branchHolder(runner: ProcessRunner, cwd: string): Promise<
   return commit === "" ? "unknown" : `detached-${commit}`;
 }
 
-/** Claims an open ticket for `holder`. Of several concurrent claims exactly one wins. */
+export interface ClaimResult extends TicketWriteResult {
+  /** The holder held the claim already, so nothing was written. */
+  alreadyHeld: boolean;
+}
+
+/**
+ * Claims an open ticket for `holder`. Of several concurrent claims exactly one wins. Claiming a ticket its holder
+ * already holds succeeds and changes nothing, so a session can claim the ticket Dryland claimed for it at start.
+ */
 export async function claimTicket(
   runner: ProcessRunner,
   cwd: string,
   reference: string,
   options: ClaimOptions,
-): Promise<TicketWriteResult> {
+): Promise<ClaimResult> {
   const wanted = parseTicketReference(reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
+    if (ticket.state === "claimed" && ticket.claimant === options.holder) {
+      return { changes: [], message: "", value: { ticket, alreadyHeld: true } };
+    }
     if (ticket.state === "claimed") {
       const holder = ticket.claimant ?? "someone";
       const since = readClaim(text)?.at;
@@ -46,10 +57,10 @@ export async function claimTicket(
     return {
       changes: [{ path, content: rewriteStatus(text, { claim }) }],
       message: `Claim ${name} for ${options.holder}`,
-      value: { ...ticket, state: "claimed" as const, claimant: options.holder },
+      value: { ticket: { ...ticket, state: "claimed" as const, claimant: options.holder }, alreadyHeld: false },
     };
   });
-  return { ticket: value, warnings };
+  return { ...value, warnings };
 }
 
 /** Releases a claimed ticket, restoring the status it had before the claim. */

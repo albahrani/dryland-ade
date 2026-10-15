@@ -20,6 +20,8 @@ import {
   worktreeForTicket,
 } from "@dryland/core";
 import type { AgentAvailability, SessionInfo } from "../shared/api.ts";
+import { trackerArgs } from "../shared/tracker-actions.ts";
+import type { DrylandCli } from "./dryland-cli.ts";
 import { createPretyper, PRETYPE_TIMING, type PretypeTiming } from "./pretype.ts";
 import type { ShellSpec } from "./shell.ts";
 import type { TerminalManager } from "./terminals.ts";
@@ -33,7 +35,17 @@ export interface WorkStarterOptions {
   launcherDir: string;
   /** Dryland's own directory for the settings files that inject status hooks; never the user's CLI config. */
   hooksDir: string;
+  /** Runs `dryland`, through which the ticket is claimed for its session. */
+  dryland: DrylandCli;
+  /** Whether tracker writes in the project are committed. */
+  autoCommit: (projectPath: string) => boolean;
   pretype?: PretypeTiming;
+}
+
+/** A session that started, and what the user should know about it, such as a claim that could not be made. */
+export interface StartedWork {
+  session: SessionInfo;
+  warnings: string[];
 }
 
 export interface WorkStarter {
@@ -41,9 +53,10 @@ export interface WorkStarter {
   listAgents(): Promise<AgentAvailability[]>;
   /**
    * Opens the Agent CLI in the ticket's worktree, created or reused, with the ticket's next-step command typed but
-   * not submitted. Fails with a `DrylandError`, before touching anything, when the CLI is not installed.
+   * not submitted, and claims the ticket for the session. A ticket someone else holds keeps its claim and the
+   * session starts anyway. Fails with a `DrylandError`, before touching anything, when the CLI is not installed.
    */
-  startWork(projectPath: string, ticket: TicketRef, agentId: string): Promise<SessionInfo>;
+  startWork(projectPath: string, ticket: TicketRef, agentId: string): Promise<StartedWork>;
   /** The sessions started so far, as recorded at spawn. */
   sessions(): SessionInfo[];
 }
@@ -72,7 +85,7 @@ function launchArgs(adapter: AgentAdapter, hooksDir: string): string[] {
 }
 
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
-  const { terminals, runner, env, launcherDir, hooksDir, pretype = PRETYPE_TIMING } = options;
+  const { terminals, runner, env, launcherDir, hooksDir, dryland, autoCommit, pretype = PRETYPE_TIMING } = options;
   const started: SessionInfo[] = [];
 
   function adapterFor(agentId: string): AgentAdapter {
@@ -123,6 +136,13 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       const typed = command === null ? null : skillCommand(adapter, command);
 
       const sessionId = randomUUID();
+      // After the command is chosen, which reads the ticket unclaimed, and before the agent starts, so it finds the
+      // claim made. Never released or taken over here: a claim someone else holds stays theirs.
+      const claim = await dryland.run(trackerArgs({ kind: "claim", ticket }, autoCommit(projectPath)), {
+        cwd: mainCheckout,
+        sessionId,
+      });
+      const warnings = claim.ok ? claim.warnings : [`${claim.message} The session started without claiming it.`];
       let terminalId = "";
       const pretyper =
         typed === null
@@ -149,7 +169,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         startedAt: new Date().toISOString(),
       };
       started.push(session);
-      return session;
+      return { session, warnings };
     },
 
     sessions: () => [...started],

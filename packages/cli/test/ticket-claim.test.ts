@@ -30,6 +30,22 @@ describe("dryland ticket claim", () => {
     expect(repo.git("status", "--porcelain")).toBe("");
     expect(repo.log()[0]).toBe("Claim shop/01 for session-a");
   });
+
+  it("succeeds without a change or commit when the holder already holds the claim", async () => {
+    const repo = shopRepo();
+    await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    const claimed = repo.read(TICKET_PATH);
+    const head = repo.git("rev-parse", "HEAD");
+
+    const again = await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    const other = await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-b" });
+
+    expect(again.exitCode).toBe(0);
+    expect(again.stdout).toContain("already holds");
+    expect(other.exitCode).not.toBe(0);
+    expect(repo.read(TICKET_PATH)).toBe(claimed);
+    expect(repo.git("rev-parse", "HEAD")).toBe(head);
+  });
 });
 
 describe("dryland ticket release", () => {

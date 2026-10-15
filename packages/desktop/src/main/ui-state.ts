@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
+import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
 
 /** The small local UI state Dryland keeps; the repo stays the source of truth for everything else. */
 export interface UiState {
@@ -11,9 +12,23 @@ export interface UiState {
   /** The editor tabs open in each project, by project path. */
   tabs: Record<string, TabsState>;
   liveEventsPanel: LiveEventsPanelMode;
+  /** Whether the app's tracker writes are committed, unless a project overrides it. */
+  autoCommit: boolean;
+  /** Auto-commit overrides, by project path. */
+  projectAutoCommit: Record<string, boolean>;
+  /** Each confirmation type's "do not ask again" flag. */
+  dontAsk: DontAsk;
 }
 
-const DEFAULTS: UiState = { lastProject: null, legendDismissed: false, tabs: {}, liveEventsPanel: "expanded" };
+const DEFAULTS: UiState = {
+  lastProject: null,
+  legendDismissed: false,
+  tabs: {},
+  liveEventsPanel: "expanded",
+  autoCommit: true,
+  projectAutoCommit: {},
+  dontAsk: ASK_ALWAYS,
+};
 
 export interface UiStateStore {
   read(): UiState;
@@ -23,6 +38,18 @@ export interface UiStateStore {
 function parseAllTabs(raw: unknown): Record<string, TabsState> {
   if (raw === null || typeof raw !== "object") return {};
   return Object.fromEntries(Object.entries(raw).map(([project, tabs]) => [project, parseTabs(tabs)]));
+}
+
+function parseOverrides(raw: unknown): Record<string, boolean> {
+  if (raw === null || typeof raw !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(raw).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+  );
+}
+
+function parseDontAsk(raw: unknown): DontAsk {
+  const flags = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return Object.fromEntries(CONFIRMATION_TYPES.map((type) => [type, flags[type] === true])) as DontAsk;
 }
 
 /** Reads each field on its own, so one wrong value never discards the others. */
@@ -39,6 +66,9 @@ function parse(text: string): UiState {
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
     tabs: parseAllTabs(raw.tabs),
     liveEventsPanel: isLiveEventsPanelMode(raw.liveEventsPanel) ? raw.liveEventsPanel : DEFAULTS.liveEventsPanel,
+    autoCommit: typeof raw.autoCommit === "boolean" ? raw.autoCommit : DEFAULTS.autoCommit,
+    projectAutoCommit: parseOverrides(raw.projectAutoCommit),
+    dontAsk: parseDontAsk(raw.dontAsk),
   };
 }
 

@@ -230,11 +230,13 @@ const COMMANDS: Record<
     changed: changedTicket,
     run: async (target, flags) => {
       const holder = process.env["DRYLAND_SESSION_ID"] || (await branchHolder(nodeProcessRunner, process.cwd()));
-      const { ticket, warnings } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
+      const { ticket, warnings, alreadyHeld } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
         holder,
         autoCommit: autoCommit(flags),
       });
-      return { value: ticket, text: `Claimed ${ticket.map}/${ticket.id} for ${holder}.\n`, warnings };
+      const name = `${ticket.map}/${ticket.id}`;
+      const text = alreadyHeld ? `${holder} already holds ${name}.\n` : `Claimed ${name} for ${holder}.\n`;
+      return { value: ticket, text, warnings };
     },
   },
   "ticket release": {

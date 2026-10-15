@@ -40,4 +40,25 @@ describe("readProjectState", () => {
       ["spec-without-tickets", { kind: "spec", map: "blog" }],
     ]);
   });
+
+  it("feeds the live sessions it is given into the snapshot, and leaves them unknown when it is given none", async () => {
+    const root = checkout({
+      "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
+      ".scratch/shop/map.md": "# Map: Shop\n\n## Not yet specified\n\nNothing.\n",
+      ".scratch/shop/issues/01-cart.md": ticket("Build the cart", "Type: task", "Status: claimed"),
+      ".scratch/shop/issues/02-pay.md": ticket("Build payments", "Type: task", "Status: claimed"),
+    });
+    const sessions = [{ id: "s1", ticket: { map: "shop", id: "02" }, state: "waiting" as const }];
+
+    const live = await readProjectState(nodeProcessRunner, root, sessions);
+    const unknown = await readProjectState(nodeProcessRunner, root);
+
+    expect(
+      nextSteps(live.snapshot).map((s) => [s.ruleId, s.target.kind === "ticket" ? s.target.id : s.target.kind]),
+    ).toEqual([
+      ["waiting-session", "session"],
+      ["stale-claim", "01"],
+    ]);
+    expect(nextSteps(unknown.snapshot)).toEqual([]);
+  });
 });

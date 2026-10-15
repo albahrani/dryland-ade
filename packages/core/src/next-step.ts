@@ -224,7 +224,10 @@ const waitingSessions: Rule = (snapshot) =>
       evidence: [{ artifact: `session ${session.id}`, field: "state", value: "waiting" }],
     }));
 
-/** A claim no live session holds is only flagged: releasing it is an explicit user action. */
+/**
+ * A claim no live session holds is only flagged: releasing it is an explicit user action. A live session holds a
+ * claim it is named in as holder, or one on the ticket it works on.
+ */
 const staleClaims: Rule = (snapshot) => {
   const { sessions } = snapshot;
   if (sessions === null) return [];
@@ -233,7 +236,9 @@ const staleClaims: Rule = (snapshot) => {
     .sort(byTicketNumber)
     .flatMap((ticket) => {
       const live = sessions.filter(
-        (s) => s.state !== "ended" && s.ticket?.map === ticket.map && s.ticket.id === ticket.id,
+        (s) =>
+          s.state !== "ended" &&
+          (s.id === ticket.claimant || (s.ticket?.map === ticket.map && s.ticket.id === ticket.id)),
       );
       if (live.length > 0) return [];
       return [

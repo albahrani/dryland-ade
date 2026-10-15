@@ -1,10 +1,18 @@
 import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { NextUp } from "./next-up.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
+import type { ConfirmationType, DontAsk, TicketAction } from "./tracker-actions.ts";
 
 /** The tickets tree of a project with its next steps, or why it cannot be read and what to do about it. */
 export type TreeLoad =
-  { ok: true; tree: TicketsTree; nextUp: NextUp } | { ok: false; message: string; nextAction: string };
+  | {
+      ok: true;
+      tree: TicketsTree;
+      nextUp: NextUp;
+      /** The `map/id` of every claim no live Dryland session holds: claimed, possibly stale. */
+      staleClaims: string[];
+    }
+  | { ok: false; message: string; nextAction: string };
 
 export interface ProjectView {
   /** The path the user opened. */
@@ -19,6 +27,13 @@ export type LiveEventsPanelMode = (typeof LIVE_EVENTS_PANEL_MODES)[number];
 export const isLiveEventsPanelMode = (value: unknown): value is LiveEventsPanelMode =>
   LIVE_EVENTS_PANEL_MODES.includes(value as LiveEventsPanelMode);
 
+/** The settings the renderer acts on. */
+export interface AppSettings {
+  /** Whether tracker writes in the open project are committed: its override, else the global setting. */
+  autoCommit: boolean;
+  dontAsk: DontAsk;
+}
+
 export interface AppState {
   project: ProjectView | null;
   legendDismissed: boolean;
@@ -29,6 +44,7 @@ export interface AppState {
   sessionStates: Readonly<Record<string, SessionState>>;
   /** The editor tabs last open in `project`. */
   tabs: TabsState;
+  settings: AppSettings;
 }
 
 /** What an editor tab shows; `missing` when the ticket or map is gone, or the project cannot be read. */
@@ -60,7 +76,11 @@ export interface SessionInfo {
 }
 
 /** The session work started, or why it could not start and what to do about it. */
-export type StartWorkResult = { ok: true; session: SessionInfo } | { ok: false; message: string; nextAction: string };
+export type StartWorkResult =
+  { ok: true; session: SessionInfo; warnings: string[] } | { ok: false; message: string; nextAction: string };
+
+/** How a tracker write went: `dryland`'s warnings, or its error and the next action it names. */
+export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {
@@ -80,6 +100,10 @@ export interface DrylandApi {
   listAgents(): Promise<AgentAvailability[]>;
   /** Opens the Agent CLI in the ticket's worktree with its next-step command typed, in a new terminal. */
   startWork(ticket: TicketRef, agentId: string): Promise<StartWorkResult>;
+  /** Runs a ticket action through `dryland` in the open project; asking for confirmation is the caller's part. */
+  runTicketAction(action: TicketAction): Promise<TicketActionResult>;
+  /** Stops asking for confirmations of `type`, until it is reset. */
+  dontAskAgain(type: ConfirmationType): Promise<void>;
   writeTerminal(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
   /** Kills the terminal's process. */
@@ -92,6 +116,8 @@ export interface DrylandApi {
   onProjectChanged(callback: (project: ProjectView) => void): () => void;
   /** Called with every live event the app receives. Returns an unsubscribe function. */
   onLiveEvent(callback: (event: LiveEvent) => void): () => void;
+  /** Called with the settings whenever they change, such as from the menu. Returns an unsubscribe function. */
+  onSettingsChanged(callback: (settings: AppSettings) => void): () => void;
   /** Called with every session's state whenever one changes. Returns an unsubscribe function. */
   onSessionStates(callback: (states: Readonly<Record<string, SessionState>>) => void): () => void;
 }

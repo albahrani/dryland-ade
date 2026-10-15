@@ -190,6 +190,16 @@ describe("nextSteps session and claim rules", () => {
     expect(nextSteps(live)).toEqual([]);
     expect(nextSteps(snapshot([effort("shop")], claimed))).toEqual([]);
   });
+
+  it("does not flag a claim whose holder is a live session, whatever ticket that session started on", () => {
+    const claim = '<!-- dryland: {"claim":{"holder":"s1","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->';
+    const claimed = [ticket("shop", "02", ["Type: task", "Status: claimed", claim])];
+    const holder = (state: "running" | "ended") =>
+      snapshot([effort("shop")], claimed, { sessions: [{ id: "s1", ticket: { map: "shop", id: "05" }, state }] });
+
+    expect(nextSteps(holder("running"))).toEqual([]);
+    expect(nextSteps(holder("ended")).map((s) => s.ruleId)).toEqual(["stale-claim"]);
+  });
 });
 
 describe("nextSteps triage, implementation and unknown rules", () => {

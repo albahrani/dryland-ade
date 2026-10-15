@@ -554,6 +554,99 @@ ul {
   border-radius: 4px;
 }
 
+.ticket-actions {
+  margin-bottom: 12px;
+}
+
+.ticket-actions .action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ticket-actions button,
+.row-action,
+.modal button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.stale-claim,
+.meta.stale {
+  color: var(--progress);
+}
+
+.resolve-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.resolve-form label {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 640px;
+}
+
+.resolve-form textarea {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+}
+
+.row-action {
+  margin-left: 6px;
+  padding: 0 6px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 50%);
+  z-index: 10;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(480px, calc(100vw - 32px));
+  padding: 16px;
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.modal .command {
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal .primary {
+  border-color: var(--accent);
+}
+
 .start-work .unavailable {
   color: var(--fg-dim);
 }
