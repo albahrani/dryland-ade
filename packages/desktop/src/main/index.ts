@@ -21,12 +21,12 @@ import {
   type StartWorkResult,
   type TreeLoad,
 } from "../shared/api.ts";
-import { createSessionStatus } from "../shared/session-status.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
 import { writeLauncher } from "./launcher.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
+import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore } from "./ui-state.ts";
 import { watchProject } from "./watch-project.ts";
 import { createWorkStarter } from "./work.ts";
@@ -45,11 +45,7 @@ const terminals = createTerminalManager({
   onData: (id, data) => sendToWindow("terminal:data", id, data),
   onExit: (id, exitCode) => {
     sendToWindow("terminal:exit", id, exitCode);
-    const session = work.sessions().find((s) => s.terminalId === id);
-    if (session !== undefined) {
-      status.exited(session.id);
-      sendSessionStates();
-    }
+    terminalEnded(id);
   },
 });
 const store = createUiStateStore(join(app.getPath("userData"), "ui-state.json"));
@@ -67,10 +63,18 @@ let project: { path: string } | null = null;
 let stopWatching: (() => void) | null = null;
 let live: LiveListener | null = null;
 
-/** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
 const status = createSessionStatus();
 const sendSessionStates = () => sendToWindow("sessions:states", status.states());
 
+/** Ends the session in terminal `id`, if one runs there: its CLI exited, or Dryland closed the terminal. */
+function terminalEnded(id: string): void {
+  const session = work.sessions().find((s) => s.terminalId === id);
+  if (session === undefined) return;
+  status.exited(session.id);
+  sendSessionStates();
+}
+
+/** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
 function onLiveEvent(event: LiveEvent): void {
   sendToWindow("live:event", event);
   if (status.apply(event)) sendSessionStates();
@@ -101,6 +105,7 @@ async function currentState(): Promise<AppState> {
     legendDismissed,
     liveEventsPanel,
     tabs: (view && tabs[view.path]) || EMPTY_TABS,
+    sessions: work.sessions(),
     sessionStates: status.states(),
   };
 }
@@ -142,7 +147,12 @@ async function pickProject(): Promise<void> {
   const [path] = result.filePaths;
   if (result.canceled || path === undefined) return;
   // Terminals belong to the project they were opened in.
-  if (path !== project?.path) terminals.closeAll();
+  if (path !== project?.path) {
+    // The manager reports no exit for terminals it closes, so their sessions are ended here.
+    const closing = terminals.liveIds();
+    terminals.closeAll();
+    closing.forEach(terminalEnded);
+  }
   await openProject(path);
 }
 
@@ -209,7 +219,10 @@ ipcMain.handle("work:start", async (_event, ticket: TicketRef, agentId: string):
 });
 ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
-ipcMain.on("terminal:close", (_event, id: string) => terminals.close(id));
+ipcMain.on("terminal:close", (_event, id: string) => {
+  terminals.close(id);
+  terminalEnded(id);
+});
 
 void app.whenReady().then(async () => {
   // The CLI bundle is built next to this file; the launcher runs it with this very Electron binary.

@@ -1,12 +1,4 @@
-import type { LiveEvent, SessionState } from "@dryland/core";
-
-/** The session state each live event kind reports; other kinds say nothing about a session's state. */
-const STATE_OF: Partial<Record<LiveEvent["kind"], SessionState>> = {
-  "session.running": "running",
-  "session.waiting": "waiting",
-  "session.idle": "idle",
-  "session.ended": "ended",
-};
+import { type LiveEvent, type SessionState, sessionStateOf } from "@dryland/core";
 
 export interface SessionStatus {
   /** A session Dryland just spawned. */
@@ -31,8 +23,8 @@ export function createSessionStatus(): SessionStatus {
   return {
     launched: (sessionId) => void states.set(sessionId, "launched"),
     apply(event) {
-      const state = STATE_OF[event.kind];
-      return state !== undefined && set(event.session_id, state);
+      const state = sessionStateOf(event.kind);
+      return state !== null && set(event.session_id, state);
     },
     exited: (sessionId) => void set(sessionId, "ended"),
     states: () => Object.fromEntries(states),

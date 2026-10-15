@@ -1,3 +1,4 @@
+import type { LiveEventKind } from "./live-reporting.ts";
 import type { SessionSnapshot } from "./next-step.ts";
 
 export type SessionState = SessionSnapshot["state"];
@@ -97,18 +98,31 @@ interface HookGroup {
   hooks: { type: "command"; command: string; timeout: number }[];
 }
 
+/** The live event kind that reports each session state; launched has none, it comes from Dryland's own spawn. */
+export const SESSION_STATE_EVENTS = {
+  running: "session.running",
+  waiting: "session.waiting",
+  idle: "session.idle",
+  ended: "session.ended",
+} as const satisfies Record<Exclude<SessionState, "launched">, LiveEventKind>;
+
+/** The session state a live event reports, or `null` for one that says nothing about a session's state. */
+export function sessionStateOf(kind: LiveEventKind): SessionState | null {
+  const found = Object.entries(SESSION_STATE_EVENTS).find(([, eventKind]) => eventKind === kind);
+  return found === undefined ? null : (found[0] as SessionState);
+}
+
 /**
- * The settings a `settings-flag` adapter's CLI is launched with: for each native event in `statusEvents`, a hook
- * that reports the session state with `dryland status`. `Event:subtype` becomes a matcher on the subtype. `null`
- * for an adapter whose hooks are not injected at launch.
+ * The settings a `settings-flag` adapter's CLI is launched with: for each native event of its `statusEvents`, a
+ * hook that reports the session state with `dryland status`. `Event:subtype` becomes a matcher on the subtype.
  */
-export function hookSettings(adapter: AgentAdapter): { hooks: Record<string, HookGroup[]> } | null {
-  if (adapter.hookInjection.kind !== "settings-flag") return null;
+export function hookSettings(statusEvents: AgentAdapter["statusEvents"]): { hooks: Record<string, HookGroup[]> } {
   const hooks: Record<string, HookGroup[]> = {};
-  for (const [event, state] of Object.entries(adapter.statusEvents)) {
+  for (const [event, state] of Object.entries(statusEvents)) {
     const [name = event, subtype] = event.split(":");
+    const command = `dryland status ${SESSION_STATE_EVENTS[state]}`;
     // `dryland status` gives up on an app that does not answer well within this; seconds, as Claude Code counts.
-    const group: HookGroup = { hooks: [{ type: "command", command: `dryland status session.${state}`, timeout: 5 }] };
+    const group: HookGroup = { hooks: [{ type: "command", command, timeout: 5 }] };
     (hooks[name] ??= []).push(subtype === undefined ? group : { matcher: subtype, ...group });
   }
   return { hooks };

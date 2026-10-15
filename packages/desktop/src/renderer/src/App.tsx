@@ -9,7 +9,8 @@ import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
 import { disposeTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
 import { SessionBadge } from "./status.tsx";
-import { type TicketSession, TicketsView } from "./TicketsView.tsx";
+import { TicketsView } from "./TicketsView.tsx";
+import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts";
 
 type ActivityView = "tickets" | "maps" | "sessions";
 
@@ -103,7 +104,11 @@ export function App() {
   const [sessions, setSessions] = useState<ReadonlyMap<string, SessionInfo>>(new Map());
 
   useEffect(() => {
-    void window.dryland.getState().then(setState);
+    void window.dryland.getState().then((loaded) => {
+      setState(loaded);
+      // After a reload the main process still knows the sessions this app started.
+      setSessions(new Map(loaded.sessions.map((session) => [session.terminalId, session])));
+    });
     const stopProject = window.dryland.onProjectChanged((project) =>
       setState((current) => current && { ...current, project }),
     );
@@ -125,13 +130,7 @@ export function App() {
   if (state === null) return null;
   const { project, legendDismissed, tabs, liveEventsPanel, sessionStates } = state;
   const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
-  // A ticket shows its newest session; sessions are kept in the order they started.
-  const ticketSessions = new Map<string, TicketSession>(
-    [...sessions.values()].map((s) => [
-      `${s.ticket.map}/${s.ticket.id}`,
-      { agent: s.agent.name, state: sessionState(s) },
-    ]),
-  );
+  const ticketSessionMap = ticketSessions([...sessions.values()], sessionStates);
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
   const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
     setState({ ...state, liveEventsPanel: mode });
@@ -224,7 +223,7 @@ export function App() {
           view={activity}
           project={project}
           tabs={tabs}
-          ticketSessions={ticketSessions}
+          ticketSessions={ticketSessionMap}
           onOpen={(ref) => setTabs(openTab(tabs, ref))}
         />
       </aside>

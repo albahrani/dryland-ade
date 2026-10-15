@@ -1,6 +1,6 @@
 import type { LiveEvent, LiveEventKind } from "@dryland/core";
 import { describe, expect, it } from "vitest";
-import { createSessionStatus } from "../src/shared/session-status.ts";
+import { createSessionStatus } from "../src/main/session-status.ts";
 
 const event = (session: string, kind: LiveEventKind): LiveEvent => ({
   session_id: session,

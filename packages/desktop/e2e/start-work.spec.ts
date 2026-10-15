@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { _electron as electron, expect, test } from "@playwright/test";
 
 const windows = process.platform === "win32";
@@ -34,7 +35,10 @@ function fixtureRepo(): string {
 }
 
 /** The hook side of a fake Claude Code, shared with the CLI's contract tests. */
-const FAKE_HOOKS = resolve("../cli/test/fake-claude-hooks.mjs").replaceAll("\\", "/");
+const FAKE_HOOKS = fileURLToPath(new URL("../../cli/test/fake-claude-hooks.mjs", import.meta.url)).replaceAll(
+  "\\",
+  "/",
+);
 
 /**
  * A fake `claude`: prints where it runs and what Dryland gave it, runs `dryland ticket list` the way an agent
@@ -148,6 +152,19 @@ test("shows the session's state from Claude Code's hooks on its tab and on its t
   await expectState("idle");
   await window.keyboard.type("#");
   await expectState("ended");
+
+  // A second session on the ticket: the ticket shows it over the ended one.
+  const ticketBadge = (state: string) =>
+    window.getByRole("region", { name: "Tickets" }).getByRole("img", { name: `Claude Code: ${state}` });
+  await window.getByRole("tab", { name: "shop/02", exact: true }).click();
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(ticketBadge("launched")).toBeVisible();
+  // Closing its tab kills the CLI, which ends the session.
+  await window.getByRole("button", { name: "Close Claude Code shop/02" }).last().click();
+  await expect(ticketBadge("ended")).toBeVisible();
+  // A reloaded window gets the sessions and their states back from the main process.
+  await window.reload();
+  await expect(ticketBadge("ended")).toBeVisible();
   await app.close();
 });
 

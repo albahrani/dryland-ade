@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { delimiter, extname, join } from "node:path";
 import {
   AGENT_ADAPTERS,
@@ -61,11 +61,13 @@ function programFor(executable: string, args: string[], env: Record<string, stri
  * written fresh on every launch. A file rather than inline JSON, which `cmd.exe` would mangle.
  */
 function launchArgs(adapter: AgentAdapter, hooksDir: string): string[] {
-  const settings = hookSettings(adapter);
-  if (settings === null || adapter.hookInjection.kind !== "settings-flag") return [...adapter.launchArgs];
+  if (adapter.hookInjection.kind !== "settings-flag") return [...adapter.launchArgs];
   mkdirSync(hooksDir, { recursive: true });
   const file = join(hooksDir, `${adapter.id}.json`);
-  writeFileSync(file, JSON.stringify(settings, null, 2));
+  // Renamed into place, so a CLI starting in parallel never reads half a file.
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  writeFileSync(temporary, JSON.stringify(hookSettings(adapter.statusEvents), null, 2));
+  renameSync(temporary, file);
   return [...adapter.launchArgs, adapter.hookInjection.flag, file];
 }
 

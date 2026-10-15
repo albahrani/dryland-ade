@@ -20,8 +20,11 @@ export const EMPTY_TABS: TabsState = { open: [], active: null };
 
 export function tabKey(ref: ItemRef): string {
   if (ref.kind === "terminal") return `terminal:${ref.id}`;
-  return ref.kind === "ticket" ? `ticket:${ref.map}/${ref.id}` : `map:${ref.name}`;
+  return ref.kind === "ticket" ? `ticket:${ticketKey(ref)}` : `map:${ref.name}`;
 }
+
+/** A ticket's `map/id`, as the CLI and the tracker write it. */
+export const ticketKey = (ref: { map: string; id: string }): string => `${ref.map}/${ref.id}`;
 
 /** Opens `ref` in a new tab, or focuses its tab when it is already open. */
 export function openTab(state: TabsState, ref: ItemRef): TabsState {

@@ -1,4 +1,4 @@
-import type { SessionState, TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
+import type { TicketsTree, TicketStatus, TreeTicket } from "@dryland/core";
 import { useState } from "react";
 import {
   applyViewOptions,
@@ -9,7 +9,8 @@ import {
 } from "../../shared/view-options.ts";
 import { STATUS_META } from "../../shared/status-meta.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
-import { type ItemRef, tabKey } from "../../shared/tabs.ts";
+import type { TicketSession } from "../../shared/session-meta.ts";
+import { type ItemRef, tabKey, ticketKey } from "../../shared/tabs.ts";
 import { SessionBadge, StatusIcon } from "./status.tsx";
 
 /** The ticket kinds a map lists after its fog, in workflow order. */
@@ -28,12 +29,6 @@ function Blockers({ ticket }: { ticket: TreeTicket }) {
   const text = formatBlockers(ticket.blockers);
   if (text === null) return null;
   return <span className="meta">{ticket.blockers === "unknown" ? `blocked by: ${text}` : `blocked by ${text}`}</span>;
-}
-
-/** The session working on a ticket, as its badge shows it. */
-export interface TicketSession {
-  agent: string;
-  state: SessionState;
 }
 
 function TicketRow({
@@ -256,7 +251,7 @@ export function TicketsView({
                           key={t.id}
                           ticket={t}
                           active={isActive(t)}
-                          session={sessions.get(`${t.map}/${t.id}`)}
+                          session={sessions.get(ticketKey(t))}
                           onOpen={onOpen}
                         />
                       ))}
@@ -280,7 +275,7 @@ export function TicketsView({
                           key={t.id}
                           ticket={t}
                           active={isActive(t)}
-                          session={sessions.get(`${t.map}/${t.id}`)}
+                          session={sessions.get(ticketKey(t))}
                           onOpen={onOpen}
                         />
                       ))}

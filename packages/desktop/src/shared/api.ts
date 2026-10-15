@@ -21,6 +21,8 @@ export interface AppState {
   project: ProjectView | null;
   legendDismissed: boolean;
   liveEventsPanel: LiveEventsPanelMode;
+  /** The sessions this app started, in the order they started. */
+  sessions: SessionInfo[];
   /** The state of each session this app started, by session id. */
   sessionStates: Readonly<Record<string, SessionState>>;
   /** The editor tabs last open in `project`. */

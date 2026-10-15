@@ -64,17 +64,18 @@ describe("Claude Code status hooks", () => {
     ["PostToolUse", "session.running"],
     ["PermissionRequest", "session.waiting"],
     ["Notification:permission_prompt", "session.waiting"],
+    ["Notification:elicitation_dialog", "session.waiting"],
     ["Stop", "session.idle"],
     ["Notification:idle_prompt", "session.idle"],
     ["SessionEnd", "session.ended"],
   ])("report %s as %s for the session", async (event, kind) => {
-    const { fire } = await session(hookSettings(CLAUDE_CODE));
+    const { fire } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
     expect(await fire(event)).toEqual([{ session: "session-a", kind }]);
   });
 
   it("report nothing for a notification that is not about the session's state", async () => {
-    const { fire } = await session(hookSettings(CLAUDE_CODE));
+    const { fire } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
     expect(await fire("Notification:auth_success")).toEqual([]);
   });

@@ -78,7 +78,7 @@ describe("starting work on a ticket", () => {
 
     const settingsFile = join(hooksDir, "claude-code.json");
     expect(provider.spawned[0]?.options.args).toEqual(["--settings", settingsFile]);
-    expect(JSON.parse(readFileSync(settingsFile, "utf8"))).toEqual(hookSettings(CLAUDE_CODE));
+    expect(JSON.parse(readFileSync(settingsFile, "utf8"))).toEqual(hookSettings(CLAUDE_CODE.statusEvents));
     expect(readdirSync(home)).toEqual([]);
   });
 
