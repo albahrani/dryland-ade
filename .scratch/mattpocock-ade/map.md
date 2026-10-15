@@ -99,6 +99,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Claude Code session status](issues/36-claude-code-session-status.md): Claude Code is launched with --settings hooks (in Dryland's app dir) that call dryland status; verified against 2.1.300; the session state shows as a badge on its tab and ticket.
 
+- [Tracker lock race behind the flaky parallel create test](issues/68-diagnose-the-flaky-parallel-ticket-create-test.md): A stale-lock breaker could remove a live lock; breakers now take turns and re-read before removing.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
