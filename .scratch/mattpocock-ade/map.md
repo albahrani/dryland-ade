@@ -103,6 +103,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Next-up markers and explanations](issues/34-next-up-markers-and-explanations.md): The top three next-step items carry a gold bar and star with the reason on hover, the item tab explains rule and evidence, and unmarked tickets answer 'Why not this?'.
 
+- [Ticket actions, stale claims and write confirmations](issues/39-ticket-actions-stale-claims-and-write-confirmations.md): Claim, resolve and unblock run from a ticket at once through dryland; a stale claim's release from a Tickets row asks first with a resettable per-type 'do not ask again'; sessions claim their ticket and feed the rule engine; auto-commit can be off globally or per project.
+
 ## Not yet specified
 
 Nothing. The destination is reached: next is `/to-tickets` on the spec.
