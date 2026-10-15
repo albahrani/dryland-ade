@@ -47,7 +47,7 @@ function stubAgent(): string {
       "const { basename } = require('node:path');",
       "const set = (name) => (process.env[name] ? 'set' : 'missing');",
       "console.log(`agent-ready cwd=${basename(process.cwd())}`);",
-      "console.log(`session=${set('DRYLAND_SESSION_ID')} pane=${set('DRYLAND_PANE_KEY')}`);",
+      "console.log(`session=${set('DRYLAND_SESSION_ID')} pane=${set('DRYLAND_PANE_KEY')} port=${set('DRYLAND_PORT')} token=${set('DRYLAND_TOKEN')}`);",
       "console.log(execSync('dryland ticket list', { encoding: 'utf8' }));",
       "process.stdin.setRawMode(true);",
       "process.stdin.on('data', (d) => {",
@@ -96,7 +96,7 @@ test("starts Claude Code on a ticket in its worktree with the next-step command 
   const screen = window.locator(".xterm-rows:visible");
   // The CLI runs in the ticket's own worktree, with the session's identity in its environment.
   await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
-  await expect(screen).toContainText("session=set pane=set");
+  await expect(screen).toContainText("session=set pane=set port=set token=set");
   // `dryland` is on PATH in the session and reads the main checkout, uncommitted edits included.
   await expect(screen).toContainText("Build the basket");
   // The next step for the ticket is typed once the CLI is quiet, and Enter is never pressed.

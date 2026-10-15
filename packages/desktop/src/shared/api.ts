@@ -1,4 +1,4 @@
-import type { MapDetail, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
+import type { LiveEvent, MapDetail, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 
 /** The tickets tree of a project, or why it cannot be read and what to do about it. */
@@ -11,9 +11,14 @@ export interface ProjectView {
   tree: TreeLoad;
 }
 
+/** How much of the live-events panel shows: all of it, its newest line, or nothing. */
+export const LIVE_EVENTS_PANEL_MODES = ["expanded", "line", "hidden"] as const;
+export type LiveEventsPanelMode = (typeof LIVE_EVENTS_PANEL_MODES)[number];
+
 export interface AppState {
   project: ProjectView | null;
   legendDismissed: boolean;
+  liveEventsPanel: LiveEventsPanelMode;
   /** The editor tabs last open in `project`. */
   tabs: TabsState;
 }
@@ -55,6 +60,8 @@ export interface DrylandApi {
   /** Shows the folder picker; resolves with the state after it, unchanged if the user cancels. */
   openProject(): Promise<AppState>;
   dismissLegend(): Promise<void>;
+  /** Remembers how much of the live-events panel shows. */
+  setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;
   /** Remembers the open tabs of the open project. */
   saveTabs(tabs: TabsState): Promise<void>;
   /** Reads a ticket or map fresh from the open project. */
@@ -75,4 +82,6 @@ export interface DrylandApi {
   onTerminalExit(callback: (id: string, exitCode: number) => void): () => void;
   /** Called whenever tracker files change on disk. Returns an unsubscribe function. */
   onProjectChanged(callback: (project: ProjectView) => void): () => void;
+  /** Called with every live event the app receives. Returns an unsubscribe function. */
+  onLiveEvent(callback: (event: LiveEvent) => void): () => void;
 }

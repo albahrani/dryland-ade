@@ -22,13 +22,15 @@ export interface RunResult {
   exitCode: number;
 }
 
+/** An app directory with no running app in it, so tests never report to a real Dryland on this machine. */
+const NO_APP_DIR = mkdtempSync(join(tmpdir(), "dryland-no-app-"));
+
 /** Runs the real bundled `dryland` command. */
 export function runDryland(args: string[], opts: { cwd: string; env?: Record<string, string> }): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [BUNDLE, ...args], {
-      cwd: opts.cwd,
-      env: { ...process.env, ...opts.env },
-    });
+    const env: Record<string, string | undefined> = { ...process.env, DRYLAND_APP_DIR: NO_APP_DIR, ...opts.env };
+    for (const name of ["DRYLAND_PORT", "DRYLAND_TOKEN"]) if (opts.env?.[name] === undefined) delete env[name];
+    const child = spawn(process.execPath, [BUNDLE, ...args], { cwd: opts.cwd, env });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => (stdout += chunk));

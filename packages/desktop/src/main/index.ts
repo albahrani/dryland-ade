@@ -2,14 +2,26 @@ import { basename, join } from "node:path";
 import {
   DrylandError,
   findMainCheckout,
+  type LiveEvent,
+  type LiveListener,
+  liveLockFile,
   nodeProcessRunner,
   readMapDetail,
   readTicketDetail,
   readTicketsTree,
+  startLiveListener,
   type TicketRef,
 } from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
-import type { AppState, ItemContent, ProjectView, StartWorkResult, TreeLoad } from "../shared/api.ts";
+import {
+  type AppState,
+  type ItemContent,
+  LIVE_EVENTS_PANEL_MODES,
+  type LiveEventsPanelMode,
+  type ProjectView,
+  type StartWorkResult,
+  type TreeLoad,
+} from "../shared/api.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState } from "../shared/tabs.ts";
 import { writeLauncher } from "./launcher.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
@@ -24,20 +36,29 @@ function sendToWindow(channel: string, ...args: unknown[]): void {
   if (window !== null && !window.isDestroyed()) window.webContents.send(channel, ...args);
 }
 
+/** What terminals and sessions inherit: this process's environment plus how to reach the live listener. */
+const ptyEnv: Record<string, string | undefined> = { ...process.env };
 const terminals = createTerminalManager({
   provider: nodePtyProvider,
   shell: resolveShell(process.platform, process.env),
-  env: process.env,
+  env: ptyEnv,
   onData: (id, data) => sendToWindow("terminal:data", id, data),
   onExit: (id, exitCode) => sendToWindow("terminal:exit", id, exitCode),
 });
 const store = createUiStateStore(join(app.getPath("userData"), "ui-state.json"));
 // Sessions find `dryland` here; ticket 57 moves the launcher to the install directory.
 const launcherDir = join(app.getPath("userData"), "bin");
-const work = createWorkStarter({ terminals, runner: nodeProcessRunner, env: process.env, launcherDir });
+const work = createWorkStarter({ terminals, runner: nodeProcessRunner, env: ptyEnv, launcherDir });
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
 let stopWatching: (() => void) | null = null;
+let live: LiveListener | null = null;
+
+/** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
+function onLiveEvent(event: LiveEvent): void {
+  sendToWindow("live:event", event);
+  if (event.kind === "ticket.changed") void refresh();
+}
 
 async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: string | null }> {
   try {
@@ -56,9 +77,9 @@ async function projectView(): Promise<{ view: ProjectView; mainCheckout: string 
 }
 
 async function currentState(): Promise<AppState> {
-  const { legendDismissed, tabs } = store.read();
+  const { legendDismissed, tabs, liveEventsPanel } = store.read();
   const view = (await projectView())?.view ?? null;
-  return { project: view, legendDismissed, tabs: (view && tabs[view.path]) || EMPTY_TABS };
+  return { project: view, legendDismissed, liveEventsPanel, tabs: (view && tabs[view.path]) || EMPTY_TABS };
 }
 
 async function readItem(ref: DocumentRef): Promise<ItemContent> {
@@ -142,6 +163,9 @@ ipcMain.handle("tabs:save", (_event, tabs: TabsState) => {
 });
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
+ipcMain.handle("live-events:mode", (_event, mode: LiveEventsPanelMode) => {
+  if (LIVE_EVENTS_PANEL_MODES.includes(mode)) store.update({ liveEventsPanel: mode });
+});
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();
   if (loaded === null) return null;
@@ -164,6 +188,15 @@ ipcMain.on("terminal:close", (_event, id: string) => terminals.close(id));
 void app.whenReady().then(async () => {
   // The CLI bundle is built next to this file; the launcher runs it with this very Electron binary.
   writeLauncher(launcherDir, { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") });
+  // Listening before any terminal opens, so every session can report; a new port and token on every launch.
+  try {
+    live = await startLiveListener({ lockFile: liveLockFile(process.env), onEvent: onLiveEvent });
+    ptyEnv["DRYLAND_PORT"] = String(live.port);
+    ptyEnv["DRYLAND_TOKEN"] = live.token;
+  } catch (error) {
+    // Without the listener the app still works; it only misses live events until the next launch.
+    console.error("Live reporting is off: could not start the listener.", error);
+  }
   // The window opens first; a slow or missing last project fills in when it has loaded.
   buildMenu();
   createWindow();
@@ -180,4 +213,8 @@ app.on("window-all-closed", () => {
 });
 
 // No process outlives the app (ADR 0002).
-app.on("will-quit", () => terminals.closeAll());
+app.on("will-quit", () => {
+  terminals.closeAll();
+  // Removes the lock file at once, so `dryland` stops trying to reach this app.
+  void live?.close();
+});

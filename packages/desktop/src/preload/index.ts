@@ -1,3 +1,4 @@
+import type { LiveEvent } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
 import type { DrylandApi, ProjectView } from "../shared/api.ts";
 
@@ -5,6 +6,7 @@ const api: DrylandApi = {
   getState: () => ipcRenderer.invoke("state:get"),
   openProject: () => ipcRenderer.invoke("project:open"),
   dismissLegend: () => ipcRenderer.invoke("legend:dismiss"),
+  setLiveEventsPanel: (mode) => ipcRenderer.invoke("live-events:mode", mode),
   saveTabs: (tabs) => ipcRenderer.invoke("tabs:save", tabs),
   readItem: (ref) => ipcRenderer.invoke("item:read", ref),
   openTerminal: () => ipcRenderer.invoke("terminal:open"),
@@ -27,6 +29,11 @@ const api: DrylandApi = {
     const listener = (_event: unknown, project: ProjectView) => callback(project);
     ipcRenderer.on("project:changed", listener);
     return () => ipcRenderer.removeListener("project:changed", listener);
+  },
+  onLiveEvent(callback) {
+    const listener = (_event: unknown, event: LiveEvent) => callback(event);
+    ipcRenderer.on("live:event", listener);
+    return () => ipcRenderer.removeListener("live:event", listener);
   },
 };
 

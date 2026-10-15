@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { LIVE_EVENTS_PANEL_MODES, type LiveEventsPanelMode } from "../shared/api.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
 
 /** The small local UI state Dryland keeps; the repo stays the source of truth for everything else. */
@@ -9,9 +10,10 @@ export interface UiState {
   legendDismissed: boolean;
   /** The editor tabs open in each project, by project path. */
   tabs: Record<string, TabsState>;
+  liveEventsPanel: LiveEventsPanelMode;
 }
 
-const DEFAULTS: UiState = { lastProject: null, legendDismissed: false, tabs: {} };
+const DEFAULTS: UiState = { lastProject: null, legendDismissed: false, tabs: {}, liveEventsPanel: "expanded" };
 
 export interface UiStateStore {
   read(): UiState;
@@ -36,6 +38,9 @@ function parse(text: string): UiState {
     lastProject: typeof raw.lastProject === "string" ? raw.lastProject : DEFAULTS.lastProject,
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
     tabs: parseAllTabs(raw.tabs),
+    liveEventsPanel: LIVE_EVENTS_PANEL_MODES.includes(raw.liveEventsPanel as LiveEventsPanelMode)
+      ? (raw.liveEventsPanel as LiveEventsPanelMode)
+      : DEFAULTS.liveEventsPanel,
   };
 }
 

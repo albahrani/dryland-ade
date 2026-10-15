@@ -1,15 +1,19 @@
-import type { TicketRef } from "@dryland/core";
+import type { LiveEvent, TicketRef } from "@dryland/core";
 import { useEffect, useRef, useState } from "react";
-import type { AppState, ProjectView, SessionInfo } from "../../shared/api.ts";
+import type { AppState, LiveEventsPanelMode, ProjectView, SessionInfo } from "../../shared/api.ts";
 import { activeItem, closeTab, focusTab, type ItemRef, openTab, tabKey, type TabsState } from "../../shared/tabs.ts";
 import { ItemTab } from "./ItemTab.tsx";
 import { Legend } from "./Legend.tsx";
+import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
 import { disposeTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
 import { TicketsView } from "./TicketsView.tsx";
 
 type ActivityView = "tickets" | "maps" | "sessions";
+
+/** The panel keeps the newest events only, so a long day does not grow the window's memory without bound. */
+const MAX_LIVE_EVENTS = 500;
 
 const ACTIVITIES: { id: ActivityView; label: string; glyph: string }[] = [
   { id: "tickets", label: "Tickets", glyph: "☰" },
@@ -81,7 +85,10 @@ function SessionHeader({ session }: { session: SessionInfo }) {
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [activity, setActivity] = useState<ActivityView>("tickets");
-  const [panelOpen, setPanelOpen] = useState(true);
+  // Live events since this window opened; never stored (ADR 0008).
+  const [liveEvents, setLiveEvents] = useState<readonly LiveEvent[]>([]);
+  // The panel mode the status bar's "Show" returns to.
+  const lastVisiblePanel = useRef<LiveEventsPanelMode>("expanded");
   // Tabs whose details header the user collapsed; not persisted.
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<string>>(new Set());
   // Titles of terminals, numbered in the order they were opened.
@@ -97,14 +104,23 @@ export function App() {
       setState((current) => current && { ...current, project }),
     );
     const stopTerminals = routeTerminalEvents();
+    const stopLive = window.dryland.onLiveEvent((event) =>
+      setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
+    );
     return () => {
       stopProject();
       stopTerminals();
+      stopLive();
     };
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs } = state;
+  const { project, legendDismissed, tabs, liveEventsPanel } = state;
+  if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
+  const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
+    setState({ ...state, liveEventsPanel: mode });
+    void window.dryland.setLiveEventsPanel(mode);
+  };
   const setTabs = (next: TabsState) => {
     setState({ ...state, tabs: next });
     void window.dryland.saveTabs(next);
@@ -241,12 +257,13 @@ export function App() {
       <aside className="right-side">
         <p className="empty">Explorer and Source Control</p>
       </aside>
-      <section className="panel" hidden={!panelOpen} aria-label="Live events">
-        <p className="empty">Live events appear here.</p>
-      </section>
+      <LiveEventsPanel events={liveEvents} mode={liveEventsPanel} onMode={setLiveEventsPanel} />
       <footer className="statusbar">
-        <button onClick={() => setPanelOpen(!panelOpen)} aria-expanded={panelOpen}>
-          Live events
+        <button
+          aria-expanded={liveEventsPanel !== "hidden"}
+          onClick={() => setLiveEventsPanel(liveEventsPanel === "hidden" ? lastVisiblePanel.current : "hidden")}
+        >
+          {liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
         </button>
         <span>{project === null ? "No project" : project.path}</span>
       </footer>

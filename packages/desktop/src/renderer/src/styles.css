@@ -127,13 +127,74 @@ ul {
 
 .panel {
   grid-area: panel;
-  min-height: 120px;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  height: 180px;
   border-top: 1px solid var(--border);
+}
+
+.panel.line {
+  height: auto;
 }
 
 .panel[hidden] {
   display: none;
+}
+
+.panel-toolbar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 8px;
+}
+
+.panel-title {
+  flex: 1;
+  color: var(--fg-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.panel-toolbar button {
+  padding: 2px 6px;
+  color: var(--fg-dim);
+}
+
+.panel-toolbar button[aria-pressed="true"] {
+  color: var(--fg);
+  background: var(--bg-bar);
+}
+
+.live-events {
+  flex: 1;
+  overflow-y: auto;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+
+.live-events .empty {
+  margin: 0;
+  padding: 2px 12px;
+}
+
+.live-events ul {
+  padding: 0 12px 4px;
+}
+
+.live-events li {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.live-events time,
+.live-session {
+  color: var(--fg-dim);
+}
+
+.live-kind {
+  color: var(--accent);
+  min-width: 14ch;
 }
 
 .statusbar {

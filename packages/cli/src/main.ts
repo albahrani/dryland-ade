@@ -7,6 +7,7 @@ import {
   createWorktree,
   DrylandError,
   indexMap,
+  LIVE_EVENT_KINDS,
   listTickets,
   listWorktrees,
   mapFrontier,
@@ -15,11 +16,14 @@ import {
   releaseTicket,
   resolveTicket,
   runDoctor,
+  sendLiveEvent,
   showMap,
   showTicket,
   ticketKind,
   triageTicket,
   type DoctorReport,
+  type LiveEvent,
+  type LiveEventKind,
   type MapView,
   type Ticket,
   type WorktreeEntry,
@@ -116,6 +120,7 @@ const USAGE = [
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
+  "       dryland status <kind> [--session <id>] [--payload <json>] [--json]",
   "       dryland doctor [--json]",
   "",
 ].join("\n");
@@ -154,6 +159,35 @@ function numberList(flags: Flags, name: string): string[] | undefined {
     .filter((number) => number !== "");
 }
 
+/** The JSON of `--payload`; `undefined` when it was not given. */
+function parsePayload(text: string | undefined): unknown {
+  if (text === undefined) return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new DrylandError("--payload is not valid JSON.", `Pass a JSON value, such as --payload '{"reason":"..."}'.`);
+  }
+}
+
+/**
+ * Tells the running app about `kind`, for the session in `DRYLAND_SESSION_ID` unless `session` names one.
+ * Fire-and-forget: with no app running, or one that does not answer, nothing happens.
+ */
+function report(kind: LiveEventKind, payload?: unknown, session?: string): Promise<boolean> {
+  const event: LiveEvent = {
+    session_id: session ?? process.env["DRYLAND_SESSION_ID"] ?? "",
+    kind,
+    timestamp: new Date().toISOString(),
+  };
+  return sendLiveEvent(payload === undefined ? event : { ...event, payload });
+}
+
+/** What a command that returns the changed ticket changed. */
+const changedTicket = (value: unknown) => {
+  const ticket = value as Ticket;
+  return { ticket: `${ticket.map}/${ticket.id}` };
+};
+
 /** `false` when the user passed `--no-commit`; otherwise git's `dryland.autoCommit` decides. */
 const autoCommit = (flags: Flags) => (flags.noCommit ? false : undefined);
 
@@ -167,6 +201,11 @@ const COMMANDS: Record<
     switches?: string[];
     /** The value options (without `--`) the command accepts; any other is refused rather than ignored. */
     options?: string[];
+    /**
+     * Set on commands that change tickets or maps: what changed, from the command's value and target. After the
+     * command succeeds the app is told with a `ticket.changed` live event, whatever the tracker backend.
+     */
+    changed?: (value: unknown, target: string) => Record<string, string>;
     run: (target: string, flags: Flags) => Promise<Output>;
   }
 > = {
@@ -186,6 +225,7 @@ const COMMANDS: Record<
   },
   "ticket claim": {
     target: true,
+    changed: changedTicket,
     run: async (target, flags) => {
       const holder = process.env["DRYLAND_SESSION_ID"] || (await branchHolder(nodeProcessRunner, process.cwd()));
       const { ticket, warnings } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
@@ -197,6 +237,7 @@ const COMMANDS: Record<
   },
   "ticket release": {
     target: true,
+    changed: changedTicket,
     run: async (target, flags) => {
       const { ticket, warnings } = await releaseTicket(nodeProcessRunner, process.cwd(), target, {
         autoCommit: autoCommit(flags),
@@ -206,6 +247,7 @@ const COMMANDS: Record<
   },
   "ticket create": {
     target: false,
+    changed: changedTicket,
     options: ["map", "title", "type", "question", "blocked-by"],
     run: async (_target, flags) => {
       const { ticket, warnings } = await createTicket(
@@ -228,6 +270,7 @@ const COMMANDS: Record<
   },
   "ticket resolve": {
     target: true,
+    changed: changedTicket,
     options: ["answer"],
     run: async (target, flags) => {
       const { ticket, warnings } = await resolveTicket(
@@ -242,6 +285,7 @@ const COMMANDS: Record<
   },
   "ticket block": {
     target: true,
+    changed: changedTicket,
     options: ["add", "remove"],
     run: async (target, flags) => {
       const { ticket, warnings } = await blockTicket(
@@ -258,6 +302,7 @@ const COMMANDS: Record<
   },
   "ticket comment": {
     target: true,
+    changed: changedTicket,
     options: ["text"],
     run: async (target, flags) => {
       const { ticket, warnings } = await commentOnTicket(
@@ -272,6 +317,7 @@ const COMMANDS: Record<
   },
   "ticket triage": {
     target: true,
+    changed: changedTicket,
     options: ["role"],
     run: async (target, flags) => {
       const { ticket, warnings } = await triageTicket(
@@ -300,6 +346,7 @@ const COMMANDS: Record<
   },
   "map index": {
     target: true,
+    changed: (_value, map) => ({ map }),
     options: ["title", "link", "gist"],
     run: async (target, flags) => {
       const { value, warnings } = await indexMap(
@@ -310,6 +357,17 @@ const COMMANDS: Record<
         { autoCommit: autoCommit(flags) },
       );
       return { value, text: `Indexed "${flags.values["title"]}" in the ${target} map.\n`, warnings };
+    },
+  },
+  status: {
+    target: true,
+    options: ["session", "payload"],
+    run: async (kind, flags) => {
+      if (!LIVE_EVENT_KINDS.includes(kind as LiveEventKind)) {
+        throw new DrylandError(`"${kind}" is not a live event kind.`, `Use one of: ${LIVE_EVENT_KINDS.join(", ")}.`);
+      }
+      const sent = await report(kind as LiveEventKind, parsePayload(flags.values["payload"]), flags.values["session"]);
+      return { value: { sent }, text: "" };
     },
   },
   doctor: {
@@ -376,8 +434,10 @@ async function run(args: string[]): Promise<number> {
       positional.push(arg);
     }
   }
-  const [group, command, target] = positional;
-  const commandName = [group, command].filter((word) => word !== undefined).join(" ");
+  // A command is one word (`status`, `doctor`) or two (`ticket claim`); the next word is its target.
+  const words = positional[0] !== undefined && COMMANDS[positional[0]] !== undefined ? 1 : 2;
+  const commandName = positional.slice(0, words).join(" ");
+  const target = positional[words];
   const entry = COMMANDS[commandName];
 
   if (entry !== undefined && (entry.target === "optional" || entry.target === (target !== undefined))) {
@@ -396,6 +456,9 @@ async function run(args: string[]): Promise<number> {
     const { value, text, warnings = [], exitCode = 0 } = await entry.run(target ?? "", flags);
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
+    if (entry.changed !== undefined) {
+      await report("ticket.changed", { command: commandName, ...entry.changed(value, target ?? "") });
+    }
     return exitCode;
   }
 
