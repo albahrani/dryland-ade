@@ -1,0 +1,11 @@
+[
+  "\u001b[?9001h\u001b[?1004h",
+  "\u001b[?25l\u001b[2J\u001b[m\u001b[H\u001b]0;claude\u0007\u001b[?25h",
+  "\u001b[?2004h\u001b[?2031h\u001b[?1004h",
+  "\u001b[<u\u001b[>5u\u001b[>4;2m",
+  "\u001b[?25l",
+  "\u001b[?2026h\u001b[?2026l",
+  "\u001b[>0q",
+  "\u001b[?u\u001b]7501;?\u0007",
+  "\u001b[38;2;150;108;30m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[1m\u001b[3;3HAllow\u001b[1Cexternal\u001b[1CCLAUDE.md\u001b[1Cfile\u001b[1Cimports?\u001b[m\u001b[5;3HThis\u001b[1Cproject's\u001b[1CCLAUDE.md\u001b[1Cor\u001b[1C.claude/rules\u001b[1Cimports\u001b[1Cfiles\u001b[1Coutside\u001b[1Cthe\u001b[1Ccurrent\u001b[1Cworking\u001b[1Cdirectory.\u001b[1CNever\u001b[1Callow\u001b[1Cthis\u001b[1Cfor\u001b[6;3Hthird-party\u001b[1Crepositories.\u001b[38;2;102;102;102m\u001b[8;3HExternal\u001b[1Cimports:\u001b[9;3H \u001b[1CC:\\work\\shared\\RULES.md\u001b[11;3HImportant:\u001b[1COnly\u001b[1Cuse\u001b[1CClaude\u001b[1CCode\u001b[1Cwith\u001b[1Cfiles\u001b[1Cyou\u001b[1Ctrust.\u001b[1CAccessing\u001b[1Cuntrusted\u001b[1Cfiles\u001b[1Cmay\u001b[1Cpose\u001b[1Csecurity\u001b[1Crisks\u001b]8;id=u-zaxmda%5166649326141359084;https://code.claude.com/docs/en/security\u001b\\\u001b[12;3Hhttps://code.claude.com/docs/en/security\u001b[38;2;87;105;247m\u001b]8;;\u001b\\\u001b[14;3H❯\u001b[1CNo,\u001b[1Cdisable\u001b[1Cexternal\u001b[1Cimports\u001b[m\u001b[15;5HYes,\u001b[1Callow\u001b[1Cexternal\u001b[1Cimports\u001b[38;2;102;102;102m\u001b[3m\u001b[17;3HEnter\u001b[1Cto\u001b[1Cconfirm\u001b[1C·\u001b[1CEsc\u001b[1Cto\u001b[1Ccancel"
+]

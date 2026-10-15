@@ -18,7 +18,10 @@ export interface OpenOptions {
   rows?: number;
   /** The program to run instead of the shell, such as an Agent CLI. */
   program?: ShellSpec;
-  /** Variables set on top of the inherited environment; `id` is the new terminal's id. */
+  /**
+   * The whole environment, in place of the inherited one, so a caller can also remove variables; `id` is the new
+   * terminal's id. Terminal capabilities are still set on top.
+   */
   env?: (id: string) => Record<string, string>;
   /** Also receives the terminal's output. */
   onOutput?: (data: string) => void;
@@ -44,10 +47,10 @@ const DEFAULT_ROWS = 24;
 export function createTerminalManager(options: TerminalManagerOptions): TerminalManager {
   const live = new Map<string, PtyProcess>();
 
-  function terminalEnv(): Record<string, string> {
+  function inheritedEnv(): Record<string, string> {
     const env: Record<string, string> = {};
     for (const [key, value] of Object.entries(options.env)) if (value !== undefined) env[key] = value;
-    return { ...env, TERM: "xterm-256color", COLORTERM: "truecolor" };
+    return env;
   }
 
   return {
@@ -59,7 +62,7 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
         cwd,
         cols,
         rows,
-        env: { ...terminalEnv(), ...env?.(id) },
+        env: { ...(env?.(id) ?? inheritedEnv()), TERM: "xterm-256color", COLORTERM: "truecolor" },
       });
       live.set(id, pty);
       pty.onData((data) => {

@@ -27,6 +27,12 @@ export interface AgentAdapter {
    * latest output shows one. Matched against the output with escape sequences and whitespace removed.
    */
   blockingPrompts: readonly RegExp[];
+  /**
+   * Variables a running session of this CLI sets for the processes it starts. They are removed from a session's
+   * environment, so that when Dryland itself was started from inside such a session, the CLIs it launches are
+   * not taken for that session's children. Settings the user exports are not listed and pass through.
+   */
+  parentSessionEnv: readonly string[];
   /** How status hooks reach the CLI; acted on by the session status tickets. */
   hookInjection: { kind: "settings-flag"; flag: string } | { kind: "user-config" } | { kind: "none" };
   /**
@@ -37,9 +43,8 @@ export interface AgentAdapter {
 }
 
 /**
- * Claude Code. Launch and the trust dialog are verified against 2.1.300 on Windows (research notes,
- * ticket 33); the API-key and login screens are blocked by their documented wording, not yet seen; the status
- * mapping is from documentation until the status ticket verifies it.
+ * Claude Code. Launch and every blocking dialog listed are verified against 2.1.300 on Windows (research notes,
+ * ticket 33); the status mapping is from documentation until the status ticket verifies it.
  */
 export const CLAUDE_CODE: AgentAdapter = {
   id: "claude-code",
@@ -49,7 +54,20 @@ export const CLAUDE_CODE: AgentAdapter = {
   launchArgs: [],
   skillPrefix: "/",
   initialPrompt: "pre-type",
-  blockingPrompts: [/trustthisfolder/i, /usethisapikey/i, /selectloginmethod/i],
+  // A CLI that is not logged in opens to its input box and is not blocked.
+  blockingPrompts: [/trustthisfolder/i, /choosethetextstyle/i, /allowexternalclaude\.mdfileimports/i, /usethisapikey/i],
+  // Seen in a Claude Code 2.1.300 session; CLAUDE_CODE_CHILD_SESSION alone turns the child's transcripts off.
+  parentSessionEnv: [
+    "CLAUDECODE",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ATTENDED",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_MESSAGING_SOCKET",
+    "CLAUDE_CODE_MESSAGING_TOKEN",
+    "CLAUDE_PID",
+  ],
   hookInjection: { kind: "settings-flag", flag: "--settings" },
   statusEvents: {
     UserPromptSubmit: "running",

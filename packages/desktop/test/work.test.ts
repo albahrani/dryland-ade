@@ -20,19 +20,21 @@ function stubBin(): { dir: string; claude: string } {
   return { dir, claude };
 }
 
-function setup(path = stubBin().dir) {
+function setup(path = stubBin().dir, inherited: Record<string, string> = {}) {
+  // The app hands terminals and the work starter the same environment, its own.
+  const env = { PATH: path, HOME: "/home/test", ...inherited };
   const provider = new FakePtyProvider();
   const terminals = createTerminalManager({
     provider,
     shell: { file: "/bin/fake-sh", args: [] },
-    env: {},
+    env,
     onData: () => {},
     onExit: () => {},
   });
   const starter = createWorkStarter({
     terminals,
     runner: nodeProcessRunner,
-    env: { PATH: path, HOME: "/home/test" },
+    env,
     launcherDir: "/opt/dryland/bin",
     pretype: { quietMs: 20, charDelayMs: 0 },
   });
@@ -72,6 +74,20 @@ describe("starting work on a ticket", () => {
     const inherited = new Set(["PATH", "HOME", "TERM", "COLORTERM"]);
     const added = Object.keys(provider.spawned[0]?.options.env ?? {}).filter((key) => !inherited.has(key));
     expect(added.sort()).toEqual(["DRYLAND_PANE_KEY", "DRYLAND_SESSION_ID"]);
+  });
+
+  it("is not a child of the Claude Code session Dryland was started from, but keeps the user's own settings", async () => {
+    const { provider, starter } = setup(undefined, {
+      CLAUDECODE: "1",
+      CLAUDE_CODE_CHILD_SESSION: "1",
+      CLAUDE_CODE_SESSION_ID: "parent-session",
+      CLAUDE_CODE_MESSAGING_SOCKET: "\\\\.\\pipe\\parent",
+      CLAUDE_CODE_MESSAGING_TOKEN: "parent-token",
+      CLAUDE_CODE_USE_BEDROCK: "1",
+    });
+    await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    const names = Object.keys(provider.spawned[0]?.options.env ?? {}).filter((key) => key.startsWith("CLAUDE"));
+    expect(names).toEqual(["CLAUDE_CODE_USE_BEDROCK"]);
   });
 
   it("types the next-step command once the CLI has gone quiet, one key at a time, without submitting", async () => {

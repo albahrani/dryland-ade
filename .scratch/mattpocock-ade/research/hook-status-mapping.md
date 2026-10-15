@@ -209,7 +209,7 @@ Setup: `claude.exe` with no arguments spawned through `node-pty` (ConPTY, 120x40
 - One `write("/implement demo/01")` of the whole string is **dropped** on Windows: the prompt stays empty, even after 5 s. A bracketed paste (`ESC[200~ … ESC[201~`) is dropped too.
 - One character per write, 15 to 20 ms apart, lands every time (5 of 5 runs): the prompt reads `❯ /implement demo/01`, the slash-command menu opens, and nothing is submitted without `\r`.
 - Typing before the input box exists loses the text. The box is drawn about 1.5 s after spawn, after which the CLI is silent; 500 ms of output quiet after the first output was the reliable readiness signal (5 of 5 runs, typing began at 1.55 to 1.59 s).
-- `CLAUDECODE=1` and the other `CLAUDE_CODE_*` variables inherited from a parent Claude Code session do not change any of this, so Dryland passes the environment through untouched. They do have one effect: when Dryland itself was started from inside a Claude Code session, the launched CLI shows "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker". Users who start Dryland normally never inherit it; the transcripts ticket should keep it in mind.
+- `CLAUDECODE=1` and the other `CLAUDE_CODE_*` variables inherited from a parent Claude Code session do not change any of this, so Dryland passes the environment through untouched. They do have one effect: when Dryland itself was started from inside a Claude Code session, the launched CLI shows "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker". Dryland now removes those variables; see "Parent-session variables" below.
 
 **Trust prompt**
 - A worktree of a trusted repo is **not** prompted: Claude Code follows the main checkout's trust, so Dryland worktrees of a trusted project open straight to the input box.
@@ -219,5 +219,14 @@ Setup: `claude.exe` with no arguments spawned through `node-pty` (ConPTY, 120x40
 **Implications for the adapter**
 - Launch `claude` with no arguments; pre-type one character at a time once the output has been quiet for 500 ms, and never while the quiet window holds a blocking prompt. After the user answers the dialog the CLI redraws to the input box, and the command is typed then.
 - Dryland does not answer the trust dialog and writes no trust entry for Claude Code: the user answers it once per untrusted project.
+
+**Other startup screens** (same day, each in a throwaway `CLAUDE_CONFIG_DIR`, so the user's config was never touched):
+- **First run** (empty config): a theme picker, "Let's get started. Choose the text style that looks best with your terminal". It blocks typing. Match: `/choosethetextstyle/i`.
+- **External imports**: when a CLAUDE.md in or above the project imports files outside it, a dialog asks "Allow external CLAUDE.md file imports?", defaulting to "No, disable external imports". It blocks typing. Match: `/allowexternalclaude\.mdfileimports/i`. Real repos with such imports show it once per project.
+- **`ANTHROPIC_API_KEY` set**: "Detected a custom API key in your environment … Do you want to use this API key?", defaulting to "No (recommended)". It blocks typing. Match: `/usethisapikey/i`. Dryland neither reads nor sets the key, and does not answer the dialog for the user.
+- **Not logged in**: there is **no** login screen. The CLI opens to its normal input box, with "Not logged in · Run /login" in the status line, so pre-typing works as usual. The guessed login pattern was dropped.
+- Keys sent to these screens can appear one keypress late: an arrow key showed up only once the next key arrived. Another reason to never type into a dialog.
+
+**Parent-session variables**: of the variables a running Claude Code session gives its children, `CLAUDE_CODE_CHILD_SESSION` alone turns transcript saving off in a launched CLI. Removing it, `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`, `CLAUDE_CODE_SESSION_ATTENDED`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN` and `CLAUDE_PID` gives a normal top-level session. The adapter lists them as `parentSessionEnv`, and Dryland removes them from every session it starts. The user's own `CLAUDE_CODE_*` settings, such as `CLAUDE_CODE_USE_BEDROCK`, pass through.
 
 **Through the built app** (Playwright driving the real CLI, same day): in a worktree of this trusted repo, "Start with Claude Code" on ticket 34 left `❯ /implement mattpocock-ade/34` in the input box, unsubmitted. In a worktree of an untrusted temp repo the trust dialog showed and, 3 s later, nothing had been typed.

@@ -64,10 +64,15 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
     return adapter;
   }
 
-  /** The session's environment: the inherited one, the launcher first on `PATH`, and the session's identity. */
-  function sessionEnv(sessionId: string, paneKey: string): Record<string, string> {
+  /**
+   * The session's environment: the inherited one less any parent session's markers, the launcher first on `PATH`,
+   * and the session's identity.
+   */
+  function sessionEnv(adapter: AgentAdapter, sessionId: string, paneKey: string): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(env)) if (value !== undefined) result[key] = value;
+    for (const [key, value] of Object.entries(env)) {
+      if (value !== undefined && !adapter.parentSessionEnv.includes(key)) result[key] = value;
+    }
     const pathKey = envKey(env, "PATH");
     result[pathKey] = [launcherDir, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
     return { ...result, DRYLAND_SESSION_ID: sessionId, DRYLAND_PANE_KEY: paneKey };
@@ -112,7 +117,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       terminalId = terminals.open({
         cwd: worktree.path,
         program: programFor(executable, adapter, env),
-        env: (id) => sessionEnv(sessionId, id),
+        env: (id) => sessionEnv(adapter, sessionId, id),
         onOutput: pretyper,
       });
       const session: SessionInfo = {

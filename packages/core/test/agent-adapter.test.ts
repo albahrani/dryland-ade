@@ -62,8 +62,20 @@ describe("blocksInput (Claude Code)", () => {
     expect(blocksInput(CLAUDE_CODE, redraw)).toBe(true);
   });
 
+  it.each([
+    ["the first-run theme picker", "first-run-theme.json"],
+    ["the external CLAUDE.md imports dialog", "external-imports.json"],
+    ["the custom API key dialog", "api-key.json"],
+  ])("sees %s", (_name, file) => {
+    expect(blocksInput(CLAUDE_CODE, recorded(file))).toBe(true);
+  });
+
   it("does not block at the input box", () => {
     expect(blocksInput(CLAUDE_CODE, recorded("input-box.json"))).toBe(false);
+  });
+
+  it("does not block at the input box of a CLI that is not logged in: it has no login screen", () => {
+    expect(blocksInput(CLAUDE_CODE, recorded("not-logged-in.json"))).toBe(false);
   });
 });
 

@@ -1,0 +1,10 @@
+[
+  "\u001b[?9001h\u001b[?1004h",
+  "\u001b[?25l\u001b[2J\u001b[m\u001b[H\u001b]0;claude\u0007\u001b[?25h",
+  "\u001b[?2004h\u001b[?2031h\u001b[?1004h",
+  "\u001b[<u\u001b[>5u\u001b[>4;2m",
+  "\u001b[?2026h\u001b[?2026l",
+  "\u001b[>0q",
+  "\u001b[?u\u001b]7501;?\u0007",
+  "\u001b[?25l\u001b[38;2;150;108;30m\r\n────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[1m\u001b[3;3HDetected\u001b[1Ca\u001b[1Ccustom\u001b[1CAPI\u001b[1Ckey\u001b[1Cin\u001b[1Cyour\u001b[1Cenvironment\u001b[m\u001b[1m\u001b[5;3HANTHROPIC_API_KEY\u001b[22m:\u001b[1Csk-ant-...probe-not-a-real-key\u001b[7;3HDo\u001b[1Cyou\u001b[1Cwant\u001b[1Cto\u001b[1Cuse\u001b[1Cthis\u001b[1CAPI\u001b[1Ckey?\u001b[9;5HYes\u001b[38;2;87;105;247m\u001b[10;3H❯\u001b[1CNo\u001b[1C(\u001b[1mrecommended\u001b[22m)\u001b[38;2;102;102;102m\u001b[3m\u001b[12;3HEnter\u001b[1Cto\u001b[1Cconfirm\u001b[1C·\u001b[1CEsc\u001b[1Cto\u001b[1Ccancel"
+]
