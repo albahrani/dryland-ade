@@ -224,7 +224,18 @@ ipcMain.on("terminal:close", (_event, id: string) => {
   terminalEnded(id);
 });
 
+// One app per user: a second launch brings the running app's window to the front and quits, so it never takes over
+// the live-reporting lock file or starts sessions of its own.
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.quit();
+app.on("second-instance", () => {
+  if (window === null) return;
+  if (window.isMinimized()) window.restore();
+  window.focus();
+});
+
 void app.whenReady().then(async () => {
+  if (!primary) return;
   // The CLI bundle is built next to this file; the launcher runs it with this very Electron binary.
   writeLauncher(launcherDir, { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") });
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.
