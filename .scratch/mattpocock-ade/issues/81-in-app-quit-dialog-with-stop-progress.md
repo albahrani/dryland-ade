@@ -3,6 +3,7 @@
 Type: task
 
 Spec: [spec](../spec.md), user stories 55, 56. "Lifecycle, packaging and release". ADRs 0002, 0004, 0010. Follows mattpocock-ade/41 (bc47448).
+Status: ready-for-agent
 
 ## What to build
 
