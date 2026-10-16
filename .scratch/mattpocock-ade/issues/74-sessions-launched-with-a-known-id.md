@@ -23,3 +23,7 @@ The app knows each session's Agent CLI id from spawn and keeps the index current
 - [ ] A live event without a CLI session id is handled as before; `dryland status` without the app stays a silent no-op
 - [ ] `CLAUDE_CODE_CHILD_SESSION` is still removed from a session's environment
 - [ ] Checked once against the real Claude Code on the dev machine: launch with `--session-id`, `/clear`, and the hook reports the new id (version recorded in the answer)
+
+## Comments
+
+From mattpocock-ade/40 (a6c8530): startWork no longer starts only on tickets. Its WorkTarget is a ticket, a map (session in <map>/scratch-wayfinder) or a new map (session in a fresh new-map/scratch-wayfinder-N). Recording at spawn must key map sessions by the map and new-map sessions by their scratch worktree branch, matching the item shape in mattpocock-ade/73.

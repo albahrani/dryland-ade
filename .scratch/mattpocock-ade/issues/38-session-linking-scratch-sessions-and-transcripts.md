@@ -22,3 +22,7 @@ Three behaviours that make sure no session is lost:
 - [ ] After a session ends, its tab shows the full output, accepts no input and is marked ended
 - [ ] Closing the tab of an ended session removes it from the Sessions view; once the paused-session tickets land, a session whose item is still claimed moves to the Paused pane instead
 - [ ] Dryland persists no transcript of an ended session across an app restart (the Agent CLI keeps its own; paused sessions and the session index are ADR 0010's later tickets)
+
+## Comments
+
+From mattpocock-ade/40 (a6c8530): part of the scratch-worktree plumbing exists. Core has worktreeForScratch(runner, cwd, map, slug), which reuses <map>/scratch-<slug> when it is on disk. The desktop WorkStarter takes a WorkTarget (ticket | map | new-map, in shared/work-target.ts), and SessionInfo.ticket is nullable with a map field. A ticketless session can be one more WorkTarget kind instead of a new code path.
