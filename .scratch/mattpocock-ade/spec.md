@@ -178,7 +178,7 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 
 - `dryland` is the only write path for tickets and the map index. The generated `issue-tracker.md` tells agents never to edit tracker files directly and to stop and tell the user if `dryland` is missing.
 - Local-markdown tracker state lives only in the main checkout, located from any worktree via git's common dir. Writes are atomic and made under a lock; ticket numbers are allocated under that lock.
-- Claims record the holder (branch or session id) and a timestamp.
+- Claims record the holder and a timestamp. The holder is always a branch, the one `dryland ticket claim` runs in: for Start work, the ticket's worktree branch (ADR 0010).
 - Every mutating command commits only its own tracker paths with a descriptive message. On by default, opt-out. If the commit fails the change stays on disk and the CLI warns.
 - GitHub/GitLab: claim is the assignee, blocking uses native dependencies where available, the map index is the map issue's body. GitLab without Premium keeps blocking in a `Blocked by:` body line. No webhooks; poll on focus and on a timer. Missing or unauthenticated `gh`/`glab` is reported clearly; tokens are never requested or stored.
 - Prose files (`GLOSSARY.md`, ADRs, specs) are ordinary git files edited per worktree and merged by git. Dryland surfaces conflicts and does no locking.
