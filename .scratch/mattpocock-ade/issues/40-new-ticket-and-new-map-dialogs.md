@@ -1,7 +1,8 @@
 # New ticket and New map dialogs
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T12:10:02.272Z","was":"ready-for-agent"}} -->
 Blocked by: 31, 33, 39
 
 Spec: [spec](../spec.md), user stories 19, 21, 22, 39. "UI". Layout detail: `prototype/views-and-ux/` (remaining screens).
