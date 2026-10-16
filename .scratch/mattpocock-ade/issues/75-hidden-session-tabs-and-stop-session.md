@@ -1,7 +1,8 @@
 # Hidden session tabs and Stop session
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T21:13:08.841Z","was":"ready-for-agent"}} -->
 Blocked by: 74
 
 Spec: [spec](../spec.md), user stories 96, 97. "Sessions, pausing and resuming". ADR 0010.
