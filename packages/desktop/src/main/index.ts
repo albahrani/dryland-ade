@@ -15,7 +15,7 @@ import {
   readTicketDetail,
   startLiveListener,
 } from "@dryland/core";
-import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions, powerMonitor } from "electron";
 import {
   type AppSettings,
   type AppState,
@@ -38,6 +38,7 @@ import {
 import { createDrylandCli } from "./dryland-cli.ts";
 import { latestOnly } from "./latest-only.ts";
 import { writeLauncher } from "./launcher.ts";
+import { quitConfirmation, runShutdown, shutdownSteps } from "./lifecycle.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
@@ -220,6 +221,14 @@ function createWindow(): void {
     title: "Dryland ADE",
     webPreferences: { preload: join(import.meta.dirname, "../preload/index.cjs"), sandbox: true },
   });
+  // Closing the window quits the app, so it asks first, like any other quit, and a cancel keeps the window.
+  window.on("close", (event) => {
+    if (quit === "allowed") return;
+    event.preventDefault();
+    app.quit();
+  });
+  // Windows ends the app soon after; the PTYs are killed before the first await of the shutdown.
+  window.on("session-end", () => void shutDown());
   window.on("closed", () => (window = null));
   // Git state behind the next steps changes outside the watched tracker files, e.g. a commit made in a terminal.
   window.on("focus", () => void refresh());
@@ -406,13 +415,69 @@ void app.whenReady().then(async () => {
   }
 });
 
-app.on("window-all-closed", () => {
+/** Whether quitting may go ahead: it asks first while sessions run, and stops them once allowed. */
+let quit: "ask" | "asking" | "allowed" = "ask";
+
+/** The sessions whose Agent CLI still runs, tab or not. */
+const runningSessions = () => {
+  const live = new Set(terminals.liveIds());
+  return work.sessions().filter((session) => live.has(session.terminalId));
+};
+
+/**
+ * Stops everything within the shutdown budget: no process outlives the app (ADR 0002). Nothing is released and no
+ * tracker is written; claims stay and the sessions become paused (ADR 0010). UI state is written as it changes, so
+ * none is pending here.
+ */
+async function stopEverything(): Promise<void> {
   stopWatching?.();
+  stopWatching = null;
+  const report = await runShutdown(shutdownSteps(terminals));
+  if (report.failed.length > 0 || report.abandoned.length > 0) console.error("Shutdown was cut short.", report);
+}
+
+/** System shutdown: no question asked, only the budgeted stop. */
+async function shutDown(): Promise<void> {
+  quit = "allowed";
+  await stopEverything();
   app.quit();
+}
+
+/** Asks before quitting while sessions run; on Quit, stops them and quits. */
+async function confirmQuit(): Promise<void> {
+  quit = "asking";
+  const confirmation = quitConfirmation(runningSessions(), status.states());
+  if (confirmation !== null) {
+    const options = { type: "question" as const, ...confirmation, defaultId: 1, cancelId: 1, noLink: true };
+    const { response } = await (window === null
+      ? dialog.showMessageBox(options)
+      : dialog.showMessageBox(window, options));
+    if (response !== 0) {
+      quit = "ask";
+      return;
+    }
+  }
+  await shutDown();
+}
+
+app.on("before-quit", (event) => {
+  if (quit === "allowed") return;
+  event.preventDefault();
+  if (quit === "ask") void confirmQuit();
 });
 
-// No process outlives the app (ADR 0002).
+// macOS and Linux announce a system shutdown here; Windows through the window's "session-end". The listener gets
+// an event whose `preventDefault()` delays the shutdown, as Electron documents, though its types leave it out.
+const onSystemShutdown = (event: Electron.Event) => {
+  event.preventDefault();
+  void shutDown();
+};
+void app.whenReady().then(() => powerMonitor.on("shutdown", onSystemShutdown as unknown as () => void));
+
+app.on("window-all-closed", () => app.quit());
+
 app.on("will-quit", () => {
+  // Already done unless the window never opened; killing is safe twice.
   terminals.closeAll();
   // Removes the lock file at once, so `dryland` stops trying to reach this app.
   void live?.close();

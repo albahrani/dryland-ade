@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -56,7 +56,7 @@ function stubAgent(): string {
       "const { execSync } = require('node:child_process');",
       "const { basename } = require('node:path');",
       "const set = (name) => (process.env[name] ? 'set' : 'missing');",
-      "console.log(`agent-ready cwd=${basename(process.cwd())}`);",
+      "console.log(`agent-ready cwd=${basename(process.cwd())} pid=${process.pid}`);",
       "console.log(`session=${set('DRYLAND_SESSION_ID')} pane=${set('DRYLAND_PANE_KEY')} port=${set('DRYLAND_PORT')} token=${set('DRYLAND_TOKEN')}`);",
       "console.log(execSync('dryland ticket list', { encoding: 'utf8' }));",
       `const hooks = require(${JSON.stringify(FAKE_HOOKS)});`,
@@ -96,6 +96,8 @@ async function openTicket(env: Record<string, string>) {
   const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`], env });
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+    // Quitting with sessions running asks first; the tests answer Quit unless they say otherwise.
+    dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
   }, repo);
   const window = await app.firstWindow();
   await window.getByRole("button", { name: "Open project..." }).click();
@@ -167,6 +169,75 @@ test("shows the session's state from Claude Code's hooks on its tab and on its t
   await window.reload();
   await expect(ticketBadge("ended")).toBeVisible();
   await app.close();
+});
+
+test("quitting with a running session asks first, then stops it and keeps its claim", async () => {
+  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/implement shop/02");
+  const pid = Number(/pid=(\d+)/.exec(await screen.innerText())?.[1]);
+  const claimed = () => ({
+    // On disk, not at HEAD: without a git identity, as in CI containers, the claim is written but not committed.
+    ticket: readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8"),
+    commits: execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: repo, encoding: "utf8" }),
+  });
+  const before = claimed();
+  expect(before.ticket).toContain("Status: claimed");
+
+  // Cancel: the question lists the session, and nothing stops.
+  await app.evaluate(({ app, dialog }) => {
+    const asked: string[] = [];
+    (globalThis as { asked?: string[] }).asked = asked;
+    dialog.showMessageBox = async (...args: unknown[]) => {
+      const options = args.at(-1) as { message: string; detail: string };
+      asked.push(`${options.message}\n${options.detail}`);
+      return { response: 1, checkboxChecked: false };
+    };
+    app.quit();
+  });
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as { asked?: string[] }).asked ?? []))
+    .toEqual([expect.stringContaining("1 session is still running.")]);
+  const [question] = await app.evaluate(() => (globalThis as { asked?: string[] }).asked ?? []);
+  expect(question).toContain("• Claude Code shop/02 (launched) in shop/02-grill");
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("x");
+  await expect(screen).toContainText("/implement shop/02x");
+
+  // Quit: the CLI is gone, and the claim and the branch's history are as they were.
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+  });
+  await app.close();
+  await expect
+    .poll(() => {
+      try {
+        process.kill(pid, 0);
+        return "alive";
+      } catch {
+        return "gone";
+      }
+    })
+    .toBe("gone");
+  expect(claimed()).toEqual(before);
+});
+
+test("quitting with no running session asks nothing", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("/implement shop/02");
+  // The CLI ends on its own: a session that has ended is nothing to ask about.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("#");
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: ended" })).toBeVisible();
+  // Any question would be answered Cancel and keep the app open.
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false });
+  });
+  const closed = app.waitForEvent("close", { timeout: 10_000 });
+  await app.evaluate(({ app }) => app.quit()).catch(() => {});
+  await closed;
 });
 
 test("shows Claude Code as unavailable when it is not installed", async () => {
