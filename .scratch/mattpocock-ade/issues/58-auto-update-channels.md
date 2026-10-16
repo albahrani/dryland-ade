@@ -23,3 +23,7 @@ The Updates tab of Settings shows the current version, the channel choice, the l
 - [ ] On macOS and deb, a found update shows a notice with a link and nothing is downloaded
 - [ ] A failed check or download is reported quietly and does not disturb running sessions
 - [ ] Update decisions (channel, daily limit, per-platform behaviour) are tested with a fake update source
+
+## Comments
+
+From mattpocock-ade/41 (bc47448): every quit now goes through before-quit in packages/desktop/src/main/index.ts, which prevents it while sessions run, asks, then stops them and calls app.quit() again with quit set to 'allowed'. Install-on-quit must follow that path: hook the install after the confirmation and the shutdown steps, or call quitAndInstall only once quit is allowed, so an update never skips the question or kills sessions unasked.

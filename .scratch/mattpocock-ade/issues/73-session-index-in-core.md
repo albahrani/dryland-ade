@@ -26,3 +26,7 @@ The session index that links items to their Agent CLI sessions, and its first wr
 - [ ] Parallel `dryland` processes recording different sessions lose no entry
 - [ ] Sessions older than the retention period are dropped on the next write
 - [ ] A missing or unparseable index reads as empty and never throws; the next write replaces it
+
+## Comments
+
+From mattpocock-ade/41 (bc47448): quit and shutdown run shutdownSteps(terminals, flushes) from packages/desktop/src/main/lifecycle.ts under one 2-second budget; PTYs are killed first, then each flush step in order, and a step still running at the deadline is abandoned. Index writes that complete as they happen need no step. Any index write the app holds back (such as a last state written by the app) must be added there as a flush step, and stay a local file operation.

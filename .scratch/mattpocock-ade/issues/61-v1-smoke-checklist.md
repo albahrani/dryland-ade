@@ -22,6 +22,6 @@ One risk carried from the spec is closed here:
 - [ ] Copilot CLI on a machine that has it: hook install and remove, no trust prompt in a Dryland worktree, all five session states, hook inert outside Dryland
 - [ ] Install and uninstall on Windows, including the global `PATH` option
 - [ ] Auto-update from a `beta` build to `latest`, applied on quit
-- [ ] Quit with live sessions: confirmation, no leftover processes, own claims released
+- [ ] Quit with live sessions: confirmation, no leftover processes, every claim kept and the sessions paused (ADR 0010)
 - [ ] Every failure has a ticket, and all are resolved
 - [ ] `v1.0.0` is tagged and published to `latest`

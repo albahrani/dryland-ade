@@ -24,3 +24,7 @@ Closing a session tab no longer ends the session; stopping it is a separate, del
 - [ ] After Stop no PTY process is left, the ticket is still claimed, and the index entry keeps its last state
 - [ ] The confirmation setting changes the rule and persists across restarts
 - [ ] A Playwright test hides a session, lets the fake CLI write, and shows the output on reopening
+
+## Comments
+
+From mattpocock-ade/41 (bc47448): the quit dialog is built by quitConfirmation in packages/desktop/src/main/lifecycle.ts, which already lists waiting sessions first and leaves out sessions whose CLI reported its end. Put 'unseen output first' into its sort, and feed it hidden sessions too: index.ts lists runningSessions() from work.sessions() whose PTY is live, so a hidden session whose PTY keeps running is included once closing a tab stops killing it.

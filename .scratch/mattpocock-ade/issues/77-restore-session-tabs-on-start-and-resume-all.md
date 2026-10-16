@@ -21,3 +21,7 @@ Getting back to where the user left off, without every agent starting at once.
 - [ ] Resume all on a map resumes only that map's paused sessions
 - [ ] With "Resume sessions on start" on, startup resumes every paused session hidden; it is off by default
 - [ ] A restored session that cannot be resumed by id falls back like Resume does
+
+## Comments
+
+From mattpocock-ade/41 (bc47448): quitting keeps the saved tab list, but parseTabs in packages/desktop/src/shared/tabs.ts drops every terminal tab when it reads it ('Terminals never outlive the app, so they are not saved'), and terminal tabs are keyed by the PTY's id, which a restart does not keep. Restoring session tabs means saving session tabs by their item and session instead, and keeping them through parseTabs.
