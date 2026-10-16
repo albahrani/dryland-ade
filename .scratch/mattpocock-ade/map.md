@@ -116,6 +116,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - Paused sessions sliced into build tickets: [Claims held by the worktree branch](issues/72-claims-held-by-the-worktree-branch.md), [Session index in core](issues/73-session-index-in-core.md), [Sessions launched with a known id](issues/74-sessions-launched-with-a-known-id.md), [Feed live and paused sessions into the repo snapshot](issues/65-feed-live-sessions-into-the-repo-snapshot.md) (rewritten), [Hidden session tabs and Stop session](issues/75-hidden-session-tabs-and-stop-session.md), [Resume a paused session](issues/76-resume-a-paused-session.md), [Restore session tabs on start and Resume all](issues/77-restore-session-tabs-on-start-and-resume-all.md), [Reconcile the session index](issues/78-reconcile-the-session-index.md), [Sessions view panes and status bar](issues/37-sessions-view-and-status-bar.md) (rewritten), [Paused pane and paused sessions on maps](issues/79-paused-pane-and-paused-sessions-on-maps.md); Copilot's session fields added to [Copilot CLI adapter](issues/43-copilot-cli-adapter.md), session settings to [Settings dialog](issues/55-settings-dialog-general-tracker-confirmations.md).
 
+- [New ticket and New map dialogs](issues/40-new-ticket-and-new-map-dialogs.md): New ticket previews and confirms dryland ticket create; New map and Continue map open /wayfinder in scratch worktrees; ticket and map tabs can launch any installed skill.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
