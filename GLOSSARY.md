@@ -36,11 +36,11 @@ The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
 
 **Claim**:
-A mark on a ticket that one session is working on it, naming its holder (a session id or branch) and when it was made. Taken by `ticket claim`, undone by `ticket release`.
+A mark on a ticket that someone is working on it, naming its holder (the branch the work happens on) and when it was made. Taken by `ticket claim`, undone by `ticket release`.
 _Avoid_: Lock, assignment
 
 **Stale claim**:
-A claim on a ticket that no live session holds; flagged as possibly stale and released only by an explicit user action.
+A claim with no live or paused session behind it and no ticket worktree on its branch; flagged as possibly stale and released only by an explicit user action.
 _Avoid_: Orphaned ticket, expired lock
 
 **Next step**:
@@ -56,8 +56,12 @@ A terminal coding agent the ADE drives through its own subscription login, such 
 _Avoid_: Agent API, SDK
 
 **Session**:
-One running Agent CLI process in a worktree.
-_Avoid_: Chat, run
+An Agent CLI session: one conversation with an Agent CLI, kept by the CLI and resumable. It is live while its process runs in the ADE.
+_Avoid_: Chat, run, conversation, work session
+
+**Paused session**:
+A session of a claimed ticket that is not live but that the ADE knows and can resume.
+_Avoid_: Suspended, interrupted, closed session
 
 **Live event**:
 A message the ADE's command-line tool sends to the running ADE when a session changes state or a ticket changes; shown live and never stored.

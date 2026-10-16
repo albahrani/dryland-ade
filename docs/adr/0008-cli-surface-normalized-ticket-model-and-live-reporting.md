@@ -14,7 +14,7 @@ ADR 0001 made the CLI the single write path for tickets. This records its shape.
 
 ## Consequences
 
-- Events are not stored. The app rebuilds its state from files, git and the tracker on start, and refreshes tickets on `ticket.changed`.
+- Events are not stored. The app rebuilds its state from files, git and the tracker on start, and refreshes tickets on `ticket.changed`. Amended by ADR 0010: the session index in the git common dir is a cache kept across restarts and reconciled on start; mutating `ticket` commands run inside an Agent CLI session record their session there even with the app closed, while `dryland status` stays a no-op.
 - GitHub and GitLab changes made outside `dryland` appear only on the next poll (window focus or timer).
 - A session's status is unknown while the app is closed; nothing is queued for later.
 - The channel accepts only local, token-authenticated requests, and the token changes on every app launch.

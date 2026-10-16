@@ -11,8 +11,8 @@ Rejected: the Claude API and Agent SDK (hard product constraint); headless `-p` 
 - **Hook injection**: per launch or worktree-local where the CLI offers it (Claude Code: per-launch settings flag). Otherwise a narrow user-level write under ADR 0005 (Copilot CLI).
 - **Session states**: launched, running, waiting, idle, ended. "Launched" always comes from Dryland's own PTY spawn, because Copilot's session-start hook fires only at the first submitted prompt. Running is prompt-submitted and tool-use events, waiting is permission-request and permission/needs-input notifications, idle is the stop event, ended is the session-end event. Copilot's idle notification is not relied on.
 - **No hooks**: status falls back to PTY heuristics and is marked approximate. Transcripts are a best-effort fallback only.
-- **Live only**: reporting is fire-and-forget and a silent no-op when the app is closed (ADR 0008). Status is never persisted; on start Dryland rebuilds from files, git and the tracker.
-- **Session-to-ticket link**: recorded at spawn (session, worktree, ticket). A session started by hand in a Dryland-created worktree links by working directory. Branches Dryland did not create are unlinked, with a commit trailer as fallback link.
+- **Live only**: reporting is fire-and-forget and a silent no-op when the app is closed (ADR 0008). Status is never persisted; on start Dryland rebuilds from files, git and the tracker. Amended by ADR 0010: a session's last state is kept in the session index as a labelled past fact, so a paused session can show "was waiting on you"; live status is still never restored from it.
+- **Session-to-ticket link**: recorded at spawn (session, worktree, ticket), and kept across restarts in the session index (ADR 0010). A session started by hand in a Dryland-created worktree links by working directory. Branches Dryland did not create are unlinked, with a commit trailer as fallback link.
 - **Orca reuse** (MIT, attributed): the config-table pattern only, not its UI or structured mode.
 
 ## Consequences

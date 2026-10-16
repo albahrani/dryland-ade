@@ -91,8 +91,8 @@ Dryland is unofficial and community-made, MIT licensed, single user and local on
 52. As a developer, I want best-effort Agent CLIs (launch and pre-typed command only) besides Claude Code and Copilot CLI, so that I can use other agents.
 53. As a developer, I want a live-events panel (expanded, one line, or hidden) showing session events and every Dryland write, so that I can follow what is happening.
 54. As a developer, I want a status bar with the selected session's state, its branch, and live/total session counts, so that context is always visible.
-55. As a developer, I want a confirmation listing live sessions when I quit, so that I do not kill agents by accident.
-56. As a developer, I want Dryland to release its own sessions' claims on quit, so that tickets are not left claimed.
+55. As a developer, I want a confirmation listing live sessions when I quit, hidden ones included and those with an unseen question or unread output first, so that I do not kill agents by accident.
+56. As a developer, I want quitting to keep my claims and my sessions resumable, so that I can pick up a grilling or an implementation where I left it.
 57. As a Copilot CLI user, I want Dryland-created worktrees trusted automatically, so that no trust prompt interrupts the launch.
 
 ### Parallel work and tracker writes
@@ -102,7 +102,7 @@ Dryland is unofficial and community-made, MIT licensed, single user and local on
 60. As a developer, I want every tracker write committed on its own with a descriptive message, so that `git log` is the audit trail and `git revert` the undo.
 61. As a developer, I want to turn auto-commit off, so that I can manage commits myself.
 62. As a developer, I want a warning when the main checkout is not on the default branch, so that tracker state does not land on the wrong branch.
-63. As a developer, I want claims that no live session holds shown as "claimed, possibly stale" with an explicit release action, so that nothing is released behind my back.
+63. As a developer, I want claims that no live or paused session holds, and whose branch is no checked-out ticket worktree, shown as "claimed, possibly stale" with an explicit release action, so that nothing is released behind my back.
 64. As a developer, I want writes I trigger from a general button to ask for confirmation, with a per-type "do not ask again", so that I stay in control without being nagged.
 65. As a developer, I want actions I start from a ticket (claim, resolve, unblock) to run without an extra confirmation, so that direct actions stay quick.
 66. As a developer, I want Dryland never to edit skill-authored prose, so that my glossary, ADRs and specs are only changed by me and the skills.
@@ -144,6 +144,17 @@ Dryland is unofficial and community-made, MIT licensed, single user and local on
 93. As a macOS or deb user, I want an "update available" notice with a link, so that I know to update even without auto-update.
 94. As a user, I want an opt-in to put `dryland` on my global `PATH`, so that I can use it in my own terminals.
 95. As a user, I want it clear in the app and README that Dryland is unofficial and community-made, with credit to Matt Pocock's skills, so that affiliation is never implied.
+
+### Paused sessions and resuming (ADR 0010)
+
+96. As a developer, I want closing a session tab to only hide it, so that the agent keeps working while I look at something else.
+97. As a developer, I want to stop a session explicitly, and to be asked first when it is running or holds a question or output I have not seen, so that I never cut off an agent or lose an unread question by accident.
+98. As a developer, I want a ticket or map whose session is not running to offer Resume, so that I continue the same Agent CLI session instead of starting over.
+99. As a developer, I want a paused session to say whether it was waiting on me or interrupted, so that I know what it needs before I resume it.
+100. As a developer, I want the session tabs I had open to come back on start, resuming when I open them, with a "Resume all" action and an opt-in setting to resume on start, so that I get back to where I was without every agent starting at once.
+101. As a developer who also works outside Dryland, I want sessions that ran `dryland ticket` commands, and sessions found in a ticket's worktree, linked to that ticket, so that resuming works for work I did in my own terminals too.
+102. As a developer, I want paused sessions kept for a number of days I can set, so that old work drops out of the views.
+103. As a developer with many sessions, I want hidden sessions shown compactly in the Sessions view, with waiting ones on top, so that the view stays usable.
 
 ## Implementation Decisions
 
@@ -191,6 +202,20 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 - One worktree per ticket, for planning and implementation alike, named `<effort>/<NN>-<slug>`. Ticketless sessions use `<effort>/scratch-<slug>`. Slugs are collision-suffixed.
 - A Linked worktree is tied to its ticket by that name, with a commit trailer as fallback. Branches matching neither are unlinked.
 - Dryland records session, worktree and ticket at spawn. A session started by hand inside a Dryland-created worktree links by its working directory.
+- A claim's holder is always a branch: Dryland claims for the ticket's worktree branch, never for its own session id.
+
+### Sessions, pausing and resuming (ADR 0010)
+
+- A session is the Agent CLI's own session: it outlives its process and is resumable. It is live while its process runs in Dryland. A paused session is a known, resumable session of a claimed item with no live process.
+- The session index lives at `<git common dir>/dryland/sessions.json`, shared by all worktrees and never committed. Per item (ticket, map or scratch worktree) it lists known sessions, newest first, with CLI, the CLI's session id, last seen and, for sessions the app ran, last state.
+- The app writes the index from its sessions' hooks, including the new session id after `/clear`. Every mutating `dryland ticket` command run inside an Agent CLI session records that session against the ticket, with or without the app. `dryland status` stays a no-op without the app.
+- Startup and window focus reconcile the index with the tracker, git and each CLI's own history for the item's worktree. Sessions found there are added without a last state.
+- Claim states: live (a session runs in Dryland), paused (the index knows a resumable session), possibly stale (neither, and its branch is no checked-out ticket worktree). A default-branch claim with no known session is possibly stale.
+- Paused labels from the last state: "was waiting on you", "interrupted", or "Paused".
+- Resume uses the CLI's resume-by-id, falling back to the CLI's session picker in the item's directory, then to a fresh start with the pre-typed command.
+- Closing a session tab hides it: the PTY keeps running, its output is buffered in the main process (bounded) and replayed when the tab is reopened from the ticket, map, Sessions view or a next-up marker. "Stop session" is its own action and asks first when the session is running, or waiting or idle with output not seen since; the rule is a setting.
+- Startup restores the session tabs open at quit and resumes each when it is first shown. "Resume all" resumes every paused session as hidden sessions; "Resume sessions on start" does it automatically and is off by default.
+- A paused session drops out of views when its ticket is resolved or its claim released. Index entries are removed after a retention period, a setting with default 30 days.
 
 ### Agent adapters
 
@@ -217,7 +242,7 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 - The app listens on `127.0.0.1` on a random port. Port and a random per-launch token are written to a lock file in a per-user app directory.
 - `dryland status` POSTs an authenticated event and exits 0 silently when there is no lock file or the connection fails. Reporting is fire-and-forget.
 - Event shape: `{session_id, kind, timestamp, payload?}`. Kinds: `session.started`, `session.running`, `session.waiting`, `session.idle`, `session.ended`, and `ticket.changed`, which every mutating `ticket` and `map` command emits.
-- Events drive the session list, ticket refresh and the live-events panel. They are not persisted.
+- Events drive the session list, ticket refresh and the live-events panel. They are not persisted; only a session's last state is kept in the session index (ADR 0010).
 
 ### Next-step rule engine
 
@@ -233,8 +258,8 @@ Three packages in a pnpm workspace under the `@dryland` scope:
   - spec with ready tickets: `/implement-spec`, or `/implement` per `ready-for-agent` ticket
   - branch ahead and ticket done: `/pr` (with `/code-review` before)
   - merged feature: `/retro`
-- Priority: a missing setup config first (nothing else works without it), then waiting sessions, then possibly stale claims, then map frontier (lowest number first), then ready implementation work, then untriaged or unspecified work, then housekeeping (`/pr`, `/retro`).
-- A claim with no live Dryland session behind it is flagged "claimed, possibly stale". It is never auto-released.
+- Priority: a missing setup config first (nothing else works without it), then waiting sessions, then paused sessions that were waiting, then possibly stale claims, then map frontier (lowest number first), then ready implementation work, then untriaged or unspecified work, then housekeeping (`/pr`, `/retro`).
+- A claim with no live or paused session behind it, and whose branch is no checked-out ticket worktree, is flagged "claimed, possibly stale". It is never auto-released.
 - Unknown backend facts are flagged ("blocking unknown"), never guessed.
 - "Why not X?" lists X's unresolved blockers.
 - Skills without a mechanical trigger are never recommended by rules but stay launchable by the user.
@@ -261,8 +286,8 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 
 ### Lifecycle, packaging and release (ADRs 0002, 0004)
 
-- Quitting with live sessions shows a confirmation listing them, then kills them.
-- Quit and system shutdown share a hard 2-second budget, in this order: kill PTYs, release Dryland's own claims (local file operations only), flush UI state. Network-backed claim releases are never attempted at shutdown; the stale-claim flag covers them.
+- Quitting with live sessions, hidden ones included, shows a confirmation listing them, then stops them. Claims are kept and the sessions become paused.
+- Quit and system shutdown share a hard 2-second budget, in this order: kill PTYs, flush the session index and UI state. Nothing is released at quit or shutdown.
 - `electron-builder` targets: NSIS (Windows x64), DMG (macOS arm64 and x64), AppImage and deb (Linux x64). Unsigned in v1. Distribution through GitHub Releases plus build-from-source.
 - `electron-updater` with `latest` and `beta` channels, default `latest`, checked at most daily plus on demand, applied on next quit. Auto-update on Windows NSIS and Linux AppImage; notify-only on macOS and deb.
 - The `dryland` launcher ships in the install directory and is replaced on every update. Global `PATH` is opt-in (NSIS checkbox, a `dryland doctor` symlink on macOS/Linux, the deb's system link).
@@ -286,7 +311,7 @@ Other decisions:
 - Vitest everywhere.
 - Skill setup fingerprinting and verdict handling are tested through core functions with fixture skill directories (default, extras, modified).
 - User-config writes (Copilot hook file, `trustedFolders`) are tested against a temp home directory: install, status, remove, and that removal restores the file byte-identically and unrelated keys are untouched.
-- Shutdown ordering and the 2-second budget are tested in the main-process lifecycle module with a fake PTY provider and a slow claim release.
+- Shutdown ordering and the 2-second budget are tested in the main-process lifecycle module with a fake PTY provider and a slow index flush.
 - A manual smoke checklist gates `v1.0.0`: real GitHub and GitLab, Claude Code and Copilot interactive trust prompt, install/uninstall, beta to latest auto-update, on Windows.
 - Prior art: the repo has no code or tests yet. The fixtures are the existing `.scratch/mattpocock-ade/` map and tickets, the prototype's snapshot generator shows the snapshot shape, and the Copilot hook file shapes and observed event order are recorded in `research/hook-status-mapping.md`.
 
@@ -297,7 +322,7 @@ Other decisions:
 - Teams, multi-user collaboration, remote or cloud sessions.
 - Claude API, Claude Agent SDK, and the headless structured (`stream-json`) mode.
 - Forking Orca or reusing its app shell, relay or mobile code.
-- A background daemon and sessions surviving an app restart.
+- A background daemon, and session processes surviving an app restart (sessions are resumed through the Agent CLI instead, ADR 0010).
 - WSL as a PTY backend.
 - User-editable next-step rules.
 - An undo UI (git is the undo), webhooks, stored tracker tokens, an MCP server.
@@ -307,7 +332,7 @@ Other decisions:
 
 ## Further Notes
 
-- **ADR set**: 0001 (tracker CLI as single write path), 0002 (desktop stack), 0003 (write policy and skill setup), 0004 (packaging and testing), 0005 (user-level agent-config exception), 0006 (Agent adapters and hook-sourced status), 0007 (next-step rule engine), 0008 (CLI surface, normalized ticket model, live reporting). ADRs 0001 to 0004 predate the rename and carry a note that `ade` reads as `dryland`.
+- **ADR set**: 0001 (tracker CLI as single write path), 0002 (desktop stack), 0003 (write policy and skill setup), 0004 (packaging and testing), 0005 (user-level agent-config exception), 0006 (Agent adapters and hook-sourced status), 0007 (next-step rule engine), 0008 (CLI surface, normalized ticket model, live reporting), 0009 (claim recorded as a Dryland annotation), 0010 (sessions paused and resumed through a session index). ADRs 0001 to 0004 predate the rename and carry a note that `ade` reads as `dryland`.
 - **Glossary**: ticket kind, stale claim, next-up marker, live event and unlinked branch are defined in the root `GLOSSARY.md`.
 - **Claude Code adapter verification** is the first implementation ticket of that adapter, not a separate wayfinding ticket.
 - **Risks**:

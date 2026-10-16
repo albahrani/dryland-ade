@@ -1,0 +1,19 @@
+# Sessions are paused and resumed through a session index in the git common dir
+
+Quitting Dryland in the middle of a grilling or an implementation is normal, so a session must outlive its process: the Agent CLI keeps every session and can resume it, and Dryland only has to know which session belongs to which item. Releasing claims at quit (the earlier plan) and tying a claim to an in-memory Dryland session id made every such ticket lose its claim or read as stale after a restart.
+
+Dryland keeps a **session index** at `<git common dir>/dryland/sessions.json`: per item (a ticket, a map or a scratch worktree), its known Agent CLI sessions, newest first, each with its CLI, the CLI's own session id, when it was last seen and, for sessions the app ran, its last state (running, waiting, idle). The git common dir is the main checkout's `.git` from every worktree, so all worktrees and every `dryland` call share one file; git ignores it and never commits, clones or cleans it. The tracker lock already lives beside it.
+
+The index is a cache of facts reported by the Agent CLIs, never a source of truth. The app writes it from its sessions' hooks. Every mutating `dryland ticket` command run inside an Agent CLI session (detected through the adapter's session environment variable, such as `CLAUDE_CODE_SESSION_ID`) records that the session acted on that ticket, with or without the app running. `dryland status` stays a silent no-op without the app: nothing is recorded that rests on an assumption about how the user works outside Dryland. On startup and window focus the app reconciles the index with the tracker, git and each CLI's own session history for the item's worktree, adding sessions found there as *found*, without a last state.
+
+Rejected: committing the index to the default branch (a commit per state change buries the audit trail, contends for the tracker lock, and puts machine-local ids in a shared file); session ids in ticket metadata (a tracker write and commit on every `/clear`, network writes on GitHub and GitLab, ids that resume on one machine only); resuming by the CLI's "continue the newest session in this directory" (ambiguous on the main checkout, where every ticket shares one directory); a Dryland-owned "work session" entity with its own lifecycle (fights the CLIs' established meaning of session).
+
+## Consequences
+
+- A claim's holder is always a branch: the ticket's worktree branch for sessions Dryland starts. A claim is **live** while a session for it runs in Dryland, **paused** while the index knows a resumable session for it, and **possibly stale** otherwise, unless its branch is checked out in a ticket worktree. A claim held by the default branch with no known session is possibly stale.
+- A paused session shows its last state as "was waiting on you", "interrupted" or plain "Paused". A permission prompt does not survive a stop; resuming shows the conversation and the user tells the agent to go on.
+- Resume uses the CLI's resume-by-id. Without a known id it falls back to the CLI's own session picker in the item's directory, then to a fresh start with the pre-typed command.
+- Losing or deleting the index loses only resume shortcuts and last states; reconciliation rebuilds what it can.
+- Paused sessions drop out of views when their ticket is resolved or its claim released. Entries older than a retention setting (default 30 days) are removed.
+- Quit stops every live session and keeps every claim; nothing is released at quit or shutdown.
+- Amends ADR 0006 (a session's last state is kept in this index) and ADR 0008 (this index is the one thing not rebuilt from files, git and the tracker alone).
