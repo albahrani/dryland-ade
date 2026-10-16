@@ -22,3 +22,7 @@ Paused sessions become visible across the views.
 - [ ] Map rows show waiting and paused counts with the breakdown in the tooltip
 - [ ] The map tab header lists the counts and the paused items, and resumes that map's paused sessions
 - [ ] The status bar shows the paused count
+
+## Comments
+
+From mattpocock-ade/37 (90d69da): the Sessions view is packages/desktop/src/renderer/src/SessionsView.tsx; add Paused as a third Pane between Hidden and Open, reusing HiddenRow's shape (Resume in place of Stop) and the same groupSessions tree (shared/sessions-view.ts), which already sorts waiting groups first and Unlinked last. The layout assumes exactly two panes: SessionsLayout.collapsed is keyed by SESSIONS_PANES and the single sash is hiddenShare, so a third pane needs pane sizes as a list (one per pane, two sashes) and parseSessionsLayout must migrate saved hiddenShare values (ui-state sessionsLayout, per project). splitSessions decides Hidden vs Open; paused sessions need their own source since they have no live state. sessionCounts builds the status-bar text and needs the paused count. Group headers use groupCount/stateBreakdown; 'were waiting' needs its own count there.
