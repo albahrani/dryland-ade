@@ -17,6 +17,8 @@ import {
   type ProcessRunner,
   readRepoSnapshot,
   readTickets,
+  recordSession,
+  sessionIdArgs,
   skillCommand,
   worktreeForScratch,
   worktreeForTicket,
@@ -26,6 +28,7 @@ import { trackerArgs } from "../shared/tracker-actions.ts";
 import { chosenSkillCommand, MAP_WORKTREE_SLUG, NEW_MAP_EFFORT, type WorkTarget } from "../shared/work-target.ts";
 import type { DrylandCli } from "./dryland-cli.ts";
 import { createPretyper, PRETYPE_TIMING, type PretypeTiming } from "./pretype.ts";
+import { sessionItem } from "./session-recording.ts";
 import type { ShellSpec } from "./shell.ts";
 import type { TerminalManager } from "./terminals.ts";
 
@@ -61,8 +64,9 @@ export interface WorkStarter {
    * with its next-step command, and the ticket is claimed for the worktree's branch; a ticket someone else holds keeps its
    * claim and the session starts anyway. On a map: in its `<map>/scratch-wayfinder` worktree, created or reused,
    * with `/wayfinder <map>`. On a new map: in a new temporary worktree with `/wayfinder `, so the skill, not
-   * Dryland, writes the map. With `skill`, that installed skill's command is typed instead. Fails with a
-   * `DrylandError`, before touching anything, when the CLI or the skill is not installed.
+   * Dryland, writes the map. With `skill`, that installed skill's command is typed instead. A CLI that takes a
+   * session id is launched with a new one, recorded in the session index for the item before the spawn. Fails with
+   * a `DrylandError`, before touching anything, when the CLI or the skill is not installed.
    */
   startWork(projectPath: string, target: WorkTarget, agentId: string, skill?: string | null): Promise<StartedWork>;
   /** The sessions started so far, as recorded at spawn. */
@@ -78,18 +82,20 @@ function programFor(executable: string, args: string[], env: Record<string, stri
 }
 
 /**
- * The adapter's launch arguments, plus its settings flag naming a file in `hooksDir` that holds the status hooks,
- * written fresh on every launch. A file rather than inline JSON, which `cmd.exe` would mangle.
+ * The adapter's launch arguments, the CLI session id Dryland chose for it, and its settings flag naming a file in
+ * `hooksDir` that holds the status hooks, written fresh on every launch. A file rather than inline JSON, which
+ * `cmd.exe` would mangle.
  */
-function launchArgs(adapter: AgentAdapter, hooksDir: string): string[] {
-  if (adapter.hookInjection.kind !== "settings-flag") return [...adapter.launchArgs];
+function launchArgs(adapter: AgentAdapter, hooksDir: string, agentSessionId: string | null): string[] {
+  const args = [...adapter.launchArgs, ...(agentSessionId === null ? [] : sessionIdArgs(adapter, agentSessionId))];
+  if (adapter.hookInjection.kind !== "settings-flag") return args;
   mkdirSync(hooksDir, { recursive: true });
   const file = join(hooksDir, `${adapter.id}.json`);
   // Renamed into place, so a CLI starting in parallel never reads half a file.
   const temporary = `${file}.${randomUUID()}.tmp`;
   writeFileSync(temporary, JSON.stringify(hookSettings(adapter.statusEvents), null, 2));
   renameSync(temporary, file);
-  return [...adapter.launchArgs, adapter.hookInjection.flag, file];
+  return [...args, adapter.hookInjection.flag, file];
 }
 
 /** The user's home as the CLIs read it: `USERPROFILE` on Windows, `HOME` elsewhere; `null` when unset. */
@@ -187,6 +193,20 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         command = skill !== null ? chosenSkillCommand(skill, target) : "/wayfinder ";
       }
       const typed = command === null ? null : skillCommand(adapter, command);
+      const ticket = target.kind === "ticket" ? { map: target.ticket.map, id: target.ticket.id } : null;
+      const map = target.kind === "ticket" ? target.ticket.map : target.kind === "map" ? target.map : null;
+      // Dryland picks the CLI's session id and records it before the spawn, so the index knows it before any hook.
+      const agentSessionId = adapter.sessionIdFlag === null ? null : randomUUID();
+      if (agentSessionId !== null) {
+        try {
+          const item = sessionItem({ ticket, map, worktree });
+          warnings.push(
+            ...(await recordSession(runner, worktree.path, item, { adapter: adapter.id, sessionId: agentSessionId })),
+          );
+        } catch (error) {
+          warnings.push(`The session was not recorded in the session index (${(error as Error).message}).`);
+        }
+      }
       let terminalId = "";
       const pretyper =
         typed === null
@@ -199,7 +219,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
             });
       terminalId = terminals.open({
         cwd: worktree.path,
-        program: programFor(executable, launchArgs(adapter, hooksDir), env),
+        program: programFor(executable, launchArgs(adapter, hooksDir, agentSessionId), env),
         env: (id) => sessionEnv(adapter, sessionId, id),
         onOutput: pretyper,
       });
@@ -207,8 +227,9 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         id: sessionId,
         terminalId,
         agent: { id: adapter.id, name: adapter.name },
-        ticket: target.kind === "ticket" ? { map: target.ticket.map, id: target.ticket.id } : null,
-        map: target.kind === "ticket" ? target.ticket.map : target.kind === "map" ? target.map : null,
+        agentSessionId,
+        ticket,
+        map,
         worktree: { branch: worktree.branch, path: worktree.path },
         command: typed,
         startedAt: new Date().toISOString(),

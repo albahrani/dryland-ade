@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { CLAUDE_CODE, currentAgentSession, parseSessionIndex, type SessionIndex, withSession } from "../src/index.ts";
+import {
+  CLAUDE_CODE,
+  currentAgentSession,
+  parseSessionIndex,
+  resumeArgs,
+  type SessionIndex,
+  sessionIdArgs,
+  withSession,
+} from "../src/index.ts";
 
 const NOW = new Date("2026-10-16T12:00:00.000Z");
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * 24 * 60 * 60_000).toISOString();
@@ -55,6 +63,40 @@ describe("withSession", () => {
     const updated = withSession(index, "shop/03", { adapter: "claude-code", sessionId: "new" }, NOW, 7);
 
     expect(Object.keys(updated.items).sort()).toEqual(["shop/02", "shop/03"]);
+  });
+
+  it("sets the last state when one is given, and keeps the old one when none is", () => {
+    const index: SessionIndex = {
+      items: { "shop/01": [{ adapter: "claude-code", sessionId: "a", lastSeen: daysAgo(1), lastState: "running" }] },
+    };
+
+    const waiting = withSession(
+      index,
+      "shop/01",
+      { adapter: "claude-code", sessionId: "a", lastState: "waiting" },
+      NOW,
+    );
+    const unchanged = withSession(waiting, "shop/01", { adapter: "claude-code", sessionId: "a" }, NOW);
+
+    expect(waiting.items["shop/01"]?.[0]?.lastState).toBe("waiting");
+    expect(unchanged.items["shop/01"]).toEqual([
+      { adapter: "claude-code", sessionId: "a", lastSeen: NOW.toISOString(), lastState: "waiting" },
+    ]);
+  });
+});
+
+describe("session launch and resume arguments", () => {
+  it("give Claude Code its session id at launch and resume by id or through its picker", () => {
+    expect(sessionIdArgs(CLAUDE_CODE, "abc")).toEqual(["--session-id", "abc"]);
+    expect(resumeArgs(CLAUDE_CODE, "abc")).toEqual(["--resume", "abc"]);
+    expect(resumeArgs(CLAUDE_CODE, null)).toEqual(["--resume"]);
+  });
+
+  it("are empty, or absent, for a CLI that has neither flag", () => {
+    const plain = { ...CLAUDE_CODE, sessionIdFlag: null, resumeFlag: null };
+
+    expect(sessionIdArgs(plain, "abc")).toEqual([]);
+    expect(resumeArgs(plain, "abc")).toBeNull();
   });
 });
 

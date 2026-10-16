@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { AGENT_ADAPTERS } from "@dryland/core";
 import type { TicketActionResult } from "../shared/api.ts";
 
 export interface DrylandCliOptions {
@@ -16,7 +17,8 @@ export type DrylandRun = TicketActionResult;
 export interface DrylandCli {
   /**
    * Runs `dryland <args>` in `cwd`. A claim is made for the branch of `cwd`. Live events name `sessionId` when given:
-   * never a session the app itself was started from.
+   * never a session the app itself was started from, and no Agent CLI session it was started from is recorded in the
+   * session index.
    */
   run(args: string[], options: { cwd: string; sessionId?: string }): Promise<DrylandRun>;
 }
@@ -43,7 +45,12 @@ export function createDrylandCli({ runtime, cli, env }: DrylandCliOptions): Dryl
   return {
     run(args, { cwd, sessionId }) {
       // undefined drops a session id the app inherited; the child is spawned without it.
-      const runEnv = { ...env, ELECTRON_RUN_AS_NODE: "1", DRYLAND_SESSION_ID: sessionId };
+      const runEnv: Record<string, string | undefined> = {
+        ...env,
+        ELECTRON_RUN_AS_NODE: "1",
+        DRYLAND_SESSION_ID: sessionId,
+      };
+      for (const { sessionEnv } of AGENT_ADAPTERS) if (sessionEnv !== null) runEnv[sessionEnv] = undefined;
       return new Promise((resolve) => {
         execFile(
           runtime,

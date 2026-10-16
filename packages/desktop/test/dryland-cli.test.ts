@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { nodeProcessRunner, readSessionIndex } from "@dryland/core";
 import { describe, expect, it } from "vitest";
 import { createDrylandCli } from "../src/main/dryland-cli.ts";
 import { fixtureRepo } from "./fixture-repo.ts";
@@ -42,6 +43,15 @@ describe("running dryland from the app", () => {
     await inherited.run(["ticket", "claim", "shop/03"], { cwd: repo, sessionId: "session-a" });
 
     expect(git(repo, "log", "-2", "--format=%s")).toBe("Claim shop/03 for main\nClaim shop/02 for main");
+  });
+
+  it("records no Agent CLI session the app was started from in the session index", async () => {
+    const repo = fixtureRepo();
+    const inherited = cli({ ...process.env, CLAUDE_CODE_SESSION_ID: "the-cli-session-dryland-was-started-from" });
+
+    await inherited.run(["ticket", "claim", "shop/02"], { cwd: repo });
+
+    expect((await readSessionIndex(nodeProcessRunner, repo)).index.items).toEqual({});
   });
 
   it("leaves the change uncommitted with --no-commit", async () => {

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner } from "@dryland/core";
+import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner, readSessionIndex } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
 import { createDrylandCli } from "../src/main/dryland-cli.ts";
 import { createTerminalManager } from "../src/main/terminals.ts";
@@ -103,10 +103,15 @@ describe("starting work on a ticket", () => {
     const home = mkdtempSync(join(tmpdir(), "dryland-home-"));
     const { provider, starter, hooksDir } = setup(undefined, { HOME: home, USERPROFILE: home });
 
-    await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
 
     const settingsFile = join(hooksDir, "claude-code.json");
-    expect(provider.spawned[0]?.options.args).toEqual(["--settings", settingsFile]);
+    expect(provider.spawned[0]?.options.args).toEqual([
+      "--session-id",
+      session.agentSessionId,
+      "--settings",
+      settingsFile,
+    ]);
     expect(JSON.parse(readFileSync(settingsFile, "utf8"))).toEqual(hookSettings(CLAUDE_CODE.statusEvents));
     expect(readdirSync(home)).toEqual([]);
   });
@@ -186,6 +191,31 @@ describe("starting work on a ticket", () => {
       ticket: { map: "shop", id: "02" },
       map: "shop",
     });
+  });
+
+  it("launches the CLI with a session id of its own and holds it in the index for the ticket right after spawn", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+
+    const { session } = await starter.startWork(repo, onTicket("02"), "claude-code");
+
+    expect(session.agentSessionId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(session.agentSessionId).not.toBe(session.id);
+    const { index } = await readSessionIndex(nodeProcessRunner, repo);
+    expect(index.items["shop/02"]).toEqual([
+      { adapter: "claude-code", sessionId: session.agentSessionId, lastSeen: expect.any(String) },
+    ]);
+  });
+
+  it("gives every launch a new CLI session id, newest first in the index", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+
+    const { session: first } = await starter.startWork(repo, onTicket("02"), "claude-code");
+    const { session: second } = await starter.startWork(repo, onTicket("02"), "claude-code");
+
+    const { index } = await readSessionIndex(nodeProcessRunner, repo);
+    expect(index.items["shop/02"]?.map((s) => s.sessionId)).toEqual([second.agentSessionId, first.agentSessionId]);
   });
 
   it("shows an Agent CLI that is not installed as unavailable and does not launch it", async () => {
@@ -302,6 +332,18 @@ describe("continuing a map and starting a new one", () => {
     expect(readdirSync(join(repo, ".scratch"))).toEqual(["shop"]);
     expect(readdirSync(join(first.worktree.path, ".scratch"))).toEqual(["shop"]);
     expect(git(repo, "status", "--porcelain")).toBe("");
+  });
+
+  it("records a map's session under the map, and a new map's under its scratch worktree branch", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+
+    const { session: map } = await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code");
+    const { session: newMap } = await starter.startWork(repo, { kind: "new-map" }, "claude-code");
+
+    const { index } = await readSessionIndex(nodeProcessRunner, repo);
+    expect(index.items["shop"]?.map((s) => s.sessionId)).toEqual([map.agentSessionId]);
+    expect(index.items["new-map/scratch-wayfinder"]?.map((s) => s.sessionId)).toEqual([newMap.agentSessionId]);
   });
 });
 

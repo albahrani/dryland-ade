@@ -101,6 +101,17 @@ describe("dryland status", () => {
     ]);
   });
 
+  it("sends the Agent CLI's session id when it runs in a CLI session, and none outside one", async () => {
+    const repo = TempRepo.create();
+    const { env, received } = await runningApp();
+
+    await repo.run(["status", "session.idle"], repo.path, { ...env, CLAUDE_CODE_SESSION_ID: "cli-1" });
+    await repo.run(["status", "session.idle"], repo.path, env);
+
+    expect(received.map((e) => e.agent_session_id)).toEqual(["cli-1", undefined]);
+    expect(received[1]).not.toHaveProperty("agent_session_id");
+  });
+
   it("exits 0 with no output when the app is not running", async () => {
     const repo = TempRepo.create();
 

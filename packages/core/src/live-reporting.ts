@@ -29,6 +29,8 @@ export interface LiveEvent {
   kind: LiveEventKind;
   /** ISO timestamp of when the event happened. */
   timestamp: string;
+  /** The Agent CLI's own id of the session it came from, when the CLI set one for its hooks (ADR 0010). */
+  agent_session_id?: string;
   payload?: unknown;
 }
 
@@ -59,10 +61,12 @@ function appDir(env: Env, platform: NodeJS.Platform, home: string): string {
 /** The event `value` describes, or `null` when it is not a well-formed live event. */
 export function parseLiveEvent(value: unknown): LiveEvent | null {
   if (value === null || typeof value !== "object") return null;
-  const { session_id, kind, timestamp, payload } = value as Record<string, unknown>;
+  const { session_id, kind, timestamp, agent_session_id, payload } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || typeof timestamp !== "string") return null;
   if (!isLiveEventKind(kind)) return null;
+  if (agent_session_id !== undefined && typeof agent_session_id !== "string") return null;
   const event: LiveEvent = { session_id, kind, timestamp };
+  if (agent_session_id) event.agent_session_id = agent_session_id;
   return payload === undefined ? event : { ...event, payload };
 }
 

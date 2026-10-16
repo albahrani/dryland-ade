@@ -42,6 +42,7 @@ import { quitConfirmation, runShutdown, shutdownSteps } from "./lifecycle.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
+import { createSessionRecorder } from "./session-recording.ts";
 import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { watchProject } from "./watch-project.ts";
@@ -90,6 +91,12 @@ let stopWatching: (() => void) | null = null;
 let live: LiveListener | null = null;
 
 const status = createSessionStatus();
+// The session index is a cache: a write that fails is logged, never shown as an error.
+const recorder = createSessionRecorder({
+  runner: nodeProcessRunner,
+  sessions: () => work.sessions(),
+  warn: (message) => console.warn(message),
+});
 const sendSessionStates = () => sendToWindow("sessions:states", status.states());
 
 function settings(): AppSettings {
@@ -121,6 +128,7 @@ function terminalEnded(id: string): void {
 /** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
 function onLiveEvent(event: LiveEvent): void {
   sendToWindow("live:event", event);
+  recorder.apply(event);
   const stateChanged = status.apply(event);
   if (stateChanged) sendSessionStates();
   // A session's state moves the next steps too: a waiting one ranks first.
@@ -427,12 +435,12 @@ const runningSessions = () => {
 /**
  * Stops everything within the shutdown budget: no process outlives the app (ADR 0002). Nothing is released and no
  * tracker is written; claims stay and the sessions become paused (ADR 0010). UI state is written as it changes, so
- * none is pending here.
+ * none is pending here; session index writes may be, and are flushed.
  */
 async function stopEverything(): Promise<void> {
   stopWatching?.();
   stopWatching = null;
-  const report = await runShutdown(shutdownSteps(terminals));
+  const report = await runShutdown(shutdownSteps(terminals, [{ name: "flush session index", run: recorder.flush }]));
   if (report.failed.length > 0 || report.abandoned.length > 0) console.error("Shutdown was cut short.", report);
 }
 

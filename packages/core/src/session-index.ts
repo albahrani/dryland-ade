@@ -23,6 +23,9 @@ export interface IndexedSession {
   lastState?: (typeof LAST_STATES)[number];
 }
 
+/** A session as it is recorded: its last state only when the app saw one, which then replaces the old. */
+export type RecordedSession = Pick<IndexedSession, "adapter" | "sessionId" | "lastState">;
+
 /**
  * The session index: per item (a ticket `<map>/<NN>`, a map, or a scratch worktree branch), its known sessions,
  * newest first. A cache of what the Agent CLIs reported, never a source of truth.
@@ -107,18 +110,25 @@ export function sessionsOf(index: SessionIndex, item: string): IndexedSession[] 
 
 /**
  * `index` with `session` recorded for `item`: moved to the front with its last seen set to `now`, never duplicated,
- * keeping a last state it had. Sessions last seen before the retention period, and items left empty, are dropped.
+ * with the last state given, else keeping the one it had. Sessions last seen before the retention period, and items
+ * left empty, are dropped.
  */
 export function withSession(
   index: SessionIndex,
   item: string,
-  session: { adapter: string; sessionId: string },
+  session: RecordedSession,
   now: Date,
   retentionDays: number = DEFAULT_SESSION_RETENTION_DAYS,
 ): SessionIndex {
   const same = (s: IndexedSession) => s.adapter === session.adapter && s.sessionId === session.sessionId;
   const known = sessionsOf(index, item).find(same);
-  const recorded: IndexedSession = { ...known, ...session, lastSeen: now.toISOString() };
+  const { lastState = known?.lastState } = session;
+  const recorded: IndexedSession = {
+    adapter: session.adapter,
+    sessionId: session.sessionId,
+    lastSeen: now.toISOString(),
+    ...(lastState === undefined ? {} : { lastState }),
+  };
   const items: Record<string, IndexedSession[]> = {
     ...index.items,
     [item]: [recorded, ...sessionsOf(index, item).filter((s) => !same(s))],
@@ -145,7 +155,7 @@ export async function recordSession(
   runner: ProcessRunner,
   cwd: string,
   item: string,
-  session: { adapter: string; sessionId: string },
+  session: RecordedSession,
   options: RecordSessionOptions = {},
 ): Promise<string[]> {
   const path = await sessionIndexPath(runner, cwd);

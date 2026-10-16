@@ -188,14 +188,17 @@ function parsePayload(text: string | undefined): unknown {
 }
 
 /**
- * Tells the running app about `kind`, for the session in `DRYLAND_SESSION_ID` unless `session` names one.
- * Fire-and-forget: with no app running, or one that does not answer, nothing happens.
+ * Tells the running app about `kind`, for the session in `DRYLAND_SESSION_ID` unless `session` names one, with the
+ * Agent CLI's own session id when the CLI set one. Fire-and-forget: with no app running, or one that does not
+ * answer, nothing happens.
  */
 function reportLiveEvent(kind: LiveEventKind, payload?: unknown, session?: string): Promise<boolean> {
+  const agentSession = currentAgentSession(AGENT_ADAPTERS, process.env);
   const event: LiveEvent = {
     session_id: session ?? process.env["DRYLAND_SESSION_ID"] ?? "",
     kind,
     timestamp: new Date().toISOString(),
+    ...(agentSession === null ? {} : { agent_session_id: agentSession.sessionId }),
   };
   return sendLiveEvent(payload === undefined ? event : { ...event, payload });
 }

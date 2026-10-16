@@ -45,16 +45,19 @@ async function session(settings: unknown) {
     writeFileSync(file, JSON.stringify(settings));
     args.push("--settings", file);
   }
-  /** Fires `event` in the fake CLI and returns the session events the app received for it. */
-  const fire = async (event: string) => {
+  /** Fires `event` in the fake CLI, in its session `cliSession` when given, and returns the events the app received. */
+  const fireEvents = async (event: string, cliSession?: string) => {
     const before = received.length;
+    const sessionArgs = cliSession === undefined ? [] : ["--session-id", cliSession];
     // Not spawnSync: the listener answers on this process's event loop.
     await new Promise((resolve) =>
-      spawn(process.execPath, [...args, event], { env, cwd: appDir }).on("close", resolve),
+      spawn(process.execPath, [...args, ...sessionArgs, event], { env, cwd: appDir }).on("close", resolve),
     );
-    return received.slice(before).map((e) => ({ session: e.session_id, kind: e.kind }));
+    return received.slice(before);
   };
-  return { fire };
+  /** The session and kind of each event `event` reported. */
+  const fire = async (event: string) => (await fireEvents(event)).map((e) => ({ session: e.session_id, kind: e.kind }));
+  return { fire, fireEvents };
 }
 
 describe("Claude Code status hooks", () => {
@@ -76,6 +79,16 @@ describe("Claude Code status hooks", () => {
     const { fire } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
     expect(await fire(event)).toEqual([{ session: "session-a", kind }]);
+  });
+
+  it("carry the CLI's own session id, and the new one once the CLI has changed it, as after /clear", async () => {
+    const { fireEvents } = await session(hookSettings(CLAUDE_CODE.statusEvents));
+
+    const [before] = await fireEvents("Stop", "launched-id");
+    const [after] = await fireEvents("UserPromptSubmit", "cleared-id");
+
+    expect(before).toMatchObject({ session_id: "session-a", kind: "session.idle", agent_session_id: "launched-id" });
+    expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
   });
 
   it("report nothing for a notification that is not about the session's state", async () => {

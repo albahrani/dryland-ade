@@ -68,6 +68,8 @@ export interface SessionInfo {
   /** The terminal it runs in, which is also its `DRYLAND_PANE_KEY`. */
   terminalId: string;
   agent: { id: string; name: string };
+  /** The Agent CLI's own id of the session, given at launch; `null` for a CLI that cannot be told one. */
+  agentSessionId: string | null;
   /** The ticket it works on; `null` for a map's own session or a new map's. */
   ticket: TicketRef | null;
   /** The map it works on: the ticket's, the map continued, or `null` for a map not yet charted. */

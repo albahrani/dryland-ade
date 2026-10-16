@@ -115,7 +115,18 @@ describe("live reporting", () => {
     expect((await post({ ...EVENT, kind: "session.exploded" })).status).toBe(400);
     expect((await post({ ...EVENT, session_id: 7 })).status).toBe(400);
     expect((await post({ kind: "ticket.changed" })).status).toBe(400);
+    expect((await post({ ...EVENT, agent_session_id: 7 })).status).toBe(400);
     expect(received).toEqual([]);
+  });
+
+  it("carries the Agent CLI's session id when the event has one", async () => {
+    const dir = appDir();
+    const { received } = await listen(dir);
+    const event: LiveEvent = { ...EVENT, kind: "session.idle", agent_session_id: "cli-session-1" };
+
+    await sendLiveEvent(event, { env: { DRYLAND_APP_DIR: dir } });
+
+    expect(received).toEqual([event]);
   });
 
   it("listens on the loopback address only", async () => {

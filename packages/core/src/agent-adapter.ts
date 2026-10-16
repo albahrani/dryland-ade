@@ -44,6 +44,13 @@ export interface AgentAdapter {
    * the agent knows which session acted (ADR 0010); `null` when the CLI sets none.
    */
   sessionEnv: string | null;
+  /** The launch flag that sets the CLI's session id, so Dryland knows it from spawn; `null` when the CLI has none. */
+  sessionIdFlag: string | null;
+  /**
+   * The flag that resumes a session: followed by an id it resumes that one, alone it opens the CLI's own picker;
+   * `null` when the CLI cannot resume.
+   */
+  resumeFlag: string | null;
   /** How status hooks reach the CLI; acted on by the session status tickets. */
   hookInjection: { kind: "settings-flag"; flag: string } | { kind: "user-config" } | { kind: "none" };
   /**
@@ -81,6 +88,9 @@ export const CLAUDE_CODE: AgentAdapter = {
     "CLAUDE_PID",
   ],
   sessionEnv: "CLAUDE_CODE_SESSION_ID",
+  // Verified against 2.1.301: hooks see the id given at launch in CLAUDE_CODE_SESSION_ID (ticket 74).
+  sessionIdFlag: "--session-id",
+  resumeFlag: "--resume",
   hookInjection: { kind: "settings-flag", flag: "--settings" },
   // SessionStart (fires at launch) and SubagentStop (fires after Stop) are left out: neither changes the state.
   // PermissionRequest also fires for AskUserQuestion and ExitPlanMode, in default, plan and auto mode, so their
@@ -110,6 +120,20 @@ export const AGENT_ADAPTERS: readonly AgentAdapter[] = [CLAUDE_CODE];
 /** A rule engine command, such as `/implement shop/02`, written the way the adapter's CLI invokes skills. */
 export function skillCommand(adapter: AgentAdapter, command: string): string {
   return adapter.skillPrefix + command.replace(/^\//, "");
+}
+
+/** The launch arguments that give a new session the id `sessionId`; none when the CLI cannot be told one. */
+export function sessionIdArgs(adapter: AgentAdapter, sessionId: string): string[] {
+  return adapter.sessionIdFlag === null ? [] : [adapter.sessionIdFlag, sessionId];
+}
+
+/**
+ * The arguments that resume session `sessionId`, or open the CLI's own picker when it is `null`; `null` when the
+ * CLI cannot resume.
+ */
+export function resumeArgs(adapter: AgentAdapter, sessionId: string | null): string[] | null {
+  if (adapter.resumeFlag === null) return null;
+  return sessionId === null ? [adapter.resumeFlag] : [adapter.resumeFlag, sessionId];
 }
 
 /** A Claude Code `hooks` settings entry: command hooks for the events a matcher selects. */
