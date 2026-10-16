@@ -1,7 +1,8 @@
 # Quit and shutdown lifecycle
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T12:42:18.967Z","was":"ready-for-agent"}} -->
 Blocked by: 39
 
 Spec: [spec](../spec.md), user stories 55, 56. "Lifecycle, packaging and release". ADRs 0002, 0004, 0010.
