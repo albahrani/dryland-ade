@@ -12,7 +12,9 @@ Rejected: committing the index to the default branch (a commit per state change 
 
 - A claim's holder is always a branch: the ticket's worktree branch for sessions Dryland starts. A claim is **live** while a session for it runs in Dryland, **paused** while the index knows a resumable session for it, and **possibly stale** otherwise, unless its branch is checked out in a ticket worktree. A claim held by the default branch with no known session is possibly stale.
 - A paused session shows its last state as "was waiting on you", "interrupted" or plain "Paused". A permission prompt does not survive a stop; resuming shows the conversation and the user tells the agent to go on.
-- Resume uses the CLI's resume-by-id. Without a known id it falls back to the CLI's own session picker in the item's directory, then to a fresh start with the pre-typed command.
+- Resume uses the CLI's resume-by-id, after checking the CLI still has that session: Copilot CLI silently starts a blank session under an unknown id, and Claude Code deletes transcripts after 30 days. Without a usable id it falls back to the CLI's own session picker in the item's directory, then to a fresh start with the pre-typed command.
+- Dryland launches each session with the CLI's `--session-id <uuid>`, so the index knows the session from spawn rather than from its first hook.
+- Reconciling from a CLI's own history works for Claude Code, whose history is kept per working directory and named by session id. Copilot CLI's history is not split by directory and its formats are undocumented, so Copilot sessions are known only from hooks and `dryland` commands. See `research/agent-cli-session-resume.md`.
 - Losing or deleting the index loses only resume shortcuts and last states; reconciliation rebuilds what it can.
 - Paused sessions drop out of views when their ticket is resolved or its claim released. Entries older than a retention setting (default 30 days) are removed.
 - Quit stops every live session and keeps every claim; nothing is released at quit or shutdown.
