@@ -1,8 +1,7 @@
 # Session index in core
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T20:20:33.667Z","was":"ready-for-agent"}} -->
+Status: resolved
 
 Spec: [spec](../spec.md), user stories 101, 102. "Sessions, pausing and resuming". ADR 0010. Session ids per CLI: `research/agent-cli-session-resume.md`.
 
@@ -20,14 +19,18 @@ The session index that links items to their Agent CLI sessions, and its first wr
 
 ## Acceptance criteria
 
-- [ ] The index path is the same from the main checkout and from a linked worktree, and `git status` stays clean after a write
-- [ ] `dryland ticket claim` with `CLAUDE_CODE_SESSION_ID` set records that session on the ticket, and `dryland ticket show` lists it
-- [ ] Without the variable, no entry is written
-- [ ] Recording the same session id twice updates last seen without a duplicate
-- [ ] Parallel `dryland` processes recording different sessions lose no entry
-- [ ] Sessions older than the retention period are dropped on the next write
-- [ ] A missing or unparseable index reads as empty and never throws; the next write replaces it
+- [x] The index path is the same from the main checkout and from a linked worktree, and `git status` stays clean after a write
+- [x] `dryland ticket claim` with `CLAUDE_CODE_SESSION_ID` set records that session on the ticket, and `dryland ticket show` lists it
+- [x] Without the variable, no entry is written
+- [x] Recording the same session id twice updates last seen without a duplicate
+- [x] Parallel `dryland` processes recording different sessions lose no entry
+- [x] Sessions older than the retention period are dropped on the next write
+- [x] A missing or unparseable index reads as empty and never throws; the next write replaces it
 
 ## Comments
 
 From mattpocock-ade/41 (bc47448): quit and shutdown run shutdownSteps(terminals, flushes) from packages/desktop/src/main/lifecycle.ts under one 2-second budget; PTYs are killed first, then each flush step in order, and a step still running at the deadline is abandoned. Index writes that complete as they happen need no step. Any index write the app holds back (such as a last state written by the app) must be added there as a flush step, and stay a local file operation.
+
+## Answer
+
+Built in 9068120. Core module session-index.ts: sessionIndexPath (git rev-parse --git-common-dir on the ProcessRunner seam), readSessionIndex, the pure withSession and parseSessionIndex, recordSession (sessions.lock beside tracker.lock, reusing the tracker's acquireLock, writeAtomically and leftover-temp cleanup, now exported from tracker-write.ts) and currentAgentSession. Entries are {adapter, sessionId, lastSeen, lastState?}, keyed by item, newest first, deduplicated on adapter plus session id; a re-recorded session keeps its lastState. Retention is a parameter (DEFAULT_SESSION_RETENTION_DAYS = 30) applied on every write, also dropping empty items. AgentAdapter gained sessionEnv (CLAUDE_CODE_SESSION_ID for Claude Code, null allowed). The CLI records on claim, release, resolve, block, comment and triage (not create) after the command succeeds; a failed index write is a warning, never a failed command. ticket show adds sessions to --json and a Sessions section to text. Decisions: a missing index reads as empty silently, only an unparseable or unreadable one warns, so every ticket show before the first session stays quiet; malformed entries inside a valid index are dropped individually. The CLI test harness strips adapter session variables unless a test sets them, since the suite may itself run inside a Claude Code session. Known limits: the app does not write lastState yet, and the retention setting is not wired to Settings (ticket 55).

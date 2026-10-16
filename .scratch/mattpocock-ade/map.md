@@ -122,6 +122,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Claims held by the worktree branch](issues/72-claims-held-by-the-worktree-branch.md): Start work and dryland ticket claim claim for the worktree branch, never a session id; a claim held by a ticket worktree's branch is never stale.
 
+- [Session index in core](issues/73-session-index-in-core.md): Mutating dryland ticket commands run in an Agent CLI session record it in <git common dir>/dryland/sessions.json under its own lock; ticket show lists a ticket's sessions.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
