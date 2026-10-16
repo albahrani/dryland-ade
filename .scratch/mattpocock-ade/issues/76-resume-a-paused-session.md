@@ -24,3 +24,7 @@ A ticket whose session is paused offers to continue that same Agent CLI session.
 - [ ] Tickets tree rows and tabs show the pause badge in the colour of the label
 - [ ] The last output line shows for a session paused during this run and is left out after a restart
 - [ ] A Playwright test stops a session and resumes it with the fake-CLI stub
+
+## Comments
+
+From mattpocock-ade/74 (e273a26): resumeArgs(adapter, id | null) in core gives the resume arguments ([--resume, id], or [--resume] for the picker; null when the CLI cannot resume), and sessionIdArgs the launch ones. SessionInfo.agentSessionId is the id given at launch; after /clear the newest id lives only in the index (sessionsOf(index, item)[0]), so resume should read the index, not SessionInfo. sessionItem(session) in desktop/src/main/session-recording.ts maps a session to its index item.
