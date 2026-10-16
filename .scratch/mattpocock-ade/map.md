@@ -128,6 +128,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Hidden session tabs and Stop session](issues/75-hidden-session-tabs-and-stop-session.md): Closing a session tab hides it, keeping its CLI running with bounded output replayed on Show from its ticket or map; unseen output is tracked; Stop kills the PTY and keeps claim and last state, asking per a stored rule.
 
+- [Sessions view panes and status bar](issues/37-sessions-view-and-status-bar.md): Hidden and Open panes (grouped tree, collapse, sash, per-project layout), selected-session status bar and waiting badge; next-up markers on waiting sessions show the session.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
