@@ -12,7 +12,7 @@ The app knows each session's Agent CLI id from spawn and keeps the index current
 
 - **Adapter fields**: the launch flag that sets the session id (`--session-id` for Claude Code), the resume arguments by id (`--resume <id>`) and without one (`--resume`, the CLI's picker). The session variable field comes from "Session index in core".
 - **Launch**: `startWork` chooses a UUID, launches the CLI with it, and records it in the index for the ticket at spawn, before any hook fires. `SessionInfo` carries the CLI session id.
-- **Hooks**: `dryland status` also sends the CLI session id it finds in the adapter's session variable, which the CLI sets for hooks. This is one new optional field in the live event (ADR 0008's schema). On each state event the app updates the entry's last state and last seen. An id the item does not know yet, as after `/clear`, is recorded as the item's newest session; older ones stay.
+- **Hooks**: `dryland status` also sends the CLI session id it finds in the adapter's session variable, which the CLI sets for hooks. This is one new optional field in the live event, `agent_session_id` (the spec's event shape; ADR 0010 amends ADR 0008). On each state event the app updates the entry's last state and last seen. An id the item does not know yet, as after `/clear`, is recorded as the item's newest session; older ones stay.
 - `CLAUDE_CODE_CHILD_SESSION` stays stripped from session environments: it hides the child's sessions from resume.
 
 ## Acceptance criteria

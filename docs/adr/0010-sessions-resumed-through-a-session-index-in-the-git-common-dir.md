@@ -18,4 +18,4 @@ Rejected: committing the index to the default branch (a commit per state change 
 - Losing or deleting the index loses only resume shortcuts and last states; reconciliation rebuilds what it can.
 - Paused sessions drop out of views when their ticket is resolved or its claim released. Entries older than a retention setting (default 30 days) are removed.
 - Quit stops every live session and keeps every claim; nothing is released at quit or shutdown.
-- Amends ADR 0006 (a session's last state is kept in this index) and ADR 0008 (this index is the one thing not rebuilt from files, git and the tracker alone).
+- Amends ADR 0006 (a session's last state is kept in this index) and ADR 0008 (this index is the one thing not rebuilt from files, git and the tracker alone; live events gain an optional `agent_session_id`, the Agent CLI's own id, so the index follows a session through `/clear`).

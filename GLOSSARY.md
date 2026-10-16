@@ -63,6 +63,14 @@ _Avoid_: Chat, run, conversation, work session
 A session of a claimed ticket that is not live but that the ADE knows and can resume.
 _Avoid_: Suspended, interrupted, closed session
 
+**Hidden session**:
+A live session whose tab is closed: its process keeps running and its output is kept, and it shows again from its ticket, map or the Sessions view.
+_Avoid_: Background session, minimized session, closed session
+
+**Session index**:
+The ADE's machine-local record of which sessions belong to which ticket, map or scratch worktree, kept beside the repository's git data and never committed; a cache rebuilt where possible from the Agent CLIs.
+_Avoid_: Session store, session database, session log
+
 **Live event**:
 A message the ADE's command-line tool sends to the running ADE when a session changes state or a ticket changes; shown live and never stored.
 _Avoid_: Log entry, notification

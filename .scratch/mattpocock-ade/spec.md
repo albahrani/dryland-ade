@@ -90,7 +90,7 @@ Dryland is unofficial and community-made, MIT licensed, single user and local on
 51. As a developer, I want status for CLIs without hooks marked approximate, so that I know how much to trust it.
 52. As a developer, I want best-effort Agent CLIs (launch and pre-typed command only) besides Claude Code and Copilot CLI, so that I can use other agents.
 53. As a developer, I want a live-events panel (expanded, one line, or hidden) showing session events and every Dryland write, so that I can follow what is happening.
-54. As a developer, I want a status bar with the selected session's state, its branch, and live/total session counts, so that context is always visible.
+54. As a developer, I want a status bar with the selected session's state, its branch, and the open, hidden (waiting) and paused session counts, so that context is always visible.
 55. As a developer, I want a confirmation listing live sessions when I quit, hidden ones included and those with an unseen question or unread output first, so that I do not kill agents by accident.
 56. As a developer, I want quitting to keep my claims and my sessions resumable, so that I can pick up a grilling or an implementation where I left it.
 57. As a Copilot CLI user, I want Dryland-created worktrees trusted automatically, so that no trust prompt interrupts the launch.
@@ -208,7 +208,7 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 
 - A session is the Agent CLI's own session: it outlives its process and is resumable. It is live while its process runs in Dryland. A paused session is a known, resumable session of a claimed item with no live process.
 - The session index lives at `<git common dir>/dryland/sessions.json`, shared by all worktrees and never committed. Per item (ticket, map or scratch worktree) it lists known sessions, newest first, with CLI, the CLI's session id, last seen and, for sessions the app ran, last state.
-- The app writes the index from its sessions' hooks, including the new session id after `/clear`. Every mutating `dryland ticket` command run inside an Agent CLI session records that session against the ticket, with or without the app. `dryland status` stays a no-op without the app.
+- The app writes the index from its sessions' hooks, including the new session id after `/clear`. Every mutating `dryland ticket` command run inside an Agent CLI session records that session against the ticket, with or without the app. `dryland ticket show` lists a ticket's known sessions. `dryland status` stays a no-op without the app.
 - Startup and window focus reconcile the index with the tracker, git and each CLI's own history for the item's worktree (Claude Code only; Copilot's history is not per directory). Sessions found there are added without a last state.
 - Claim states: live (a session runs in Dryland), paused (the index knows a resumable session), possibly stale (neither, and its branch is no checked-out ticket worktree). A default-branch claim with no known session is possibly stale.
 - Paused labels from the last state: "was waiting on you", "interrupted", or "Paused".
@@ -243,7 +243,7 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 
 - The app listens on `127.0.0.1` on a random port. Port and a random per-launch token are written to a lock file in a per-user app directory.
 - `dryland status` POSTs an authenticated event and exits 0 silently when there is no lock file or the connection fails. Reporting is fire-and-forget.
-- Event shape: `{session_id, kind, timestamp, payload?}`. Kinds: `session.started`, `session.running`, `session.waiting`, `session.idle`, `session.ended`, and `ticket.changed`, which every mutating `ticket` and `map` command emits.
+- Event shape: `{session_id, agent_session_id?, kind, timestamp, payload?}`. `agent_session_id` is the Agent CLI's own session id, read by `dryland status` from the adapter's session variable; it is how the session index learns a new id after `/clear` (ADR 0010). Kinds: `session.started`, `session.running`, `session.waiting`, `session.idle`, `session.ended`, and `ticket.changed`, which every mutating `ticket` and `map` command emits.
 - Events drive the session list, ticket refresh and the live-events panel. They are not persisted; only a session's last state is kept in the session index (ADR 0010).
 
 ### Next-step rule engine
