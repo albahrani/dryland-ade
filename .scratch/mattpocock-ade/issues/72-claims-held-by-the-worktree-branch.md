@@ -1,7 +1,8 @@
 # Claims held by the worktree branch
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T13:28:27.856Z","was":"ready-for-agent"}} -->
 
 Spec: [spec](../spec.md), user stories 56, 63. "Sessions, pausing and resuming". ADR 0010.
 
