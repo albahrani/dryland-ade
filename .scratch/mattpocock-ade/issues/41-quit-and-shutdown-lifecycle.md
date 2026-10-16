@@ -8,7 +8,7 @@ Spec: [spec](../spec.md), user stories 55, 56. "Lifecycle, packaging and release
 
 ## What to build
 
-Quitting leaves a consistent state and keeps the user's work resumable. Quitting with live sessions shows a confirmation listing every one of them, including sessions not shown in a tab, then stops them. Nothing is released: claims stay, and the sessions become paused (ADR 0010), resumed through the Agent CLI on a later start.
+Quitting leaves a consistent state and keeps the user's work resumable. Quitting with live sessions shows a confirmation listing every one of them, including sessions not shown in a tab, then stops them. Once "Hidden session tabs and Stop session" has landed, sessions waiting on the user or with unseen output are listed first. Nothing is released: claims stay, and the sessions become paused (ADR 0010), resumed through the Agent CLI on a later start.
 
 Quit and system shutdown share a hard 2-second budget, in this order: kill PTYs, flush the session index (once it exists) and UI state. No tracker write and no network call is made at quit or shutdown.
 

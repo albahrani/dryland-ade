@@ -19,6 +19,8 @@ Rules: never rewrite unrelated keys, skip unparseable files, honour Copilot's co
 
 Status mapping: running from `userPromptSubmitted`, `preToolUse`, `postToolUse`; waiting from `permissionRequest` and `notification` (permission prompt); idle from `agentStop`; ended from `sessionEnd`. `sessionStart` fires only at the first submitted prompt, so "launched" comes from the PTY spawn and the CLI's own session id is learned at first submit. Copilot's idle notification is not relied on.
 
+Session ids and resume (ADR 0010, `research/agent-cli-session-resume.md`), filling the adapter fields the paused-session tickets add: session variable `COPILOT_AGENT_SESSION_ID`; launch with `--session-id <uuid>`; resume with `--resume=<id>`, picker with `--resume`. Copilot silently starts a blank session under an unknown id, so the session-exists check looks for `~/.copilot/session-state/<id>/` before resuming. Its history is not per directory, so it is not reconciled.
+
 The dev machine has no Copilot CLI. Build from the recorded shapes and event order; the real-CLI re-check is part of the v1.0.0 smoke checklist.
 
 ## Acceptance criteria

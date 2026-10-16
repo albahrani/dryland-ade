@@ -10,7 +10,7 @@ Spec: [spec](../spec.md), user stories 61, 64, 85. "UI". Layout detail: `prototy
 
 The Settings modal with its six tabs: General, Agent CLIs, Tracker, Skills, Write confirmations, Updates. This ticket builds the modal and fills three tabs; the other three show a placeholder until their tickets land.
 
-- **General**: live-events panel mode, legend reset, and the other app-wide UI preferences that already exist.
+- **General**: live-events panel mode, legend reset, and the other app-wide UI preferences that already exist, including the session settings once their tickets have landed: the Stop session confirmation rule, "Resume sessions on start" and the session retention period (default 30 days).
 - **Tracker**: auto-commit, and the polling interval for GitHub/GitLab if polling exists by then.
 - **Write confirmations**: one row per confirmation type (tracker metadata write from a button, Dryland-owned user-config write, prose annotation) with its "do not ask again" state and a reset.
 
