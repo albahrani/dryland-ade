@@ -124,6 +124,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Session index in core](issues/73-session-index-in-core.md): Mutating dryland ticket commands run in an Agent CLI session record it in <git common dir>/dryland/sessions.json under its own lock; ticket show lists a ticket's sessions.
 
+- [Sessions launched with a known id](issues/74-sessions-launched-with-a-known-id.md): Claude Code launches with a Dryland-chosen --session-id recorded before spawn; hook events carry agent_session_id and keep last state, last seen and post-/clear ids in the index.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
