@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,6 +64,14 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}, aut
 const git = (repo: string, ...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
 const grill = (repo: string) => readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8");
 
+const onTicket = (id: string) => ({ kind: "ticket" as const, ticket: { map: "shop", id } });
+
+/** Installs skill `name` for Claude Code under `root`, as a directory with a `SKILL.md`. */
+function installSkill(root: string, name: string): void {
+  mkdirSync(join(root, ".claude/skills", name), { recursive: true });
+  writeFileSync(join(root, ".claude/skills", name, "SKILL.md"), `---\nname: ${name}\n---\n`);
+}
+
 const typed = (pty: { written: string[] } | undefined) => pty?.written.join("") ?? "";
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** How many worktrees git knows for `repo`, the main checkout included. */
@@ -77,7 +85,7 @@ describe("starting work on a ticket", () => {
     const bin = stubBin();
     const { provider, starter } = setup(bin.dir);
 
-    const { session } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(session.worktree.branch).toBe("shop/02-grill");
     expect(existsSync(join(session.worktree.path, ".scratch/shop/issues/02-grill.md"))).toBe(true);
@@ -95,7 +103,7 @@ describe("starting work on a ticket", () => {
     const home = mkdtempSync(join(tmpdir(), "dryland-home-"));
     const { provider, starter, hooksDir } = setup(undefined, { HOME: home, USERPROFILE: home });
 
-    await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
 
     const settingsFile = join(hooksDir, "claude-code.json");
     expect(provider.spawned[0]?.options.args).toEqual(["--settings", settingsFile]);
@@ -105,7 +113,7 @@ describe("starting work on a ticket", () => {
 
   it("runs under the user's own login: it adds only the session's identity, no credentials", async () => {
     const { provider, starter } = setup();
-    await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     const inherited = new Set(["PATH", "HOME", "TERM", "COLORTERM"]);
     const added = Object.keys(provider.spawned[0]?.options.env ?? {}).filter((key) => !inherited.has(key));
     expect(added.sort()).toEqual(["DRYLAND_PANE_KEY", "DRYLAND_SESSION_ID"]);
@@ -120,14 +128,14 @@ describe("starting work on a ticket", () => {
       CLAUDE_CODE_MESSAGING_TOKEN: "parent-token",
       CLAUDE_CODE_USE_BEDROCK: "1",
     });
-    await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     const names = Object.keys(provider.spawned[0]?.options.env ?? {}).filter((key) => key.startsWith("CLAUDE"));
     expect(names).toEqual(["CLAUDE_CODE_USE_BEDROCK"]);
   });
 
   it("types the next-step command once the CLI has gone quiet, one key at a time, without submitting", async () => {
     const { provider, starter } = setup();
-    const { session } = await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     const pty = provider.spawned[0];
 
     pty?.emit("Claude Code v2\r\n❯ ");
@@ -140,7 +148,7 @@ describe("starting work on a ticket", () => {
 
   it("waits while a trust dialog shows and types once the CLI has redrawn its prompt", async () => {
     const { provider, starter } = setup();
-    await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     const pty = provider.spawned[0];
 
     pty?.emit("Quick safety check \x1b[16;4HYes,\x1b[1CI\x1b[1Ctrust\x1b[1Cthis\x1b[1Cfolder");
@@ -153,7 +161,7 @@ describe("starting work on a ticket", () => {
 
   it("types nothing when no next step points at the ticket", async () => {
     const { provider, starter } = setup();
-    const { session } = await starter.startWork(fixtureRepo(), { map: "shop", id: "03" }, "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("03"), "claude-code");
     provider.spawned[0]?.emit("❯ ");
     await pause(80);
     expect(session.command).toBeNull();
@@ -163,19 +171,20 @@ describe("starting work on a ticket", () => {
   it("reuses the ticket's worktree when work starts on it again", async () => {
     const repo = fixtureRepo();
     const { starter } = setup();
-    const { session: first } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
-    const { session: second } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session: first } = await starter.startWork(repo, onTicket("02"), "claude-code");
+    const { session: second } = await starter.startWork(repo, onTicket("02"), "claude-code");
     expect(second.worktree).toEqual(first.worktree);
     expect(worktreeCount(repo)).toBe(2);
   });
 
   it("records session, worktree and ticket at spawn", async () => {
     const { starter } = setup();
-    const { session } = await starter.startWork(fixtureRepo(), { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     expect(starter.sessions()).toEqual([session]);
     expect(session).toMatchObject({
       agent: { id: "claude-code", name: "Claude Code" },
       ticket: { map: "shop", id: "02" },
+      map: "shop",
     });
   });
 
@@ -186,7 +195,7 @@ describe("starting work on a ticket", () => {
     expect(await starter.listAgents()).toEqual([
       { id: "claude-code", name: "Claude Code", available: false, reason: "`claude` is not on PATH." },
     ]);
-    await expect(starter.startWork(repo, { map: "shop", id: "02" }, "claude-code")).rejects.toThrow(DrylandError);
+    await expect(starter.startWork(repo, onTicket("02"), "claude-code")).rejects.toThrow(DrylandError);
     expect(provider.spawned).toEqual([]);
     expect(worktreeCount(repo)).toBe(1);
   });
@@ -195,7 +204,7 @@ describe("starting work on a ticket", () => {
     const repo = fixtureRepo();
     const { provider, starter } = setup();
 
-    const { session, warnings } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session, warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(warnings).toEqual([]);
     expect(grill(repo)).toContain(`"holder":"${session.id}"`);
@@ -209,7 +218,7 @@ describe("starting work on a ticket", () => {
     const head = git(repo, "rev-parse", "HEAD");
     const { starter } = setup(undefined, {}, false);
 
-    const { session } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { session } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(grill(repo)).toContain(`"holder":"${session.id}"`);
     expect(git(repo, "rev-parse", "HEAD")).toBe(head);
@@ -220,7 +229,7 @@ describe("starting work on a ticket", () => {
     const { provider, starter, dryland } = setup();
     await dryland.run(["ticket", "claim", "shop/02"], { cwd: repo, sessionId: "someone-else" });
 
-    const { warnings } = await starter.startWork(repo, { map: "shop", id: "02" }, "claude-code");
+    const { warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(warnings).toEqual([expect.stringContaining("already claimed by someone-else")]);
     expect(grill(repo)).toContain('"holder":"someone-else"');
@@ -232,5 +241,88 @@ describe("starting work on a ticket", () => {
     expect(await starter.listAgents()).toEqual([
       { id: "claude-code", name: "Claude Code", available: true, reason: null },
     ]);
+  });
+});
+
+describe("continuing a map and starting a new one", () => {
+  it("continues a map in its own scratch worktree with /wayfinder <map> typed, claiming nothing", async () => {
+    const repo = fixtureRepo();
+    const head = git(repo, "rev-parse", "HEAD");
+    const { provider, starter } = setup();
+
+    const { session } = await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code");
+
+    expect(session).toMatchObject({ ticket: null, map: "shop", worktree: { branch: "shop/scratch-wayfinder" } });
+    expect(provider.spawned[0]?.options.cwd).toBe(session.worktree.path);
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/wayfinder shop"));
+    expect(git(repo, "rev-parse", "HEAD")).toBe(head);
+    expect(grill(repo)).not.toContain("holder");
+  });
+
+  it("reuses the map's scratch worktree when the map is continued again", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    const { session: first } = await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code");
+    const { session: second } = await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code");
+    expect(second.worktree).toEqual(first.worktree);
+    expect(worktreeCount(repo)).toBe(2);
+  });
+
+  it("starts a new map in a new temporary worktree with /wayfinder typed and writes no map file", async () => {
+    const repo = fixtureRepo();
+    const { provider, starter } = setup();
+
+    const { session: first } = await starter.startWork(repo, { kind: "new-map" }, "claude-code");
+    const { session: second } = await starter.startWork(repo, { kind: "new-map" }, "claude-code");
+
+    expect(first).toMatchObject({ ticket: null, map: null, worktree: { branch: "new-map/scratch-wayfinder" } });
+    expect(second.worktree.branch).toBe("new-map/scratch-wayfinder-2");
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/wayfinder "));
+    await pause(50);
+    expect(typed(provider.spawned[0])).not.toContain("\r");
+    expect(readdirSync(join(repo, ".scratch"))).toEqual(["shop"]);
+    expect(readdirSync(join(first.worktree.path, ".scratch"))).toEqual(["shop"]);
+    expect(git(repo, "status", "--porcelain")).toBe("");
+  });
+});
+
+describe("launching any installed skill", () => {
+  function withSkills() {
+    const repo = fixtureRepo();
+    const home = mkdtempSync(join(tmpdir(), "dryland-home-"));
+    installSkill(repo, "grilling");
+    installSkill(home, "tdd");
+    // A directory without a SKILL.md is not a skill.
+    mkdirSync(join(repo, ".claude/skills/notes"), { recursive: true });
+    return { repo, ...setup(undefined, { HOME: home, USERPROFILE: home }) };
+  }
+
+  it("lists the skills installed in the project and in the user's home", async () => {
+    const { repo, starter } = withSkills();
+    expect(await starter.listSkills(repo, "claude-code")).toEqual(["grilling", "tdd"]);
+  });
+
+  it("types the chosen skill naming the ticket instead of the recommended command", async () => {
+    const { repo, provider, starter } = withSkills();
+    const { session } = await starter.startWork(repo, onTicket("02"), "claude-code", "grilling");
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/grilling shop/02"));
+    expect(session.command).toBe("/grilling shop/02");
+  });
+
+  it("types the chosen skill naming the map when a map is continued", async () => {
+    const { repo, provider, starter } = withSkills();
+    await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code", "tdd");
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/tdd shop"));
+  });
+
+  it("refuses a skill that is not installed, before touching anything", async () => {
+    const { repo, provider, starter } = withSkills();
+    await expect(starter.startWork(repo, onTicket("02"), "claude-code", "notes")).rejects.toThrow(DrylandError);
+    expect(provider.spawned).toEqual([]);
+    expect(worktreeCount(repo)).toBe(1);
   });
 });

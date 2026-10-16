@@ -21,6 +21,7 @@ function fixtureRepo(): string {
       "Status: ready-for-agent",
       "Blocked by: 02",
     ),
+    ".claude/skills/grilling/SKILL.md": "---\nname: grilling\n---\n",
   };
   for (const [file, content] of Object.entries(files)) {
     mkdirSync(dirname(join(repo, file)), { recursive: true });
@@ -176,5 +177,61 @@ test("shows Claude Code as unavailable when it is not installed", async () => {
 
   await expect(window.getByRole("button", { name: "Start with Claude Code" })).toBeDisabled();
   await expect(window.getByText("Claude Code is unavailable: `claude` is not on PATH.")).toBeVisible();
+  await app.close();
+});
+
+test("types any installed skill picked on a ticket instead of the recommended command", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+
+  await window.getByRole("group", { name: "Start work" }).getByLabel("Skill").selectOption({ label: "/grilling" });
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/grilling shop/02");
+  await expect(screen).not.toContainText("/implement");
+  await app.close();
+});
+
+test("continues a map from its stats card with /wayfinder <map> typed, in the map's own worktree", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+
+  await window.getByRole("button", { name: "Maps" }).click();
+  await window.getByRole("button", { name: /^Shop/ }).click();
+  await window
+    .getByRole("region", { name: "Shop statistics" })
+    .getByRole("button", { name: "Continue map with Claude Code" })
+    .click();
+
+  await expect(window.getByRole("tab", { name: "Claude Code shop", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("agent-ready cwd=shop-scratch-wayfinder");
+  await expect(screen).toContainText("/wayfinder shop");
+  await window.waitForTimeout(1000);
+  await expect(screen).not.toContainText("SUBMITTED");
+  await app.close();
+});
+
+test("starts a new map with only an Agent CLI chosen, /wayfinder typed in a temporary worktree", async () => {
+  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+
+  await window.getByRole("button", { name: "Maps" }).click();
+  await window.getByRole("button", { name: "New map" }).click();
+  const dialog = window.getByRole("dialog", { name: "New map" });
+  await dialog.getByRole("button", { name: "Open Claude Code" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  await expect(window.getByRole("tab", { name: "Claude Code new map" })).toHaveAttribute("aria-selected", "true");
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("agent-ready cwd=new-map-scratch-wayfinder");
+  await expect(screen).toContainText("/wayfinder");
+  await window.waitForTimeout(1000);
+  await expect(screen).not.toContainText("SUBMITTED");
+  // Dryland wrote no map: the skill does, in its session.
+  expect(execFileSync("git", ["status", "--porcelain", ".scratch"], { cwd: repo, encoding: "utf8" })).toBe(
+    " M .scratch/shop/issues/03-cart.md\n",
+  );
   await app.close();
 });

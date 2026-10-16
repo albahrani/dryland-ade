@@ -637,6 +637,42 @@ ul {
   overflow-wrap: anywhere;
 }
 
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dialog-form > label,
+.dialog-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dialog-form fieldset {
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.dialog-form .check {
+  flex-direction: row;
+  display: flex;
+  gap: 6px;
+}
+
+.dialog-form input:not([type="checkbox"]),
+.dialog-form select,
+.dialog-form textarea {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

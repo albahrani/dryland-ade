@@ -31,6 +31,25 @@ describe("trackerArgs", () => {
     ]);
   });
 
+  it("creates a ticket with the dialog's fields, leaving out an empty question and no blockers", () => {
+    const created = { map: "shop", title: "Pay by card", type: "task" as const, question: "", blockedBy: [] };
+    expect(trackerArgs({ kind: "create", ticket: created }, true)).toEqual([
+      "ticket",
+      "create",
+      "--map",
+      "shop",
+      "--title",
+      "Pay by card",
+      "--type",
+      "task",
+      "--commit",
+    ]);
+    const full = { ...created, type: "grilling" as const, question: "Which cards?", blockedBy: ["02", "03"] };
+    expect(commandLine(trackerArgs({ kind: "create", ticket: full }, false))).toBe(
+      'dryland ticket create --map shop --title "Pay by card" --type grilling --question "Which cards?" --blocked-by 02,03 --no-commit',
+    );
+  });
+
   it("tells dryland not to commit when auto-commit is off", () => {
     expect(trackerArgs({ kind: "claim", ticket }, false)).toEqual(["ticket", "claim", "shop/02", "--no-commit"]);
   });
@@ -58,6 +77,15 @@ describe("isTicketAction", () => {
     expect(isTicketAction({ kind: "delete", ticket })).toBe(false);
     expect(isTicketAction({ kind: "claim", ticket: { map: "--json", id: "02" } })).toBe(false);
     expect(isTicketAction(null)).toBe(false);
+  });
+
+  it("accepts a well-formed new ticket only", () => {
+    const created = { map: "shop", title: "Pay", type: "task", question: "", blockedBy: ["02"] };
+    expect(isTicketAction({ kind: "create", ticket: created })).toBe(true);
+    expect(isTicketAction({ kind: "create", ticket: { ...created, title: "  " } })).toBe(false);
+    expect(isTicketAction({ kind: "create", ticket: { ...created, type: "epic" } })).toBe(false);
+    expect(isTicketAction({ kind: "create", ticket: { ...created, map: "--json" } })).toBe(false);
+    expect(isTicketAction({ kind: "create", ticket: { ...created, blockedBy: ["--remove"] } })).toBe(false);
   });
 });
 

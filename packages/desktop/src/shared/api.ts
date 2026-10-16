@@ -2,6 +2,7 @@ import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, Ticke
 import type { NextUp } from "./next-up.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 import type { ConfirmationType, DontAsk, TicketAction } from "./tracker-actions.ts";
+import type { WorkTarget } from "./work-target.ts";
 
 /** The tickets tree of a project with its next steps, or why it cannot be read and what to do about it. */
 export type TreeLoad =
@@ -67,9 +68,12 @@ export interface SessionInfo {
   /** The terminal it runs in, which is also its `DRYLAND_PANE_KEY`. */
   terminalId: string;
   agent: { id: string; name: string };
-  ticket: TicketRef;
+  /** The ticket it works on; `null` for a map's own session or a new map's. */
+  ticket: TicketRef | null;
+  /** The map it works on: the ticket's, the map continued, or `null` for a map not yet charted. */
+  map: string | null;
   worktree: { branch: string; path: string };
-  /** The skill command pre-typed at launch; `null` when no next step pointed at the ticket. */
+  /** The skill command pre-typed at launch; `null` when no next step pointed at the ticket and none was chosen. */
   command: string | null;
   /** ISO timestamp of the spawn. */
   startedAt: string;
@@ -81,6 +85,9 @@ export type StartWorkResult =
 
 /** How a tracker write went: `dryland`'s warnings, or its error and the next action it names. */
 export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
+
+/** What the application menu asks of the window: the dialogs that live in the renderer. */
+export type MenuCommand = "new-ticket" | "new-map";
 
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {
@@ -98,8 +105,13 @@ export interface DrylandApi {
   openTerminal(): Promise<string | null>;
   /** The Agent CLIs work can start with, and whether each is installed. */
   listAgents(): Promise<AgentAvailability[]>;
-  /** Opens the Agent CLI in the ticket's worktree with its next-step command typed, in a new terminal. */
-  startWork(ticket: TicketRef, agentId: string): Promise<StartWorkResult>;
+  /** The skills the Agent CLI has installed for the open project, by name; empty without a project. */
+  listSkills(agentId: string): Promise<string[]>;
+  /**
+   * Opens the Agent CLI in a new terminal, in the target's worktree, with the recommended command typed: a ticket's
+   * next step, `/wayfinder <map>` for a map, `/wayfinder ` for a new map. With `skill`, that skill's command instead.
+   */
+  startWork(target: WorkTarget, agentId: string, skill: string | null): Promise<StartWorkResult>;
   /** Runs a ticket action through `dryland` in the open project; asking for confirmation is the caller's part. */
   runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */
@@ -118,6 +130,8 @@ export interface DrylandApi {
   onLiveEvent(callback: (event: LiveEvent) => void): () => void;
   /** Called with the settings whenever they change, such as from the menu. Returns an unsubscribe function. */
   onSettingsChanged(callback: (settings: AppSettings) => void): () => void;
+  /** Called when a menu item asks the window to open one of its dialogs. Returns an unsubscribe function. */
+  onMenuCommand(callback: (command: MenuCommand) => void): () => void;
   /** Called with every session's state whenever one changes. Returns an unsubscribe function. */
   onSessionStates(callback: (states: Readonly<Record<string, SessionState>>) => void): () => void;
 }

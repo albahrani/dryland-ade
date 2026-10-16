@@ -19,6 +19,11 @@ export interface AgentAdapter {
   /** How a skill is invoked: the prefix that replaces the `/` of the rule engine's commands. */
   skillPrefix: string;
   /**
+   * Where the CLI finds installed skills, relative to the project and to the user's home: one directory per skill,
+   * holding its `SKILL.md`. Read only, to offer every installed skill besides the recommended one.
+   */
+  skillDirs: readonly string[];
+  /**
    * How the skill command reaches the CLI. `pre-type` types it into the interactive prompt without Enter, once
    * the CLI has drawn its prompt; v1 has no other mode, because prompt arguments submit immediately.
    */
@@ -54,6 +59,7 @@ export const CLAUDE_CODE: AgentAdapter = {
   binary: "claude",
   launchArgs: [],
   skillPrefix: "/",
+  skillDirs: [".claude/skills"],
   initialPrompt: "pre-type",
   // A CLI that is not logged in opens to its input box and is not blocked.
   blockingPrompts: [/trustthisfolder/i, /choosethetextstyle/i, /allowexternalclaude\.mdfileimports/i, /usethisapikey/i],

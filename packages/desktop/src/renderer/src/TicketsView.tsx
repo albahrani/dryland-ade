@@ -203,6 +203,7 @@ export function TicketsView({
   staleClaims,
   onOpen,
   onRelease,
+  onNewTicket,
 }: {
   tree: TicketsTree;
   /** The `tabKey` of the focused tab, if any. */
@@ -215,6 +216,7 @@ export function TicketsView({
   onOpen: (ref: ItemRef) => void;
   /** Releases a possibly stale claim; a general button, so it asks for confirmation first. */
   onRelease: (ticket: TreeTicket) => void;
+  onNewTicket: () => void;
 }) {
   const [options, setOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -252,14 +254,19 @@ export function TicketsView({
     <section className="tickets" aria-label="Tickets">
       <header className="view-header">
         <h2>Tickets</h2>
-        <button
-          aria-label="More actions"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(!menuOpen)}
-        >
-          ...
-        </button>
+        <span>
+          <button aria-label="New ticket" title="New ticket" onClick={onNewTicket}>
+            +
+          </button>
+          <button
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            ...
+          </button>
+        </span>
       </header>
       {menuOpen && (
         <OptionsMenu

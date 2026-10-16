@@ -29,4 +29,9 @@ describe("the session a ticket shows", () => {
     expect(shown.get("shop/02")?.state).toBe("idle");
     expect(ticketSessions([session("a", "shop/02")], {}).get("shop/02")?.state).toBe("launched");
   });
+
+  it("is never a map's own session, which works on no ticket", () => {
+    const mapSession = { id: "m", agent: { name: "Claude Code" }, ticket: null };
+    expect([...ticketSessions([mapSession], { m: "waiting" }).keys()]).toEqual([]);
+  });
 });

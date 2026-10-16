@@ -163,3 +163,60 @@ test("with auto-commit off for the project, writes change the files without comm
   );
   await app.close();
 });
+
+/** Opens the New ticket dialog from the File menu and types a title. */
+async function newTicket(app: ElectronApplication, window: Page, title: string): Promise<void> {
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
+    file?.submenu?.items.find((item) => item.label === "New Ticket...")?.click();
+  });
+  await window.getByRole("dialog", { name: "New ticket" }).getByLabel("Title").fill(title);
+}
+
+test("creates a ticket from the New ticket dialog, previewing the exact command and asking first", async () => {
+  const { app, window, repo } = await openProject();
+  const dialog = window.getByRole("dialog", { name: "New ticket" });
+  const command = dialog.getByLabel("Command");
+
+  await newTicket(app, window, "Refund orders");
+  await expect(command).toHaveText('dryland ticket create --map shop --title "Refund orders" --type task --commit');
+  // The preview follows every field.
+  await dialog.getByLabel("Type").selectOption("grilling");
+  await dialog.getByLabel("Question").fill("Who refunds?");
+  await dialog.getByLabel("03 Take payments").check();
+  await expect(command).toHaveText(
+    'dryland ticket create --map shop --title "Refund orders" --type grilling --question "Who refunds?" --blocked-by 03 --commit',
+  );
+
+  await dialog.getByRole("button", { name: "Create ticket" }).click();
+  const confirm = window.getByRole("dialog", { name: "Confirm write" });
+  await expect(confirm).toContainText("--blocked-by 03 --commit");
+  await confirm.getByRole("button", { name: "Confirm" }).click();
+
+  // It appears in the tree under its map, written and committed through dryland.
+  await expect(window.getByRole("region", { name: "Tickets" }).getByText("Refund orders")).toBeVisible();
+  const created = readFileSync(join(repo, ".scratch/shop/issues/04-refund-orders.md"), "utf8");
+  expect(created).toContain("Blocked by: 03");
+  expect(created).toContain("Who refunds?");
+  expect(git(repo, "log", "-1", "--format=%s")).toContain("shop/04");
+  await app.close();
+});
+
+test("creates a ticket without asking once tracker metadata writes are no longer asked for", async () => {
+  const { app, window } = await openProject();
+
+  await newTicket(app, window, "Refund orders");
+  await window.getByRole("button", { name: "Create ticket" }).click();
+  const confirm = window.getByRole("dialog", { name: "Confirm write" });
+  await confirm.getByLabel("Don't ask again for tracker metadata writes from a button").check();
+  await confirm.getByRole("button", { name: "Confirm" }).click();
+  await expect(window.getByText("Refund orders")).toBeVisible();
+
+  // The "+" in the Tickets view opens the same dialog.
+  await window.getByRole("button", { name: "New ticket" }).click();
+  await window.getByRole("dialog", { name: "New ticket" }).getByLabel("Title").fill("Ship orders");
+  await window.getByRole("button", { name: "Create ticket" }).click();
+  await expect(window.getByRole("region", { name: "Tickets" }).getByText("Ship orders")).toBeVisible();
+  await expect(window.getByRole("dialog", { name: "Confirm write" })).toHaveCount(0);
+  await app.close();
+});

@@ -21,14 +21,17 @@ export interface TicketSession {
 
 /**
  * The session each ticket shows, by `ticketKey`: of a ticket's sessions, the one that most needs the user, and
- * the newest of equals. `sessions` are in the order they started; one with no state yet is launched.
+ * the newest of equals. `sessions` are in the order they started; one with no state yet is launched. Sessions on
+ * no ticket are left out.
  */
 export function ticketSessions(
-  sessions: readonly { id: string; agent: { name: string }; ticket: TicketRef }[],
+  sessions: readonly { id: string; agent: { name: string }; ticket: TicketRef | null }[],
   states: Readonly<Record<string, SessionState>>,
 ): Map<string, TicketSession> {
   const shown = new Map<string, TicketSession>();
   for (const session of sessions) {
+    // A map's own session, or a new map's, shows on no ticket.
+    if (session.ticket === null) continue;
     const key = ticketKey(session.ticket);
     const candidate = { agent: session.agent.name, state: states[session.id] ?? "launched" };
     const current = shown.get(key);

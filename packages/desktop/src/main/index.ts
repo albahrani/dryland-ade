@@ -14,7 +14,6 @@ import {
   readProjectState,
   readTicketDetail,
   startLiveListener,
-  type TicketRef,
 } from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions } from "electron";
 import {
@@ -22,6 +21,7 @@ import {
   type AppState,
   isLiveEventsPanelMode,
   type ItemContent,
+  type MenuCommand,
   type ProjectView,
   type StartWorkResult,
   type TicketActionResult,
@@ -45,6 +45,7 @@ import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { watchProject } from "./watch-project.ts";
 import { createWorkStarter } from "./work.ts";
+import { isSkillChoice, isWorkTarget } from "../shared/work-target.ts";
 
 /** A terminal can print after its window is gone, between the window closing and the app quitting. */
 function sendToWindow(channel: string, ...args: unknown[]): void {
@@ -271,12 +272,27 @@ function trackerMenu(): MenuItemConstructorOptions[] {
   ];
 }
 
+/** A menu item that opens one of the window's dialogs. */
+const menuCommand = (command: MenuCommand) => () => sendToWindow("menu:command", command);
+
 function buildMenu(): void {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
         label: "File",
         submenu: [
+          {
+            label: "New Map...",
+            accelerator: "CmdOrCtrl+Shift+M",
+            enabled: project !== null,
+            click: menuCommand("new-map"),
+          },
+          {
+            label: "New Ticket...",
+            accelerator: "CmdOrCtrl+N",
+            enabled: project !== null,
+            click: menuCommand("new-ticket"),
+          },
           { label: "Open Project...", accelerator: "CmdOrCtrl+O", click: () => void pickProject().then(refresh) },
           { type: "separator" },
           { role: "quit" },
@@ -309,20 +325,34 @@ ipcMain.handle("terminal:open", async () => {
   return terminals.open({ cwd: loaded.mainCheckout ?? loaded.view.path });
 });
 ipcMain.handle("agents:list", () => work.listAgents());
-ipcMain.handle("work:start", async (_event, ticket: TicketRef, agentId: string): Promise<StartWorkResult> => {
-  if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
+ipcMain.handle("skills:list", async (_event, agentId: unknown): Promise<string[]> => {
+  if (project === null || typeof agentId !== "string") return [];
   try {
-    const { session, warnings } = await work.startWork(project.path, ticket, agentId);
-    status.launched(session.id);
-    sendSessionStates();
-    // The session now holds its claim, which is no longer possibly stale.
-    void refresh();
-    return { ok: true, session, warnings };
+    return await work.listSkills(project.path, agentId);
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
-    return { ok: false, message: error.message, nextAction: error.nextAction };
+    return [];
   }
 });
+ipcMain.handle(
+  "work:start",
+  async (_event, target: unknown, agentId: unknown, skill: unknown): Promise<StartWorkResult> => {
+    if (!isWorkTarget(target) || typeof agentId !== "string" || !isSkillChoice(skill))
+      return { ok: false, message: "That is not something work can start on.", nextAction: "Retry from the app." };
+    if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
+    try {
+      const { session, warnings } = await work.startWork(project.path, target, agentId, skill);
+      status.launched(session.id);
+      sendSessionStates();
+      // The session now holds its claim, which is no longer possibly stale.
+      void refresh();
+      return { ok: true, session, warnings };
+    } catch (error) {
+      if (!(error instanceof DrylandError)) throw error;
+      return { ok: false, message: error.message, nextAction: error.nextAction };
+    }
+  },
+);
 ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): Promise<TicketActionResult> => {
   if (!isTicketAction(action) || typeof commit !== "boolean")
     return { ok: false, message: "That is not a ticket action.", nextAction: "Retry from the ticket." };

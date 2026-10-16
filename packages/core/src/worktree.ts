@@ -153,6 +153,25 @@ export async function worktreeForTicket(
   return { ...(await createWorktree(runner, mainCheckout, { ticket: ref })), reused: false };
 }
 
+/**
+ * The scratch worktree `<map>/scratch-<slug>` when it is still on disk; otherwise a new one, collision-suffixed. A
+ * map's own session so goes back to the worktree its earlier sessions used.
+ */
+export async function worktreeForScratch(
+  runner: ProcessRunner,
+  cwd: string,
+  map: string,
+  slug: string,
+): Promise<WorktreeResult & { reused: boolean }> {
+  const mainCheckout = await findMainCheckout(runner, cwd);
+  const branch = `${map}/scratch-${slugify(slug) || "work"}`;
+  const found = (await gitWorktrees(runner, mainCheckout)).find((entry) => entry.branch === branch);
+  if (found !== undefined && (await exists(found.path))) {
+    return { branch, path: found.path, ticket: null, reused: true };
+  }
+  return { ...(await createWorktree(runner, mainCheckout, { map, slug })), reused: false };
+}
+
 interface RawWorktree {
   path: string;
   branch: string | null;

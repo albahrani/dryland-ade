@@ -1,10 +1,29 @@
 import { useEffect, useState } from "react";
 import type { AgentAvailability } from "../../shared/api.ts";
 
-/** Picks an Agent CLI and starts work on the ticket with it. CLIs that are not installed are shown, disabled. */
-export function StartWork({ onStart }: { onStart: (agentId: string) => Promise<void> }) {
+/** Starts a session with the chosen Agent CLI, and with `skill` instead of the recommended command when given. */
+export type StartHandler = (agentId: string, skill: string | null) => Promise<void>;
+
+/**
+ * Picks an Agent CLI and starts a session with it. CLIs that are not installed are shown, disabled. With
+ * `chooseSkill`, the user can also pick any installed skill instead of the recommended command, so Dryland never
+ * blocks them.
+ */
+export function StartWork({
+  onStart,
+  label = (agent) => `Start with ${agent}`,
+  chooseSkill = false,
+}: {
+  onStart: StartHandler;
+  /** The button's text, given the agent's name. */
+  label?: (agent: string) => string;
+  chooseSkill?: boolean;
+}) {
   const [agents, setAgents] = useState<AgentAvailability[] | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [skills, setSkills] = useState<string[]>([]);
+  // `null` is the recommended command.
+  const [skill, setSkill] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -19,13 +38,26 @@ export function StartWork({ onStart }: { onStart: (agentId: string) => Promise<v
     };
   }, []);
 
+  useEffect(() => {
+    if (!chooseSkill || chosen === null) return;
+    let current = true;
+    void window.dryland.listSkills(chosen).then((list) => {
+      if (!current) return;
+      setSkills(list);
+      setSkill((picked) => (picked !== null && list.includes(picked) ? picked : null));
+    });
+    return () => {
+      current = false;
+    };
+  }, [chooseSkill, chosen]);
+
   if (agents === null || agents.length === 0) return null;
   const agent = agents.find((a) => a.id === chosen) ?? agents[0];
   if (agent === undefined) return null;
   const start = async () => {
     setStarting(true);
     try {
-      await onStart(agent.id);
+      await onStart(agent.id, skill);
     } finally {
       setStarting(false);
     }
@@ -42,8 +74,22 @@ export function StartWork({ onStart }: { onStart: (agentId: string) => Promise<v
           ))}
         </select>
       )}
+      {chooseSkill && skills.length > 0 && (
+        <select
+          aria-label="Skill"
+          value={skill ?? ""}
+          onChange={(event) => setSkill(event.target.value === "" ? null : event.target.value)}
+        >
+          <option value="">Recommended command</option>
+          {skills.map((name) => (
+            <option key={name} value={name}>
+              /{name}
+            </option>
+          ))}
+        </select>
+      )}
       <button disabled={!agent.available || starting} onClick={() => void start()}>
-        Start with {agent.name}
+        {label(agent.name)}
       </button>
       {!agent.available && (
         <span className="unavailable">

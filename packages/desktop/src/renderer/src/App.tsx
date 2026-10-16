@@ -1,6 +1,7 @@
-import type { LiveEvent, TicketRef, TreeTicket } from "@dryland/core";
+import type { LiveEvent, TreeTicket } from "@dryland/core";
 import { useEffect, useRef, useState } from "react";
-import type { AppState, LiveEventsPanelMode, ProjectView, SessionInfo } from "../../shared/api.ts";
+import type { AppState, LiveEventsPanelMode, MenuCommand, ProjectView, SessionInfo } from "../../shared/api.ts";
+import { sessionTitle } from "../../shared/work-target.ts";
 import {
   activeItem,
   closeTab,
@@ -12,7 +13,8 @@ import {
   ticketKey,
 } from "../../shared/tabs.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
-import { ItemTab } from "./ItemTab.tsx";
+import { ItemTab, type StartWorkHandler } from "./ItemTab.tsx";
+import { NewMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
@@ -46,6 +48,8 @@ function Sidebar({
   ticketSessions,
   onOpen,
   onRelease,
+  onStartWork,
+  onDialog,
 }: {
   view: ActivityView;
   project: ProjectView | null;
@@ -53,6 +57,8 @@ function Sidebar({
   ticketSessions: ReadonlyMap<string, TicketSession>;
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
+  onStartWork: StartWorkHandler;
+  onDialog: (dialog: MenuCommand) => void;
 }) {
   if (project === null) return <p className="empty">Open a git repo to see its tickets.</p>;
   if (!project.tree.ok) {
@@ -74,12 +80,20 @@ function Sidebar({
         staleClaims={staleClaims}
         onOpen={onOpen}
         onRelease={onRelease}
+        onNewTicket={() => onDialog("new-ticket")}
       />
     );
   if (view === "maps") {
     const active = activeItem(tabs);
     return (
-      <MapsView tree={tree} activeMap={active?.kind === "map" ? active.name : null} nextUp={nextUp} onOpen={onOpen} />
+      <MapsView
+        tree={tree}
+        activeMap={active?.kind === "map" ? active.name : null}
+        nextUp={nextUp}
+        onOpen={onOpen}
+        onContinue={(map, agentId, skill) => onStartWork({ kind: "map", map }, agentId, skill)}
+        onNewMap={() => onDialog("new-map")}
+      />
     );
   }
   return <p className="empty">The {view} view arrives in a later ticket.</p>;
@@ -93,12 +107,17 @@ function SessionHeader({ session }: { session: SessionInfo }) {
         <dt>Agent</dt>
         <dd>{session.agent.name}</dd>
       </div>
-      <div>
-        <dt>Ticket</dt>
-        <dd>
-          {session.ticket.map}/{session.ticket.id}
-        </dd>
-      </div>
+      {session.ticket !== null ? (
+        <div>
+          <dt>Ticket</dt>
+          <dd>{ticketKey(session.ticket)}</dd>
+        </div>
+      ) : (
+        <div>
+          <dt>Map</dt>
+          <dd>{session.map ?? "new map"}</dd>
+        </div>
+      )}
       <div>
         <dt>Worktree</dt>
         <dd title={session.worktree.path}>{session.worktree.branch}</dd>
@@ -130,6 +149,8 @@ export function App() {
   const [pending, setPending] = useState<(PendingWrite & { action: TicketAction }) | null>(null);
   // What the last tracker write or session start reported: its error, or the warnings it ran with.
   const [notice, setNotice] = useState<string | null>(null);
+  // The New ticket or New map dialog, while it is open.
+  const [dialog, setDialog] = useState<MenuCommand | null>(null);
 
   useEffect(() => {
     void window.dryland.getState().then((loaded) => {
@@ -150,7 +171,9 @@ export function App() {
     const stopLive = window.dryland.onLiveEvent((event) =>
       setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
     );
+    const stopMenu = window.dryland.onMenuCommand(setDialog);
     return () => {
+      stopMenu();
       stopProject();
       stopTerminals();
       stopLive();
@@ -194,9 +217,9 @@ export function App() {
     setTerminalTitles((current) => new Map(current).set(id, title));
     setState((current) => current && { ...current, tabs: openTab(current.tabs, { kind: "terminal", id }) });
   };
-  const startWork = async (ticket: TicketRef, agentId: string) => {
+  const startWork: StartWorkHandler = async (target, agentId, skill) => {
     setTerminalError(null);
-    const result = await window.dryland.startWork(ticket, agentId);
+    const result = await window.dryland.startWork(target, agentId, skill);
     if (!result.ok) {
       setTerminalError(`${result.message} ${result.nextAction}`);
       return;
@@ -204,7 +227,7 @@ export function App() {
     const { session, warnings } = result;
     setNotice(warnings.length === 0 ? null : warnings.join(" "));
     setSessions((current) => new Map(current).set(session.terminalId, session));
-    showTerminal(session.terminalId, `${session.agent.name} ${session.ticket.map}/${session.ticket.id}`);
+    showTerminal(session.terminalId, sessionTitle(session));
   };
   const newTerminal = async () => {
     setTerminalError(null);
@@ -230,14 +253,15 @@ export function App() {
   /** A ticket's own actions run at once; a general button asks first, unless the user said not to (ADR 0003). */
   const requestAction = async (action: TicketAction, source: ActionSource): Promise<boolean> => {
     if (source === "ticket" || settings.dontAsk["tracker-metadata"]) return runAction(action);
-    const ref = ticketKey(action.ticket);
     setPending({
       action,
       type: "tracker-metadata",
       text:
-        action.kind === "release"
-          ? `Release the claim on ${ref}? Its status goes back to what it was before.`
-          : `Change ${ref}?`,
+        action.kind === "create"
+          ? `Create ticket "${action.ticket.title}" on map ${action.ticket.map}?`
+          : action.kind === "release"
+            ? `Release the claim on ${ticketKey(action.ticket)}? Its status goes back to what it was before.`
+            : `Change ${ticketKey(action.ticket)}?`,
       command: commandLine(trackerArgs(action, settings.autoCommit)),
     });
     return false;
@@ -293,6 +317,8 @@ export function App() {
           onRelease={(ticket) =>
             void requestAction({ kind: "release", ticket: { map: ticket.map, id: ticket.id } }, "general-button")
           }
+          onStartWork={startWork}
+          onDialog={setDialog}
         />
       </aside>
       <main className="editor">
@@ -359,6 +385,33 @@ export function App() {
       <aside className="right-side">
         <p className="empty">Explorer and Source Control</p>
       </aside>
+      {dialog === "new-ticket" && project?.tree.ok && (
+        <NewTicketDialog
+          tree={project.tree.tree}
+          initialMap={
+            activeTab === undefined || activeTab.kind === "terminal"
+              ? null
+              : activeTab.kind === "map"
+                ? activeTab.name
+                : activeTab.map
+          }
+          autoCommit={settings.autoCommit}
+          onCancel={() => setDialog(null)}
+          onCreate={(ticket) => {
+            setDialog(null);
+            void requestAction({ kind: "create", ticket }, "general-button");
+          }}
+        />
+      )}
+      {dialog === "new-map" && project !== null && (
+        <NewMapDialog
+          onCancel={() => setDialog(null)}
+          onStart={async (agentId, skill) => {
+            setDialog(null);
+            await startWork({ kind: "new-map" }, agentId, skill);
+          }}
+        />
+      )}
       {pending !== null && (
         <ConfirmWrite pending={pending} onConfirm={confirmPending} onCancel={() => setPending(null)} />
       )}

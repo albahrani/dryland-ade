@@ -1,4 +1,4 @@
-import type { NextUpMarker, TicketDetail, TicketRef, TreeTicket } from "@dryland/core";
+import type { NextUpMarker, TicketDetail, TreeTicket } from "@dryland/core";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import type { ItemContent, ProjectView } from "../../shared/api.ts";
@@ -10,6 +10,7 @@ import { ProgressBar } from "./ProgressBar.tsx";
 import { StartWork } from "./StartWork.tsx";
 import { StatusIcon } from "./status.tsx";
 import { TicketActions, type TicketActionHandler } from "./TicketActions.tsx";
+import type { WorkTarget } from "../../shared/work-target.ts";
 
 /** Re-reads the item whenever the project view changes, so open tabs follow the files on disk. */
 function useItem(ref: DocumentRef, project: ProjectView): ItemContent | null {
@@ -114,7 +115,12 @@ function TicketContent({
   return (
     <article>
       {ticket.status !== "done" && (
-        <StartWork onStart={(agentId) => onStartWork({ map: ticket.map, id: ticket.id }, agentId)} />
+        <StartWork
+          chooseSkill
+          onStart={(agentId, skill) =>
+            onStartWork({ kind: "ticket", ticket: { map: ticket.map, id: ticket.id } }, agentId, skill)
+          }
+        />
       )}
       <TicketActions ticket={ticket} stale={stale} onAction={onAction} />
       <Details
@@ -160,7 +166,7 @@ function TicketContent({
   );
 }
 
-export type StartWorkHandler = (ticket: TicketRef, agentId: string) => Promise<void>;
+export type StartWorkHandler = (target: WorkTarget, agentId: string, skill: string | null) => Promise<void>;
 
 export function ItemTab({
   item,
@@ -206,6 +212,11 @@ export function ItemTab({
   const marker = mapMarker(nextUp, detail.name);
   return (
     <article>
+      <StartWork
+        chooseSkill
+        label={(agent) => `Continue map with ${agent}`}
+        onStart={(agentId, skill) => onStartWork({ kind: "map", map: detail.name }, agentId, skill)}
+      />
       <Details
         title={
           <>

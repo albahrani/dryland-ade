@@ -6,21 +6,24 @@ import {
   type AgentAdapter,
   blocksInput,
   commandForTicket,
+  createWorktree,
   DrylandError,
   envKey,
   findExecutable,
   findMainCheckout,
   hookSettings,
+  installedSkills,
   nextSteps,
   type ProcessRunner,
   readRepoSnapshot,
   readTickets,
   skillCommand,
-  type TicketRef,
+  worktreeForScratch,
   worktreeForTicket,
 } from "@dryland/core";
 import type { AgentAvailability, SessionInfo } from "../shared/api.ts";
 import { trackerArgs } from "../shared/tracker-actions.ts";
+import { chosenSkillCommand, MAP_WORKTREE_SLUG, NEW_MAP_EFFORT, type WorkTarget } from "../shared/work-target.ts";
 import type { DrylandCli } from "./dryland-cli.ts";
 import { createPretyper, PRETYPE_TIMING, type PretypeTiming } from "./pretype.ts";
 import type { ShellSpec } from "./shell.ts";
@@ -51,12 +54,17 @@ export interface StartedWork {
 export interface WorkStarter {
   /** Every Agent adapter, with whether its CLI is installed. */
   listAgents(): Promise<AgentAvailability[]>;
+  /** The skills the Agent CLI has installed for the project, by name. */
+  listSkills(projectPath: string, agentId: string): Promise<string[]>;
   /**
-   * Opens the Agent CLI in the ticket's worktree, created or reused, with the ticket's next-step command typed but
-   * not submitted, and claims the ticket for the session. A ticket someone else holds keeps its claim and the
-   * session starts anyway. Fails with a `DrylandError`, before touching anything, when the CLI is not installed.
+   * Opens the Agent CLI with a command typed but not submitted. On a ticket: in its worktree, created or reused,
+   * with its next-step command, and the ticket is claimed for the session; a ticket someone else holds keeps its
+   * claim and the session starts anyway. On a map: in its `<map>/scratch-wayfinder` worktree, created or reused,
+   * with `/wayfinder <map>`. On a new map: in a new temporary worktree with `/wayfinder `, so the skill, not
+   * Dryland, writes the map. With `skill`, that installed skill's command is typed instead. Fails with a
+   * `DrylandError`, before touching anything, when the CLI or the skill is not installed.
    */
-  startWork(projectPath: string, ticket: TicketRef, agentId: string): Promise<StartedWork>;
+  startWork(projectPath: string, target: WorkTarget, agentId: string, skill?: string | null): Promise<StartedWork>;
   /** The sessions started so far, as recorded at spawn. */
   sessions(): SessionInfo[];
 }
@@ -82,6 +90,16 @@ function launchArgs(adapter: AgentAdapter, hooksDir: string): string[] {
   writeFileSync(temporary, JSON.stringify(hookSettings(adapter.statusEvents), null, 2));
   renameSync(temporary, file);
   return [...adapter.launchArgs, adapter.hookInjection.flag, file];
+}
+
+/** The user's home as the CLIs read it: `USERPROFILE` on Windows, `HOME` elsewhere; `null` when unset. */
+function homeOf(env: Record<string, string | undefined>): string | null {
+  const names = process.platform === "win32" ? ["USERPROFILE", "HOME"] : ["HOME"];
+  for (const name of names) {
+    const value = env[envKey(env, name)];
+    if (value !== undefined && value !== "") return value;
+  }
+  return null;
 }
 
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
@@ -120,7 +138,10 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       );
     },
 
-    async startWork(projectPath, ticket, agentId) {
+    listSkills: async (projectPath, agentId) =>
+      installedSkills(adapterFor(agentId), await findMainCheckout(runner, projectPath), homeOf(env)),
+
+    async startWork(projectPath, target, agentId, skill = null) {
       const adapter = adapterFor(agentId);
       const executable = await findExecutable(adapter.binary, env);
       if (executable === null) {
@@ -130,19 +151,41 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         );
       }
       const mainCheckout = await findMainCheckout(runner, projectPath);
-      const worktree = await worktreeForTicket(runner, mainCheckout, `${ticket.map}/${ticket.id}`);
-      const tickets = await readTickets(mainCheckout);
-      const command = commandForTicket(nextSteps(await readRepoSnapshot(runner, mainCheckout, tickets)), ticket);
-      const typed = command === null ? null : skillCommand(adapter, command);
+      if (skill !== null && !(await installedSkills(adapter, mainCheckout, homeOf(env))).includes(skill)) {
+        throw new DrylandError(
+          `${adapter.name} has no skill "${skill}" installed for this project.`,
+          "Pick one of the skills offered.",
+        );
+      }
 
       const sessionId = randomUUID();
-      // After the command is chosen, which reads the ticket unclaimed, and before the agent starts, so it finds the
-      // claim made. Never released or taken over here: a claim someone else holds stays theirs.
-      const claim = await dryland.run(trackerArgs({ kind: "claim", ticket }, autoCommit(projectPath)), {
-        cwd: mainCheckout,
-        sessionId,
-      });
-      const warnings = claim.ok ? claim.warnings : [`${claim.message} The session started without claiming it.`];
+      const warnings: string[] = [];
+      let worktree: { branch: string; path: string };
+      let command: string | null;
+      if (target.kind === "ticket") {
+        const { ticket } = target;
+        worktree = await worktreeForTicket(runner, mainCheckout, `${ticket.map}/${ticket.id}`);
+        const tickets = await readTickets(mainCheckout);
+        command =
+          skill !== null
+            ? chosenSkillCommand(skill, target)
+            : commandForTicket(nextSteps(await readRepoSnapshot(runner, mainCheckout, tickets)), ticket);
+        // After the command is chosen, which reads the ticket unclaimed, and before the agent starts, so it finds
+        // the claim made. Never released or taken over here: a claim someone else holds stays theirs.
+        const claim = await dryland.run(trackerArgs({ kind: "claim", ticket }, autoCommit(projectPath)), {
+          cwd: mainCheckout,
+          sessionId,
+        });
+        warnings.push(...(claim.ok ? claim.warnings : [`${claim.message} The session started without claiming it.`]));
+      } else if (target.kind === "map") {
+        worktree = await worktreeForScratch(runner, mainCheckout, target.map, MAP_WORKTREE_SLUG);
+        command = skill !== null ? chosenSkillCommand(skill, target) : `/wayfinder ${target.map}`;
+      } else {
+        // Always a new worktree: each new map is its own exploration, named only once the skill has charted it.
+        worktree = await createWorktree(runner, mainCheckout, { map: NEW_MAP_EFFORT, slug: MAP_WORKTREE_SLUG });
+        command = skill !== null ? chosenSkillCommand(skill, target) : "/wayfinder ";
+      }
+      const typed = command === null ? null : skillCommand(adapter, command);
       let terminalId = "";
       const pretyper =
         typed === null
@@ -163,7 +206,8 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         id: sessionId,
         terminalId,
         agent: { id: adapter.id, name: adapter.name },
-        ticket: { map: ticket.map, id: ticket.id },
+        ticket: target.kind === "ticket" ? { map: target.ticket.map, id: target.ticket.id } : null,
+        map: target.kind === "ticket" ? target.ticket.map : target.kind === "map" ? target.map : null,
         worktree: { branch: worktree.branch, path: worktree.path },
         command: typed,
         startedAt: new Date().toISOString(),

@@ -1,6 +1,6 @@
 import type { LiveEvent, SessionState } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppSettings, DrylandApi, ProjectView } from "../shared/api.ts";
+import type { AppSettings, DrylandApi, MenuCommand, ProjectView } from "../shared/api.ts";
 
 const api: DrylandApi = {
   getState: () => ipcRenderer.invoke("state:get"),
@@ -11,7 +11,8 @@ const api: DrylandApi = {
   readItem: (ref) => ipcRenderer.invoke("item:read", ref),
   openTerminal: () => ipcRenderer.invoke("terminal:open"),
   listAgents: () => ipcRenderer.invoke("agents:list"),
-  startWork: (ticket, agentId) => ipcRenderer.invoke("work:start", ticket, agentId),
+  listSkills: (agentId) => ipcRenderer.invoke("skills:list", agentId),
+  startWork: (target, agentId, skill) => ipcRenderer.invoke("work:start", target, agentId, skill),
   runTicketAction: (action, commit) => ipcRenderer.invoke("tracker:run", action, commit),
   dontAskAgain: (type) => ipcRenderer.invoke("confirmations:dont-ask", type),
   writeTerminal: (id, data) => ipcRenderer.send("terminal:write", id, data),
@@ -41,6 +42,11 @@ const api: DrylandApi = {
     const listener = (_event: unknown, settings: AppSettings) => callback(settings);
     ipcRenderer.on("settings:changed", listener);
     return () => ipcRenderer.removeListener("settings:changed", listener);
+  },
+  onMenuCommand(callback) {
+    const listener = (_event: unknown, command: MenuCommand) => callback(command);
+    ipcRenderer.on("menu:command", listener);
+    return () => ipcRenderer.removeListener("menu:command", listener);
   },
   onSessionStates(callback) {
     const listener = (_event: unknown, states: Readonly<Record<string, SessionState>>) => callback(states);

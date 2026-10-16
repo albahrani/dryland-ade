@@ -9,7 +9,23 @@ export type TicketAction =
   | { kind: "claim"; ticket: TicketRef }
   | { kind: "release"; ticket: TicketRef }
   | { kind: "resolve"; ticket: TicketRef; answer: string }
-  | { kind: "unblock"; ticket: TicketRef; blocker: string };
+  | { kind: "unblock"; ticket: TicketRef; blocker: string }
+  | { kind: "create"; ticket: NewTicket };
+
+/** The ticket types `dryland ticket create` takes; core's `TICKET_TYPES`, kept here because this runs in the renderer. */
+export const CREATE_TYPES = ["research", "prototype", "grilling", "task"] as const;
+export type CreateType = (typeof CREATE_TYPES)[number];
+
+/** A ticket as the New ticket dialog describes it, before `dryland` numbers it. */
+export interface NewTicket {
+  map: string;
+  title: string;
+  type: CreateType;
+  /** Left out of the command when empty. */
+  question: string;
+  /** Numbers of tickets on the same map. */
+  blockedBy: string[];
+}
 
 /** Where an action was started: a ticket's own actions never ask, a general button does. */
 export type ActionSource = "ticket" | "general-button";
@@ -36,16 +52,30 @@ export const ASK_ALWAYS: DontAsk = { "tracker-metadata": false, "user-config": f
 
 /** The `dryland` arguments of an action, saying whether to commit, so the app's setting wins over git's. */
 export function trackerArgs(action: TicketAction, autoCommit: boolean): string[] {
-  const ref = ticketKey(action.ticket);
   const args = ((): string[] => {
     switch (action.kind) {
       case "claim":
       case "release":
-        return ["ticket", action.kind, ref];
+        return ["ticket", action.kind, ticketKey(action.ticket)];
       case "resolve":
-        return ["ticket", "resolve", ref, "--answer", action.answer];
+        return ["ticket", "resolve", ticketKey(action.ticket), "--answer", action.answer];
       case "unblock":
-        return ["ticket", "block", ref, "--remove", action.blocker];
+        return ["ticket", "block", ticketKey(action.ticket), "--remove", action.blocker];
+      case "create": {
+        const { map, title, type, question, blockedBy } = action.ticket;
+        return [
+          "ticket",
+          "create",
+          "--map",
+          map,
+          "--title",
+          title,
+          "--type",
+          type,
+          ...(question === "" ? [] : ["--question", question]),
+          ...(blockedBy.length === 0 ? [] : ["--blocked-by", blockedBy.join(",")]),
+        ];
+      }
     }
   })();
   return [...args, autoCommit ? "--commit" : "--no-commit"];
@@ -57,12 +87,13 @@ export function commandLine(args: string[]): string {
   return ["dryland", ...args].map(quote).join(" ");
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 // Never starts with `-`, so nothing from the renderer is read as a `dryland` option.
-const MAP_NAME = /^\w[\w.-]*$/;
+export const MAP_NAME = /^\w[\w.-]*$/;
 const NUMBER = /^\d+$/;
 
-const isTicketRef = (value: unknown): value is TicketRef =>
+export const isTicketRef = (value: unknown): value is TicketRef =>
   isRecord(value) &&
   typeof value.map === "string" &&
   MAP_NAME.test(value.map) &&
@@ -71,6 +102,7 @@ const isTicketRef = (value: unknown): value is TicketRef =>
 
 /** Whether `value`, which came from the renderer, is a well-formed ticket action. */
 export function isTicketAction(value: unknown): value is TicketAction {
+  if (isRecord(value) && value.kind === "create") return isNewTicket(value.ticket);
   if (!isRecord(value) || !isTicketRef(value.ticket)) return false;
   switch (value.kind) {
     case "claim":
@@ -83,6 +115,20 @@ export function isTicketAction(value: unknown): value is TicketAction {
     default:
       return false;
   }
+}
+
+function isNewTicket(value: unknown): value is NewTicket {
+  return (
+    isRecord(value) &&
+    typeof value.map === "string" &&
+    MAP_NAME.test(value.map) &&
+    typeof value.title === "string" &&
+    value.title.trim() !== "" &&
+    CREATE_TYPES.includes(value.type as CreateType) &&
+    typeof value.question === "string" &&
+    Array.isArray(value.blockedBy) &&
+    value.blockedBy.every((n) => typeof n === "string" && NUMBER.test(n))
+  );
 }
 
 export interface AutoCommitSettings {
