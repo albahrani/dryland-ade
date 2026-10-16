@@ -116,7 +116,7 @@ describe("dryland ticket resolve", () => {
 
   it("also releases a claim, leaving no dryland annotation behind", async () => {
     const repo = shopRepo();
-    await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    await repo.run(["ticket", "claim", "shop/01"]);
 
     const result = await repo.run(["ticket", "resolve", "shop/01", "--answer", "Done."]);
 

@@ -48,7 +48,7 @@ describe("dryland ticket block failures", () => {
   it("commits only the ticket and keeps the other header lines and a claim annotation", async () => {
     const repo = shopRepo();
     repo.write("unrelated.txt", "dirty");
-    await repo.run(["ticket", "claim", "shop/02"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    await repo.run(["ticket", "claim", "shop/02"]);
     const before = repo.read(PAY);
 
     const result = await repo.run(["ticket", "block", "shop/02", "--add", "1"]);
@@ -179,7 +179,7 @@ describe("dryland ticket triage", () => {
 
   it("refuses to retriage a claimed or resolved ticket and states the next action", async () => {
     const repo = shopRepo();
-    await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    await repo.run(["ticket", "claim", "shop/01"]);
     await repo.run(["ticket", "resolve", "shop/02", "--answer", "Done."]);
 
     const claimed = await repo.run(["ticket", "triage", "shop/01", "--role", "needs-info"]);
