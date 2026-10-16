@@ -31,3 +31,5 @@ The Sessions view in the activity bar as split panes, Hidden above Open (Paused 
 ## Comments
 
 From mattpocock-ade/75 (1e28cf0): hidden sessions are sessions whose terminalId has no open tab in App.tsx. Show a session with App's showSession (replays TerminalManager.output via terminal:replay, then opens the tab) and stop it with requestStop (asks per stopNeedsConfirmation in shared/stop-session.ts). Unseen output is AppState.unseenSessions, kept current by onUnseenSessions; UnseenMark and LiveSessions are in renderer/src/SessionControls.tsx, ready to reuse for the pane rows.
+
+From mattpocock-ade/75: the spec says a hidden session reopens from a next-up marker too, and that is not built. Today the marker opens the ticket tab, whose Live sessions list has Show session. Make clicking a next-up marker whose step targets a live session (the waiting-session rule) show that session directly with App's showSession, which replays its buffered output into a new tab.
