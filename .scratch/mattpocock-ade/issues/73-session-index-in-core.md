@@ -1,7 +1,8 @@
 # Session index in core
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T20:20:33.667Z","was":"ready-for-agent"}} -->
 
 Spec: [spec](../spec.md), user stories 101, 102. "Sessions, pausing and resuming". ADR 0010. Session ids per CLI: `research/agent-cli-session-resume.md`.
 
