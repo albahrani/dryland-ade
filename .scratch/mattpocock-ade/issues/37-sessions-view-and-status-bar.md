@@ -1,7 +1,8 @@
 # Sessions view panes and status bar
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T21:31:11.766Z","was":"ready-for-agent"}} -->
 Blocked by: 75
 
 Spec: [spec](../spec.md), user stories 47, 54, 103. "UI", "Sessions, pausing and resuming" (Sessions view layout). Layout detail: `prototype/views-and-ux/index.html?variant=B` and ticket 71's answer.
