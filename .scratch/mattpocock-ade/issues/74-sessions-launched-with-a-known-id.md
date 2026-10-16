@@ -1,7 +1,8 @@
 # Sessions launched with a known id
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T20:54:03.497Z","was":"ready-for-agent"}} -->
 Blocked by: 73
 
 Spec: [spec](../spec.md), user stories 98, 101. "Sessions, pausing and resuming", "Agent adapters". ADRs 0006, 0008, 0010. `research/agent-cli-session-resume.md`.
