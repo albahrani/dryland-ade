@@ -147,6 +147,23 @@ describe("quit confirmation", () => {
     expect(confirmation?.detail).not.toContain("shop/02");
   });
 
+  it("lists sessions with unseen output after those waiting and before the rest, saying so", () => {
+    const confirmation = quitConfirmation(
+      [
+        session("a", { map: "shop", id: "02" }, "shop", "shop/02-grill"),
+        session("b", { map: "shop", id: "03" }, "shop", "shop/03-cart"),
+        session("c", { map: "shop", id: "04" }, "shop", "shop/04-pay"),
+      ],
+      { a: "running", b: "idle", c: "waiting" },
+      new Set(["b"]),
+    );
+    expect(confirmation?.detail.split("\n").slice(0, 3)).toEqual([
+      "• Claude Code shop/04 (waiting for you) in shop/04-pay",
+      "• Claude Code shop/03 (idle, unseen output) in shop/03-cart",
+      "• Claude Code shop/02 (working) in shop/02-grill",
+    ]);
+  });
+
   it("speaks of one session in the singular", () => {
     const confirmation = quitConfirmation([session("a", null, null, "new-map/scratch-wayfinder")], {});
     expect(confirmation?.message).toBe("1 session is still running. Quit Dryland and stop it?");

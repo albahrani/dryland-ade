@@ -1,7 +1,8 @@
 import type { NextUpMarker, TicketDetail, TreeTicket } from "@dryland/core";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
-import type { ItemContent, ProjectView } from "../../shared/api.ts";
+import type { ItemContent, ProjectView, SessionInfo } from "../../shared/api.ts";
+import { LiveSessions, type SessionHandlers } from "./SessionControls.tsx";
 import { formatBlockers } from "../../shared/blockers.ts";
 import { mapMarker, NO_NEXT_UP, type NextUp, ticketMarker, whyNotText } from "../../shared/next-up.ts";
 import { NextUpExplanation, NextUpStar } from "./NextUp.tsx";
@@ -98,10 +99,15 @@ function TicketContent({
   nextUp,
   treeTicket,
   stale,
+  sessions,
+  sessionHandlers,
   onStartWork,
   onAction,
 }: {
   ticket: TicketDetail;
+  /** The sessions started on the ticket. */
+  sessions: SessionInfo[];
+  sessionHandlers: SessionHandlers;
   header: HeaderState;
   nextUp: NextUp;
   /** The ticket's row in the tree, which "Why not this?" reads. */
@@ -122,6 +128,7 @@ function TicketContent({
           }
         />
       )}
+      <LiveSessions sessions={sessions} handlers={sessionHandlers} />
       <TicketActions ticket={ticket} stale={stale} onAction={onAction} />
       <Details
         open={header.open}
@@ -172,12 +179,17 @@ export function ItemTab({
   item,
   project,
   header,
+  sessions,
+  sessionHandlers,
   onStartWork,
   onTicketAction,
 }: {
   item: DocumentRef;
   project: ProjectView;
   header: HeaderState;
+  /** Every session the app started; the tab shows those on its ticket or map. */
+  sessions: SessionInfo[];
+  sessionHandlers: SessionHandlers;
   onStartWork: StartWorkHandler;
   onTicketAction: TicketActionHandler;
 }) {
@@ -197,6 +209,8 @@ export function ItemTab({
         nextUp={nextUp}
         treeTicket={treeTicket}
         stale={project.tree.ok && project.tree.staleClaims.includes(ticketKey(content.ticket))}
+        sessions={sessions.filter((s) => s.ticket !== null && ticketKey(s.ticket) === ticketKey(content.ticket))}
+        sessionHandlers={sessionHandlers}
         onStartWork={onStartWork}
         onAction={onTicketAction}
       />
@@ -217,6 +231,8 @@ export function ItemTab({
         label={(agent) => `Continue map with ${agent}`}
         onStart={(agentId, skill) => onStartWork({ kind: "map", map: detail.name }, agentId, skill)}
       />
+      {/* The map's own session and those on its tickets. */}
+      <LiveSessions sessions={sessions.filter((s) => s.map === detail.name)} handlers={sessionHandlers} />
       <Details
         title={
           <>

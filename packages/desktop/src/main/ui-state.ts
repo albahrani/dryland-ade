@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
+import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
 import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
 
@@ -18,6 +19,8 @@ export interface UiState {
   projectAutoCommit: Record<string, boolean>;
   /** Each confirmation type's "do not ask again" flag. */
   dontAsk: DontAsk;
+  /** When stopping a session asks first. */
+  stopConfirmation: StopConfirmation;
 }
 
 const DEFAULTS: UiState = {
@@ -28,6 +31,7 @@ const DEFAULTS: UiState = {
   autoCommit: true,
   projectAutoCommit: {},
   dontAsk: ASK_ALWAYS,
+  stopConfirmation: DEFAULT_STOP_CONFIRMATION,
 };
 
 export interface UiStateStore {
@@ -69,6 +73,7 @@ function parse(text: string): UiState {
     autoCommit: typeof raw.autoCommit === "boolean" ? raw.autoCommit : DEFAULTS.autoCommit,
     projectAutoCommit: parseOverrides(raw.projectAutoCommit),
     dontAsk: parseDontAsk(raw.dontAsk),
+    stopConfirmation: isStopConfirmation(raw.stopConfirmation) ? raw.stopConfirmation : DEFAULTS.stopConfirmation,
   };
 }
 

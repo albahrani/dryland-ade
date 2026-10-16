@@ -45,7 +45,8 @@ const FAKE_HOOKS = fileURLToPath(new URL("../../cli/test/fake-claude-hooks.mjs",
  * A fake `claude`: prints where it runs and what Dryland gave it, runs `dryland ticket list` the way an agent
  * would, then echoes each key it receives and reports an Enter as SUBMITTED. Like the real CLI it fires the hooks
  * of its `--settings`: UserPromptSubmit on Enter, a permission prompt on `!`, Stop on `~`, and on `#` SessionEnd
- * before it exits. None of those keys is in a pre-typed command.
+ * before it exits. On `*` it prints LATER-OUTPUT and fires Stop 1.5 seconds later, as an agent finishing a task
+ * while nobody looks. None of those keys is in a pre-typed command.
  */
 function stubAgent(): string {
   const dir = mkdtempSync(join(tmpdir(), "dryland-e2e-agent-"));
@@ -68,6 +69,7 @@ function stubAgent(): string {
       "  if (keys.includes('!')) ['PermissionRequest', 'Notification:permission_prompt'].forEach((e) => hooks.fire(settings, e));",
       "  if (keys.includes('~')) hooks.fire(settings, 'Stop');",
       "  if (keys.includes('#')) { hooks.fire(settings, 'SessionEnd'); process.exit(0); }",
+      "  if (keys.includes('*')) setTimeout(() => { process.stdout.write('\\r\\nLATER-OUTPUT\\r\\n'); hooks.fire(settings, 'Stop'); }, 1500);",
       "  process.stdout.write(keys.includes('\\r') ? '\\r\\nSUBMITTED\\r\\n' : keys);",
       "});",
     ].join("\n"),
@@ -162,12 +164,93 @@ test("shows the session's state from Claude Code's hooks on its tab and on its t
   await window.getByRole("tab", { name: "shop/02", exact: true }).click();
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
   await expect(ticketBadge("launched")).toBeVisible();
-  // Closing its tab kills the CLI, which ends the session.
+  // Closing its tab hides the session; its CLI keeps running.
   await window.getByRole("button", { name: "Close Claude Code shop/02" }).last().click();
-  await expect(ticketBadge("ended")).toBeVisible();
+  await expect(ticketBadge("launched")).toBeVisible();
   // A reloaded window gets the sessions and their states back from the main process.
   await window.reload();
-  await expect(ticketBadge("ended")).toBeVisible();
+  await expect(ticketBadge("launched")).toBeVisible();
+  await app.close();
+});
+
+/** Whether process `pid` still runs. */
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+test("closing a session tab hides the session, which keeps running and shows again with what it printed", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/implement shop/02");
+  const pid = Number(/pid=(\d+)/.exec(await screen.innerText())?.[1]);
+
+  // The CLI prints and goes idle only after its tab is closed.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("*");
+  await window.getByRole("button", { name: "Close Claude Code shop/02" }).click();
+  await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveCount(0);
+  const ticketBadge = (state: string) =>
+    window.getByRole("region", { name: "Tickets" }).getByRole("img", { name: `Claude Code: ${state}` });
+  await expect(ticketBadge("idle")).toBeVisible();
+  expect(alive(pid)).toBe(true);
+
+  // The ticket shows the hidden session, marked for its unseen output, and shows it again.
+  await window.getByRole("tab", { name: "shop/02", exact: true }).click();
+  const live = window.getByRole("region", { name: "Live sessions" });
+  await expect(live).toContainText("Claude Code shop/02");
+  await expect(live.getByRole("img", { name: "Unseen output" })).toBeVisible();
+  await live.getByRole("button", { name: "Show session" }).click();
+  await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute("aria-selected", "true");
+  // Replayed: what it printed before and while hidden.
+  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(screen).toContainText("/implement shop/02*");
+  await expect(screen).toContainText("LATER-OUTPUT");
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Unseen output" })).toHaveCount(0);
+  // Input reaches the same process.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("y");
+  await expect(screen).toContainText(/LATER-OUTPUT\s*y/);
+  await app.close();
+});
+
+test("stops a session from its tab, asking first while it works, and keeps its claim and last state", async () => {
+  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/implement shop/02");
+  const pid = Number(/pid=(\d+)/.exec(await screen.innerText())?.[1]);
+  const header = window.getByLabel("Session", { exact: true });
+  const confirm = window.getByRole("dialog", { name: "Stop session" });
+
+  // Working: Stop asks, and Cancel keeps it running.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.press("Enter");
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: working" })).toBeVisible();
+  await header.getByRole("button", { name: "Stop session" }).click();
+  await expect(confirm).toContainText("It is still working");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  expect(alive(pid)).toBe(true);
+
+  // Idle with nothing unseen: Stop stops at once.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("~");
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: idle" })).toBeVisible();
+  await header.getByRole("button", { name: "Stop session" }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(screen).toContainText("[session stopped]");
+  await expect.poll(() => alive(pid)).toBe(false);
+  await expect(header.getByRole("button", { name: "Stop session" })).toHaveCount(0);
+
+  // The claim stays, and the session index still has the last state the hooks reported.
+  expect(readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8")).toContain("Status: claimed");
+  const index = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")) as unknown;
+  expect(JSON.stringify(index)).toContain('"lastState":"idle"');
   await app.close();
 });
 

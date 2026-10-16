@@ -18,6 +18,9 @@ const api: DrylandApi = {
   writeTerminal: (id, data) => ipcRenderer.send("terminal:write", id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send("terminal:resize", id, cols, rows),
   closeTerminal: (id) => ipcRenderer.send("terminal:close", id),
+  viewTerminal: (id) => ipcRenderer.send("terminal:view", id),
+  replayTerminal: (id) => ipcRenderer.invoke("terminal:replay", id),
+  stopSession: (sessionId) => ipcRenderer.invoke("session:stop", sessionId),
   onTerminalData(callback) {
     const listener = (_event: unknown, id: string, data: string) => callback(id, data);
     ipcRenderer.on("terminal:data", listener);
@@ -52,6 +55,11 @@ const api: DrylandApi = {
     const listener = (_event: unknown, states: Readonly<Record<string, SessionState>>) => callback(states);
     ipcRenderer.on("sessions:states", listener);
     return () => ipcRenderer.removeListener("sessions:states", listener);
+  },
+  onUnseenSessions(callback) {
+    const listener = (_event: unknown, sessionIds: string[]) => callback(sessionIds);
+    ipcRenderer.on("sessions:unseen", listener);
+    return () => ipcRenderer.removeListener("sessions:unseen", listener);
   },
 };
 

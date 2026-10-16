@@ -45,6 +45,8 @@ import { resolveShell } from "./shell.ts";
 import { createSessionRecorder } from "./session-recording.ts";
 import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
+import { createUnseenOutput } from "./unseen-output.ts";
+import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../shared/stop-session.ts";
 import { watchProject } from "./watch-project.ts";
 import { createWorkStarter } from "./work.ts";
 import { isSkillChoice, isWorkTarget } from "../shared/work-target.ts";
@@ -60,7 +62,11 @@ const terminals = createTerminalManager({
   provider: nodePtyProvider,
   shell: resolveShell(process.platform, process.env),
   env: ptyEnv,
-  onData: (id, data) => sendToWindow("terminal:data", id, data),
+  onData: (id, data) => {
+    sendToWindow("terminal:data", id, data);
+    const session = sessionIn(id);
+    if (session !== undefined && unseen.output(session.id)) sendUnseen();
+  },
   onExit: (id, exitCode) => {
     sendToWindow("terminal:exit", id, exitCode);
     terminalEnded(id);
@@ -98,12 +104,18 @@ const recorder = createSessionRecorder({
   warn: (message) => console.warn(message),
 });
 const sendSessionStates = () => sendToWindow("sessions:states", status.states());
+const unseen = createUnseenOutput();
+const sendUnseen = () => sendToWindow("sessions:unseen", unseen.ids());
+
+/** The session running in terminal `id`, if one does. */
+const sessionIn = (id: string) => work.sessions().find((s) => s.terminalId === id);
 
 function settings(): AppSettings {
   const saved = store.read();
   return {
     autoCommit: project === null ? saved.autoCommit : autoCommitFor(saved, project.path),
     dontAsk: saved.dontAsk,
+    stopConfirmation: saved.stopConfirmation,
   };
 }
 const sendSettings = () => sendToWindow("settings:changed", settings());
@@ -117,10 +129,11 @@ function liveSessions(): SessionSnapshot[] {
 
 /** Ends the session in terminal `id`, if one runs there: its CLI exited, or Dryland closed the terminal. */
 function terminalEnded(id: string): void {
-  const session = work.sessions().find((s) => s.terminalId === id);
+  const session = sessionIn(id);
   if (session === undefined) return;
   status.exited(session.id);
   sendSessionStates();
+  if (unseen.forget(session.id)) sendUnseen();
   // Its commits landed in a worktree the file watcher does not see; the git-fed next steps may have moved.
   void refresh();
 }
@@ -169,6 +182,7 @@ async function currentState(): Promise<AppState> {
     tabs: (view && tabs[view.path]) || EMPTY_TABS,
     sessions: work.sessions(),
     sessionStates: status.states(),
+    unseenSessions: unseen.ids(),
     settings: settings(),
   };
 }
@@ -289,6 +303,22 @@ function trackerMenu(): MenuItemConstructorOptions[] {
   ];
 }
 
+/** When stopping a session asks first, until Settings has it. */
+function sessionsMenu(): MenuItemConstructorOptions[] {
+  const current = store.read().stopConfirmation;
+  return [
+    {
+      label: "Ask Before Stopping a Session",
+      submenu: STOP_CONFIRMATIONS.map((rule) => ({
+        label: STOP_CONFIRMATION_LABELS[rule],
+        type: "radio" as const,
+        checked: current === rule,
+        click: () => changeSettings({ stopConfirmation: rule }),
+      })),
+    },
+  ];
+}
+
 /** A menu item that opens one of the window's dialogs. */
 const menuCommand = (command: MenuCommand) => () => sendToWindow("menu:command", command);
 
@@ -316,6 +346,7 @@ function buildMenu(): void {
         ],
       },
       { label: "Tracker", submenu: trackerMenu() },
+      { label: "Sessions", submenu: sessionsMenu() },
       { label: "View", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] },
     ]),
   );
@@ -386,8 +417,22 @@ ipcMain.handle("confirmations:dont-ask", (_event, type: unknown) => {
 ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 ipcMain.on("terminal:close", (_event, id: string) => {
+  // Closing a session's tab hides the session: its CLI keeps running until the session is stopped.
+  if (sessionIn(id) !== undefined) return;
   terminals.close(id);
-  terminalEnded(id);
+});
+ipcMain.on("terminal:view", (_event, id: unknown) => {
+  const session = typeof id === "string" ? sessionIn(id) : undefined;
+  if (unseen.view(session?.id ?? null)) sendUnseen();
+});
+ipcMain.handle("terminal:replay", (_event, id: unknown) => (typeof id === "string" ? terminals.output(id) : null));
+ipcMain.handle("session:stop", (_event, sessionId: unknown) => {
+  const session = work.sessions().find((s) => s.id === sessionId);
+  if (session === undefined) return;
+  // Only the process ends: the claim stays, and the session index keeps the last state the hooks reported, so the
+  // session reads as paused (ADR 0010). The manager reports no exit for a terminal it closes.
+  terminals.close(session.terminalId);
+  terminalEnded(session.terminalId);
 });
 
 // One app per user: a second launch brings the running app's window to the front and quits, so it never takes over
@@ -454,7 +499,7 @@ async function shutDown(): Promise<void> {
 /** Asks before quitting while sessions run; on Quit, stops them and quits. */
 async function confirmQuit(): Promise<void> {
   quit = "asking";
-  const confirmation = quitConfirmation(runningSessions(), status.states());
+  const confirmation = quitConfirmation(runningSessions(), status.states(), new Set(unseen.ids()));
   if (confirmation !== null) {
     const options = { type: "question" as const, ...confirmation, defaultId: 1, cancelId: 1, noLink: true };
     const { response } = await (window === null

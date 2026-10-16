@@ -97,6 +97,30 @@ describe("terminal manager", () => {
     expect(terminals.liveIds()).toEqual([]);
   });
 
+  it("keeps a live terminal's newest output within its limit, and drops it once the process is gone", () => {
+    const provider = new FakePtyProvider();
+    const terminals = createTerminalManager({
+      provider,
+      shell: { file: "/bin/fake-sh", args: [] },
+      env: {},
+      outputLimit: 10,
+      onData: () => {},
+      onExit: () => {},
+    });
+    const exited = terminals.open({ cwd: "/repo" });
+    const closed = terminals.open({ cwd: "/repo" });
+    provider.spawned[0]?.emit("old line\r\n");
+    provider.spawned[0]?.emit("new\r\nline");
+    provider.spawned[1]?.emit("other");
+    expect(terminals.output(exited)).toBe("new\r\nline");
+    expect(terminals.output(closed)).toBe("other");
+    provider.spawned[0]?.exit(0);
+    terminals.close(closed);
+    expect(terminals.output(exited)).toBeNull();
+    expect(terminals.output(closed)).toBeNull();
+    expect(terminals.output("nope")).toBeNull();
+  });
+
   it("ignores input for unknown terminals", () => {
     const { terminals } = setup();
     expect(() => {

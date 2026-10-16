@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { createOutputBuffer, OUTPUT_LIMIT, type OutputBuffer } from "./output-buffer.ts";
 import type { PtyProcess, PtyProvider } from "./pty/provider.ts";
 import type { ShellSpec } from "./shell.ts";
 
 export interface TerminalManagerOptions {
   provider: PtyProvider;
   shell: ShellSpec;
+  /** How much of each terminal's newest output `output` keeps. */
+  outputLimit?: number;
   /** The environment shells inherit. */
   env: Record<string, string | undefined>;
   onData(id: string, data: string): void;
@@ -36,6 +39,11 @@ export interface TerminalManager {
   /** Kills every live terminal; used on quit so no process outlives the app. */
   closeAll(): void;
   liveIds(): string[];
+  /**
+   * The newest output of a live terminal, within the output limit, to replay into a view opened after it printed;
+   * `null` once its process has ended.
+   */
+  output(id: string): string | null;
 }
 
 /** Sizes come from the renderer; anything else would make the PTY throw. */
@@ -46,6 +54,11 @@ const DEFAULT_ROWS = 24;
 
 export function createTerminalManager(options: TerminalManagerOptions): TerminalManager {
   const live = new Map<string, PtyProcess>();
+  const outputs = new Map<string, OutputBuffer>();
+  const forget = (id: string) => {
+    live.delete(id);
+    outputs.delete(id);
+  };
 
   function inheritedEnv(): Record<string, string> {
     const env: Record<string, string> = {};
@@ -64,14 +77,17 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
         rows,
         env: { ...(env?.(id) ?? inheritedEnv()), TERM: "xterm-256color", COLORTERM: "truecolor" },
       });
+      const output = createOutputBuffer(options.outputLimit ?? OUTPUT_LIMIT);
       live.set(id, pty);
+      outputs.set(id, output);
       pty.onData((data) => {
+        output.append(data);
         options.onData(id, data);
         onOutput?.(data);
       });
       pty.onExit((exitCode) => {
         if (live.get(id) !== pty) return;
-        live.delete(id);
+        forget(id);
         options.onExit(id, exitCode);
       });
       return id;
@@ -85,14 +101,16 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
     close(id) {
       const pty = live.get(id);
       if (pty === undefined) return;
-      live.delete(id);
+      forget(id);
       pty.kill();
     },
     closeAll() {
       const all = [...live.values()];
       live.clear();
+      outputs.clear();
       for (const pty of all) pty.kill();
     },
     liveIds: () => [...live.keys()],
+    output: (id) => outputs.get(id)?.text() ?? null,
   };
 }

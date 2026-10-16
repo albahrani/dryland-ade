@@ -84,21 +84,24 @@ export interface QuitConfirmation {
 }
 
 /**
- * Asks before quitting when sessions still run, listing every one of them, tab or not, those waiting on the user
- * first. `null` when none runs, so the app quits without asking.
+ * Asks before quitting when sessions still run, listing every one of them, hidden or not: those waiting on the user
+ * first, then those with output the user has not seen. `null` when none runs, so the app quits without asking.
  */
 export function quitConfirmation(
   live: readonly QuitSession[],
   states: Readonly<Record<string, SessionState>>,
+  unseen: ReadonlySet<string> = new Set(),
 ): QuitConfirmation | null {
   // A CLI that reported its session's end has nothing left to lose, even while its process winds down.
   const running = live.filter((session) => states[session.id] !== "ended");
   if (running.length === 0) return null;
-  const urgency = (session: QuitSession) => SESSION_META[states[session.id] ?? "launched"].urgency;
-  const listed = running.sort((a, b) => urgency(a) - urgency(b));
+  const state = (session: QuitSession) => states[session.id] ?? "launched";
+  const rank = (session: QuitSession) =>
+    state(session) === "waiting" ? 0 : unseen.has(session.id) ? 1 : 2 + SESSION_META[state(session)].urgency;
+  const listed = running.sort((a, b) => rank(a) - rank(b));
   const lines = listed.map((session) => {
-    const state = SESSION_META[states[session.id] ?? "launched"].label;
-    return `• ${sessionTitle(session)} (${state}) in ${session.worktree.branch}`;
+    const label = SESSION_META[state(session)].label + (unseen.has(session.id) ? ", unseen output" : "");
+    return `• ${sessionTitle(session)} (${label}) in ${session.worktree.branch}`;
   });
   const count = listed.length === 1 ? "1 session is" : `${listed.length} sessions are`;
   return {

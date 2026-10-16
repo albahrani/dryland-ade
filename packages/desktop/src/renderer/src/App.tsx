@@ -19,7 +19,9 @@ import { Legend } from "./Legend.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
-import { disposeTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
+import { disposeTerminal, existingTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
+import { ConfirmStop, type SessionHandlers, UnseenMark } from "./SessionControls.tsx";
+import { stopNeedsConfirmation } from "../../shared/stop-session.ts";
 import { SessionBadge } from "./status.tsx";
 import { TicketsView } from "./TicketsView.tsx";
 import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts";
@@ -99,8 +101,8 @@ function Sidebar({
   return <p className="empty">The {view} view arrives in a later ticket.</p>;
 }
 
-/** What a session tab says about its session: agent, ticket, worktree and id, as recorded at spawn. */
-function SessionHeader({ session }: { session: SessionInfo }) {
+/** What a session tab says about its session: agent, ticket, worktree and id, as recorded at spawn; and Stop. */
+function SessionHeader({ session, live, onStop }: { session: SessionInfo; live: boolean; onStop: () => void }) {
   return (
     <dl className="session-header" aria-label="Session">
       <div>
@@ -126,6 +128,7 @@ function SessionHeader({ session }: { session: SessionInfo }) {
         <dt>Session</dt>
         <dd title={session.id}>{session.id.slice(0, 8)}</dd>
       </div>
+      {live && <button onClick={onStop}>Stop session</button>}
     </dl>
   );
 }
@@ -151,6 +154,13 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   // The New ticket or New map dialog, while it is open.
   const [dialog, setDialog] = useState<MenuCommand | null>(null);
+  // A session waiting for the user to confirm it should stop.
+  const [stopping, setStopping] = useState<SessionInfo | null>(null);
+
+  // The main process marks output of every other session unseen.
+  const viewedTerminal = state === null ? undefined : activeItem(state.tabs);
+  const viewedTerminalId = viewedTerminal?.kind === "terminal" ? viewedTerminal.id : null;
+  useEffect(() => window.dryland.viewTerminal(viewedTerminalId), [viewedTerminalId]);
 
   useEffect(() => {
     void window.dryland.getState().then((loaded) => {
@@ -168,6 +178,9 @@ export function App() {
     const stopSessionStates = window.dryland.onSessionStates((sessionStates) =>
       setState((current) => current && { ...current, sessionStates }),
     );
+    const stopUnseen = window.dryland.onUnseenSessions((unseenSessions) =>
+      setState((current) => current && { ...current, unseenSessions }),
+    );
     const stopLive = window.dryland.onLiveEvent((event) =>
       setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
     );
@@ -178,13 +191,15 @@ export function App() {
       stopTerminals();
       stopLive();
       stopSessionStates();
+      stopUnseen();
       stopSettings();
     };
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel, sessionStates, settings } = state;
+  const { project, legendDismissed, tabs, liveEventsPanel, sessionStates, unseenSessions, settings } = state;
   const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
+  const isUnseen = (session: SessionInfo) => unseenSessions.includes(session.id);
   const ticketSessionMap = ticketSessions([...sessions.values()], sessionStates);
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
   const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
@@ -197,7 +212,8 @@ export function App() {
   };
   const closeItem = (ref: ItemRef) => {
     if (ref.kind === "terminal") {
-      window.dryland.closeTerminal(ref.id);
+      // A plain terminal ends; a session is only hidden, and its output stays in the main process for replay.
+      if (!sessions.has(ref.id)) window.dryland.closeTerminal(ref.id);
       disposeTerminal(ref.id);
     }
     setTabs(closeTab(tabs, tabKey(ref)));
@@ -228,6 +244,37 @@ export function App() {
     setNotice(warnings.length === 0 ? null : warnings.join(" "));
     setSessions((current) => new Map(current).set(session.terminalId, session));
     showTerminal(session.terminalId, sessionTitle(session));
+  };
+  /** Shows a session in its tab; a hidden one gets a new tab with the output it printed meanwhile. */
+  const showSession = async (session: SessionInfo) => {
+    const ref = { kind: "terminal" as const, id: session.terminalId };
+    if (tabs.open.some((tab) => tabKey(tab) === tabKey(ref))) {
+      setTabs(focusTab(tabs, tabKey(ref)));
+      return;
+    }
+    const output = await window.dryland.replayTerminal(session.terminalId);
+    if (output === null) return;
+    // In the same task as the reply, so output the main process sends after it reaches this terminal, in order.
+    getOrCreateTerminal(session.terminalId).term.write(output);
+    showTerminal(session.terminalId, sessionTitle(session));
+  };
+  const stopSession = (session: SessionInfo) => {
+    setStopping(null);
+    void window.dryland.stopSession(session.id).then(() =>
+      // Only a view still open shows it; a hidden session has none.
+      existingTerminal(session.terminalId)?.term.write("\r\n\x1b[2m[session stopped]\x1b[0m\r\n"),
+    );
+  };
+  const requestStop = (session: SessionInfo) => {
+    if (stopNeedsConfirmation(settings.stopConfirmation, sessionState(session), isUnseen(session)))
+      setStopping(session);
+    else stopSession(session);
+  };
+  const sessionHandlers: SessionHandlers = {
+    state: sessionState,
+    unseen: isUnseen,
+    show: (session) => void showSession(session),
+    stop: requestStop,
   };
   const newTerminal = async () => {
     setTerminalError(null);
@@ -329,6 +376,7 @@ export function App() {
               return (
                 <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
                   {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
+                  {session !== undefined && isUnseen(session) && <UnseenMark />}
                   <button
                     role="tab"
                     aria-selected={tabKey(tab) === tabs.active}
@@ -357,7 +405,13 @@ export function App() {
             </button>
           </p>
         )}
-        {activeSession !== undefined && <SessionHeader session={activeSession} />}
+        {activeSession !== undefined && (
+          <SessionHeader
+            session={activeSession}
+            live={sessionState(activeSession) !== "ended"}
+            onStop={() => requestStop(activeSession)}
+          />
+        )}
         {terminalIds.map((id) => (
           <TerminalTab key={id} id={id} active={activeTab?.kind === "terminal" && activeTab.id === id} />
         ))}
@@ -366,6 +420,8 @@ export function App() {
             key={tabKey(activeTab)}
             item={activeTab}
             project={project}
+            sessions={[...sessions.values()]}
+            sessionHandlers={sessionHandlers}
             onStartWork={startWork}
             onTicketAction={(action) => requestAction(action, "ticket")}
             header={{
@@ -414,6 +470,15 @@ export function App() {
       )}
       {pending !== null && (
         <ConfirmWrite pending={pending} onConfirm={confirmPending} onCancel={() => setPending(null)} />
+      )}
+      {stopping !== null && (
+        <ConfirmStop
+          session={stopping}
+          state={sessionState(stopping)}
+          unseen={isUnseen(stopping)}
+          onConfirm={() => stopSession(stopping)}
+          onCancel={() => setStopping(null)}
+        />
       )}
       <LiveEventsPanel events={liveEvents} mode={liveEventsPanel} onMode={setLiveEventsPanel} />
       <footer className="statusbar">

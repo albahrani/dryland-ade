@@ -50,6 +50,9 @@ export function getOrCreateTerminal(id: string): TerminalEntry {
   return entry;
 }
 
+/** The terminal `id` if a view of it exists, without creating one. */
+export const existingTerminal = (id: string): TerminalEntry | undefined => entries.get(id);
+
 export function disposeTerminal(id: string): void {
   entries.get(id)?.term.dispose();
   entries.delete(id);

@@ -705,6 +705,36 @@ ul {
   color: var(--fg);
 }
 
+.session-header button,
+.live-session button {
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.live-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.live-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-session .session-state {
+  color: var(--fg-dim);
+}
+
+.unseen-mark {
+  color: var(--accent);
+  font-size: 8px;
+  margin-right: 4px;
+}
+
 .content {
   max-width: 80ch;
   line-height: 1.5;

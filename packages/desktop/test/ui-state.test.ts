@@ -11,6 +11,7 @@ const SETTINGS_DEFAULTS = {
   autoCommit: true,
   projectAutoCommit: {},
   dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
+  stopConfirmation: "busy-or-unseen",
 };
 
 describe("ui state store", () => {
@@ -101,6 +102,15 @@ describe("ui state store", () => {
       "user-config": true,
       "prose-annotation": false,
     });
+  });
+
+  it("remembers when stopping a session asks, falling back to the default for an unknown rule", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ stopConfirmation: "never" });
+    expect(createUiStateStore(file).read().stopConfirmation).toBe("never");
+
+    writeFileSync(file, JSON.stringify({ stopConfirmation: "sometimes" }));
+    expect(createUiStateStore(file).read().stopConfirmation).toBe("busy-or-unseen");
   });
 
   it("remembers auto-commit globally and per project, dropping overrides that are not on or off", () => {

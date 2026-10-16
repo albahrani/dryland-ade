@@ -1,5 +1,6 @@
 import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { NextUp } from "./next-up.ts";
+import type { StopConfirmation } from "./stop-session.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 import type { ConfirmationType, DontAsk, TicketAction } from "./tracker-actions.ts";
 import type { WorkTarget } from "./work-target.ts";
@@ -33,6 +34,7 @@ export interface AppSettings {
   /** Whether tracker writes in the open project are committed: its override, else the global setting. */
   autoCommit: boolean;
   dontAsk: DontAsk;
+  stopConfirmation: StopConfirmation;
 }
 
 export interface AppState {
@@ -43,6 +45,8 @@ export interface AppState {
   sessions: SessionInfo[];
   /** The state of each session this app started, by session id. */
   sessionStates: Readonly<Record<string, SessionState>>;
+  /** The sessions that printed output the user has not seen, by session id. */
+  unseenSessions: string[];
   /** The editor tabs last open in `project`. */
   tabs: TabsState;
   settings: AppSettings;
@@ -120,8 +124,14 @@ export interface DrylandApi {
   dontAskAgain(type: ConfirmationType): Promise<void>;
   writeTerminal(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
-  /** Kills the terminal's process. */
+  /** Kills the terminal's process; a session's terminal is left running, hidden, until its session is stopped. */
   closeTerminal(id: string): void;
+  /** Tells which terminal is in view, `null` when none is: output elsewhere marks its session unseen. */
+  viewTerminal(id: string | null): void;
+  /** The newest output of a live terminal, to show again in a new view; `null` once its process has ended. */
+  replayTerminal(id: string): Promise<string | null>;
+  /** Kills a session's Agent CLI; its claim and its session index entry stay, so it can be resumed. */
+  stopSession(sessionId: string): Promise<void>;
   /** Called with output of any terminal. Returns an unsubscribe function. */
   onTerminalData(callback: (id: string, data: string) => void): () => void;
   /** Called when a terminal's process ends by itself. Returns an unsubscribe function. */
@@ -136,4 +146,6 @@ export interface DrylandApi {
   onMenuCommand(callback: (command: MenuCommand) => void): () => void;
   /** Called with every session's state whenever one changes. Returns an unsubscribe function. */
   onSessionStates(callback: (states: Readonly<Record<string, SessionState>>) => void): () => void;
+  /** Called with the sessions that have unseen output whenever that changes. Returns an unsubscribe function. */
+  onUnseenSessions(callback: (sessionIds: string[]) => void): () => void;
 }
