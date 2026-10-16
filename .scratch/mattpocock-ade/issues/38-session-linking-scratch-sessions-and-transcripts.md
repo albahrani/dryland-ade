@@ -21,4 +21,4 @@ Three behaviours that make sure no session is lost:
 - [ ] Starting a session without a ticket creates a scratch worktree and opens the CLI there
 - [ ] After a session ends, its tab shows the full output, accepts no input and is marked ended
 - [ ] Closing the tab of an ended session removes it from the Sessions view
-- [ ] Nothing about ended sessions is persisted across an app restart
+- [ ] Dryland persists no transcript of an ended session across an app restart (the Agent CLI keeps its own; paused sessions and the session index are ADR 0010's later tickets)

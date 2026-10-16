@@ -4,6 +4,8 @@
 
 A product spec plus an ADR set for a cross-platform desktop ADE optimized for repos using the Matt Pocock skills, with all major architecture decisions made and v1 scope clear enough to slice into build tickets. Nothing is built during wayfinding.
 
+Reopened for **paused sessions**: quitting Dryland keeps claims and sessions resumable (ADR 0010). Reached when the spec, ADRs and glossary carry the behaviour, ticket 41 is rewritten, and the behaviour is sliced into build tickets ready for an agent.
+
 ## Notes
 
 - Domain: agent development environment (ADE). Inspiration but NOT a fork: https://github.com/stablyai/orca (research input only; fresh build).
@@ -105,9 +107,12 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 - [Ticket actions, stale claims and write confirmations](issues/39-ticket-actions-stale-claims-and-write-confirmations.md): Claim, resolve and unblock run from a ticket at once through dryland; a stale claim's release from a Tickets row asks first with a resettable per-type 'do not ask again'; sessions claim their ticket and feed the rule engine; auto-commit can be off globally or per project.
 
+- [Paused sessions and resumable claims](issues/69-paused-sessions-and-resumable-claims.md): Quit keeps claims and sessions resumable: a branch holds every claim, a session index in the git common dir links items to their Agent CLI sessions, closed tabs only hide sessions, and resume uses the CLI's own resume-by-id; see ADR 0010.
+
 ## Not yet specified
 
-Nothing. The destination is reached: next is `/to-tickets` on the spec.
+- **Paused sessions build tickets**: slice ADR 0010 and spec stories 96 to 103 into build tickets once the session-resume research and the Sessions view prototype are resolved. Likely seams: the claim holder becoming the worktree branch in `startWork`; the session index in core (read, write, reconcile, retention) and its writers (app hooks, mutating `dryland ticket` commands); the claim states and paused-was-waiting in the rule engine (absorbs ticket 65); hidden session tabs with buffered output and Stop session; resume and startup restore with Resume all. Fit against tickets 37 (Sessions view), 38 (linking) and 55 (Settings: retention, resume on start, stop confirmation) as they stand.
+- Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
 
 - Carried into the build as risks (see the spec's Further Notes): the Claude Code adapter is docs-only until its first implementation ticket verifies it.
 
