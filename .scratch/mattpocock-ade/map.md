@@ -23,6 +23,7 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 - Platform agnostic design (Windows, macOS, Linux); verification Windows-first. Single user, local only, multiple projects.
 - Vocabulary: see root `GLOSSARY.md`. Consult skills `grilling`, `domain-modeling`, `research`, `prototype` as ticket types require.
 - Research capture: repo has no commits/remote yet, so research findings go in `.scratch/mattpocock-ade/research/<name>.md` instead of throwaway branches.
+- Prototype capture: prototypes stay on main under `.scratch/mattpocock-ade/prototype/<name>/`, not on throwaway branches, because build tickets point agents at them for layout detail (e.g. `prototype/views-and-ux/`).
 
 - **Exception to no-user-config (v1, decided):** reliability beats purity. The ADE may make narrow, ADE-owned, reversible writes to user-level agent config when that makes status hooks and first-launch trust work reliably: e.g. a dedicated `~/.copilot/hooks/<ade>.json` (or the equivalent per CLI) gated by env vars set only on ADE PTYs so it is inert elsewhere, and appending ADE worktrees to Copilot's `trustedFolders`. Never rewrite unrelated keys; skip on unparseable files; provide install/status/remove in `ade doctor`. Supersedes the 'never user-level config' lines in the adapter and hook-management decisions; applies to other agent CLIs too where it simplifies hooks. Prior art: Orca (see research/hook-status-mapping.md addendum).
 
