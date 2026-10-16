@@ -118,6 +118,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [New ticket and New map dialogs](issues/40-new-ticket-and-new-map-dialogs.md): New ticket previews and confirms dryland ticket create; New map and Continue map open /wayfinder in scratch worktrees; ticket and map tabs can launch any installed skill.
 
+- [Quit and shutdown lifecycle](issues/41-quit-and-shutdown-lifecycle.md): Quitting with running sessions asks first, listing them waiting-first; quit and shutdown kill PTYs then flush under one 2-second budget, releasing nothing and writing no tracker.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
