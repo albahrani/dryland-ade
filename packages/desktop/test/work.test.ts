@@ -200,17 +200,34 @@ describe("starting work on a ticket", () => {
     expect(worktreeCount(repo)).toBe(1);
   });
 
-  it("claims the ticket for the session, and still types the command the unclaimed ticket called for", async () => {
+  it("claims the ticket for its worktree branch, and still types the command the unclaimed ticket called for", async () => {
     const repo = fixtureRepo();
     const { provider, starter } = setup();
 
     const { session, warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(warnings).toEqual([]);
-    expect(grill(repo)).toContain(`"holder":"${session.id}"`);
-    expect(git(repo, "log", "-1", "--format=%s")).toBe(`Claim shop/02 for ${session.id}`);
+    expect(grill(repo)).not.toContain(session.id);
+    expect(git(repo, "log", "-1", "--format=%s")).toBe("Claim shop/02 for shop/02-grill");
+    const shown = execFileSync(process.execPath, [CLI, "ticket", "show", "shop/02", "--json"], {
+      cwd: repo,
+      encoding: "utf8",
+    });
+    expect(JSON.parse(shown)).toMatchObject({ state: "claimed", claimant: "shop/02-grill" });
     provider.spawned[0]?.emit("❯ ");
     await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/implement shop/02"));
+  });
+
+  it("keeps the claim when work starts on the ticket again, its branch already holding it", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    await starter.startWork(repo, onTicket("02"), "claude-code");
+    const head = git(repo, "rev-parse", "HEAD");
+
+    const { warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
+
+    expect(warnings).toEqual([]);
+    expect(git(repo, "rev-parse", "HEAD")).toBe(head);
   });
 
   it("claims without committing when auto-commit is off", async () => {
@@ -218,21 +235,21 @@ describe("starting work on a ticket", () => {
     const head = git(repo, "rev-parse", "HEAD");
     const { starter } = setup(undefined, {}, false);
 
-    const { session } = await starter.startWork(repo, onTicket("02"), "claude-code");
+    await starter.startWork(repo, onTicket("02"), "claude-code");
 
-    expect(grill(repo)).toContain(`"holder":"${session.id}"`);
+    expect(grill(repo)).toContain('"holder":"shop/02-grill"');
     expect(git(repo, "rev-parse", "HEAD")).toBe(head);
   });
 
   it("starts anyway on a ticket someone else holds, leaving their claim alone and saying so", async () => {
     const repo = fixtureRepo();
     const { provider, starter, dryland } = setup();
-    await dryland.run(["ticket", "claim", "shop/02"], { cwd: repo, sessionId: "someone-else" });
+    await dryland.run(["ticket", "claim", "shop/02"], { cwd: repo });
 
     const { warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
-    expect(warnings).toEqual([expect.stringContaining("already claimed by someone-else")]);
-    expect(grill(repo)).toContain('"holder":"someone-else"');
+    expect(warnings).toEqual([expect.stringContaining("already claimed by main")]);
+    expect(grill(repo)).toContain('"holder":"main"');
     expect(provider.spawned).toHaveLength(1);
   });
 

@@ -15,7 +15,7 @@ export function TicketActions({
   onAction,
 }: {
   ticket: TicketDetail;
-  /** Whether its claim is held by no live Dryland session. */
+  /** Whether its claim is possibly stale: no live session works on it and no ticket worktree is on its branch. */
   stale: boolean;
   onAction: TicketActionHandler;
 }) {
@@ -39,8 +39,8 @@ export function TicketActions({
     <section className="ticket-actions" aria-label="Ticket actions">
       {staleClaim && (
         <p className="stale-claim" role="status">
-          Claimed by {ticket.claimant ?? "someone"}, possibly stale: no live Dryland session holds it. It stays claimed
-          until you release it.
+          Claimed by {ticket.claimant ?? "someone"}, possibly stale: no live Dryland session works on it and no ticket
+          worktree is on that branch. It stays claimed until you release it.
         </p>
       )}
       <div className="action-row">

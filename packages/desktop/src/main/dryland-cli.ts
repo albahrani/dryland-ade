@@ -15,8 +15,8 @@ export type DrylandRun = TicketActionResult;
 
 export interface DrylandCli {
   /**
-   * Runs `dryland <args>` in `cwd`. A claim is made for `sessionId` when given, else for the branch of `cwd`: never
-   * for a session the app itself was started from.
+   * Runs `dryland <args>` in `cwd`. A claim is made for the branch of `cwd`. Live events name `sessionId` when given:
+   * never a session the app itself was started from.
    */
   run(args: string[], options: { cwd: string; sessionId?: string }): Promise<DrylandRun>;
 }

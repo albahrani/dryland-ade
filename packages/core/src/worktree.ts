@@ -333,6 +333,7 @@ export async function readTicketWorktreeStates(
       map,
       id,
       exists: true,
+      branches: [...(previous?.branches ?? []), entry.branch],
       aheadOfDefault: (previous?.aheadOfDefault ?? false) || ahead,
       merged: previous === undefined ? merged : previous.merged && merged,
     });

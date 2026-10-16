@@ -172,10 +172,13 @@ describe("nextSteps session and claim rules", () => {
         ruleId: "stale-claim",
         command: null,
         target: { kind: "ticket", map: "shop", id: "02" },
-        reason: "Ticket shop/02 is claimed, possibly stale: no live Dryland session holds it.",
+        reason:
+          "Ticket shop/02 is claimed, possibly stale: no live Dryland session works on it and no ticket worktree is on its holder's branch.",
         evidence: [
           { artifact: "shop/02", field: "Status", value: "claimed" },
+          { artifact: "shop/02", field: "claimant", value: "unknown" },
           { artifact: "sessions", field: "live sessions on shop/02", value: "0" },
+          { artifact: "worktrees", field: "ticket worktrees on the claimant's branch", value: "0" },
         ],
       },
     ]);
@@ -191,14 +194,40 @@ describe("nextSteps session and claim rules", () => {
     expect(nextSteps(snapshot([effort("shop")], claimed))).toEqual([]);
   });
 
-  it("does not flag a claim whose holder is a live session, whatever ticket that session started on", () => {
-    const claim = '<!-- dryland: {"claim":{"holder":"s1","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->';
-    const claimed = [ticket("shop", "02", ["Type: task", "Status: claimed", claim])];
-    const holder = (state: "running" | "ended") =>
-      snapshot([effort("shop")], claimed, { sessions: [{ id: "s1", ticket: { map: "shop", id: "05" }, state }] });
+  /** Ticket shop/02 claimed by `holder`, with no live session, and the given ticket worktree branches on disk. */
+  function heldBy(holder: string, branches: string[]): RepoSnapshot {
+    const claim = `<!-- dryland: {"claim":{"holder":"${holder}","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->`;
+    return snapshot([effort("shop")], [ticket("shop", "02", ["Type: task", "Status: claimed", claim])], {
+      sessions: [],
+      git: {
+        worktrees: [
+          { map: "shop", id: "02", exists: true, branches, aheadOfDefault: false, merged: false, prExists: null },
+        ],
+      },
+    });
+  }
+  const ruleIds = (input: RepoSnapshot) => nextSteps(input).map((s) => s.ruleId);
 
-    expect(nextSteps(holder("running"))).toEqual([]);
-    expect(nextSteps(holder("ended")).map((s) => s.ruleId)).toEqual(["stale-claim"]);
+  it("does not flag a claim held by the branch of an existing ticket worktree, with no live session", () => {
+    expect(nextSteps(heldBy("shop/02-grill", ["shop/02-grill"]))).toEqual([]);
+  });
+
+  it("flags a claim held by the default branch, or by a name no ticket worktree has checked out", () => {
+    expect(ruleIds(heldBy("main", ["shop/02-grill"]))).toEqual(["stale-claim"]);
+    expect(ruleIds(heldBy("shop/02-gone", ["shop/02-grill"]))).toEqual(["stale-claim"]);
+    expect(nextSteps(heldBy("main", []))[0]?.evidence).toContainEqual({
+      artifact: "shop/02",
+      field: "claimant",
+      value: "main",
+    });
+  });
+
+  it("flags a claim an earlier build made for a session id, even while that session runs on another ticket", () => {
+    const stillRunning = heldBy("s1", ["shop/02-grill"]);
+    stillRunning.sessions = [{ id: "s1", ticket: { map: "shop", id: "05" }, state: "running" }];
+
+    expect(ruleIds(heldBy("4f1c2a3e-0000-4000-8000-000000000000", []))).toEqual(["stale-claim"]);
+    expect(ruleIds(stillRunning)).toEqual(["stale-claim"]);
   });
 });
 
@@ -299,6 +328,7 @@ describe("nextSteps git rules", () => {
     map: "shop",
     id: "20",
     exists: true,
+    branches: ["shop/20-add-cart"],
     aheadOfDefault: true,
     merged: false,
     prExists: null,
@@ -398,7 +428,17 @@ describe("nextSteps priority, compatibility and why-not", () => {
       {
         sessions: [{ id: "s1", ticket: { map: "tri", id: "01" }, state: "waiting" }],
         git: {
-          worktrees: [{ map: "done", id: "01", exists: true, aheadOfDefault: true, merged: false, prExists: false }],
+          worktrees: [
+            {
+              map: "done",
+              id: "01",
+              exists: true,
+              branches: ["done/01-x"],
+              aheadOfDefault: true,
+              merged: false,
+              prExists: false,
+            },
+          ],
         },
       },
     );
@@ -645,9 +685,26 @@ describe("readRepoSnapshot git state", () => {
     const snapshot = await read(root);
 
     expect(snapshot.git?.worktrees).toEqual([
-      { map: "m", id: "01", exists: true, aheadOfDefault: true, merged: false, prExists: null },
+      { map: "m", id: "01", exists: true, branches: ["m/01-a"], aheadOfDefault: true, merged: false, prExists: null },
     ]);
     expect(nextSteps(snapshot).map((s) => s.ruleId)).toEqual(["map-cleared", "review-before-pr", "open-pr"]);
+  });
+
+  it("keeps a claim held by a ticket worktree's branch from reading stale while no session runs", async () => {
+    const root = repoWithResolvedTicket();
+    const claim =
+      '<!-- dryland: {"claim":{"holder":"m/02-b","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->';
+    writeFileSync(join(root, ".scratch/m/issues/02-b.md"), `# B\n\nType: task\nStatus: claimed\n${claim}\n`);
+    git(root, "add", "-A");
+    git(root, "commit", "-q", "-m", "claim");
+    const staleWith = async () =>
+      nextSteps(await readRepoSnapshot(nodeProcessRunner, root, await readLocalMarkdownTickets(root), undefined, []))
+        .filter((s) => s.ruleId === "stale-claim")
+        .map((s) => s.target);
+
+    expect(await staleWith()).toEqual([{ kind: "ticket", map: "m", id: "02" }]);
+    git(root, "worktree", "add", "-q", "-b", "m/02-b", join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt"));
+    expect(await staleWith()).toEqual([]);
   });
 
   it("calls a branch merged once its work is in the default branch", async () => {
@@ -710,7 +767,15 @@ describe("readRepoSnapshot git state", () => {
     const snapshot = await read(root);
 
     expect(snapshot.git?.worktrees).toEqual([
-      { map: "m", id: "01", exists: true, aheadOfDefault: false, merged: false, prExists: null },
+      {
+        map: "m",
+        id: "01",
+        exists: true,
+        branches: ["m/01-a-2"],
+        aheadOfDefault: false,
+        merged: false,
+        prExists: null,
+      },
     ]);
   });
 

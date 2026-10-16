@@ -230,7 +230,8 @@ const COMMANDS: Record<
     target: true,
     changed: changedTicket,
     run: async (target, flags) => {
-      const holder = process.env["DRYLAND_SESSION_ID"] || (await branchHolder(nodeProcessRunner, process.cwd()));
+      // Always the branch, even inside a Dryland session: a claim outlives its session (ADR 0010).
+      const holder = await branchHolder(nodeProcessRunner, process.cwd());
       const { ticket, warnings, alreadyHeld } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
         holder,
         autoCommit: autoCommit(flags),

@@ -38,7 +38,7 @@ export interface WorkStarterOptions {
   launcherDir: string;
   /** Dryland's own directory for the settings files that inject status hooks; never the user's CLI config. */
   hooksDir: string;
-  /** Runs `dryland`, through which the ticket is claimed for its session. */
+  /** Runs `dryland`, through which the ticket is claimed for its worktree branch. */
   dryland: DrylandCli;
   /** Whether tracker writes in the project are committed. */
   autoCommit: (projectPath: string) => boolean;
@@ -58,7 +58,7 @@ export interface WorkStarter {
   listSkills(projectPath: string, agentId: string): Promise<string[]>;
   /**
    * Opens the Agent CLI with a command typed but not submitted. On a ticket: in its worktree, created or reused,
-   * with its next-step command, and the ticket is claimed for the session; a ticket someone else holds keeps its
+   * with its next-step command, and the ticket is claimed for the worktree's branch; a ticket someone else holds keeps its
    * claim and the session starts anyway. On a map: in its `<map>/scratch-wayfinder` worktree, created or reused,
    * with `/wayfinder <map>`. On a new map: in a new temporary worktree with `/wayfinder `, so the skill, not
    * Dryland, writes the map. With `skill`, that installed skill's command is typed instead. Fails with a
@@ -171,9 +171,10 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
             ? chosenSkillCommand(skill, target)
             : commandForTicket(nextSteps(await readRepoSnapshot(runner, mainCheckout, tickets)), ticket);
         // After the command is chosen, which reads the ticket unclaimed, and before the agent starts, so it finds
-        // the claim made. Never released or taken over here: a claim someone else holds stays theirs.
+        // the claim made. Run in the worktree, so its branch holds the claim and the claim outlives the session.
+        // Never released or taken over here: a claim someone else holds stays theirs.
         const claim = await dryland.run(trackerArgs({ kind: "claim", ticket }, autoCommit(projectPath)), {
-          cwd: mainCheckout,
+          cwd: worktree.path,
           sessionId,
         });
         warnings.push(...(claim.ok ? claim.warnings : [`${claim.message} The session started without claiming it.`]));

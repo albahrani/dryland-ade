@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { _electron as electron, type ElectronApplication, expect, type Page, test } from "@playwright/test";
@@ -41,12 +41,18 @@ function fixtureRepo(): string {
 const git = (repo: string, ...args: string[]) =>
   execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: "pipe" }).trim();
 
-/** Claims a ticket the way a session outside Dryland would, with the `dryland` the app ships. */
+/**
+ * Claims a ticket the way a session outside Dryland would, with the `dryland` the app ships, from a worktree on
+ * branch `holder`: no ticket worktree, so the claim reads possibly stale.
+ */
 function claimOutside(repo: string, ref: string, holder: string): void {
-  const env: NodeJS.ProcessEnv = { ...process.env, DRYLAND_SESSION_ID: holder };
+  const worktree = `${repo}-${holder}`;
+  if (!existsSync(worktree)) git(repo, "worktree", "add", "--quiet", "-b", holder, worktree);
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  delete env.DRYLAND_SESSION_ID;
   delete env.DRYLAND_PORT;
   delete env.DRYLAND_TOKEN;
-  execFileSync(process.execPath, [resolve("out/main/dryland.js"), "ticket", "claim", ref], { cwd: repo, env });
+  execFileSync(process.execPath, [resolve("out/main/dryland.js"), "ticket", "claim", ref], { cwd: worktree, env });
 }
 
 async function openProject(): Promise<{ app: ElectronApplication; window: Page; repo: string }> {

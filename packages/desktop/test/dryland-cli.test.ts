@@ -34,14 +34,14 @@ describe("running dryland from the app", () => {
     expect(git(repo, "log", "-1", "--format=%s")).toBe("Claim shop/02 for main");
   });
 
-  it("claims for the session it is given, never for one in the app's own environment", async () => {
+  it("claims for the branch it runs in, never for a session id given or in the app's own environment", async () => {
     const repo = fixtureRepo();
     const inherited = cli({ ...process.env, DRYLAND_SESSION_ID: "the-session-dryland-was-started-from" });
 
     await inherited.run(["ticket", "claim", "shop/02"], { cwd: repo });
     await inherited.run(["ticket", "claim", "shop/03"], { cwd: repo, sessionId: "session-a" });
 
-    expect(git(repo, "log", "-2", "--format=%s")).toBe("Claim shop/03 for session-a\nClaim shop/02 for main");
+    expect(git(repo, "log", "-2", "--format=%s")).toBe("Claim shop/03 for main\nClaim shop/02 for main");
   });
 
   it("leaves the change uncommitted with --no-commit", async () => {

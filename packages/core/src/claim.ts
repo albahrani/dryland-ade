@@ -5,11 +5,11 @@ import { currentTicket, parseTicketReference, type TicketWriteResult } from "./t
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 
 export interface ClaimOptions extends TrackerWriteOptions {
-  /** Who is claiming: a session id or a branch name. */
+  /** Who is claiming: a branch name, so the claim outlives the session that made it (ADR 0010). */
   holder: string;
 }
 
-/** The holder name for `cwd` when no session id is set: its branch, or the commit when detached. */
+/** The holder name for `cwd`: its branch, or the commit when detached. */
 export async function branchHolder(runner: ProcessRunner, cwd: string): Promise<string> {
   const branch = (await runner.run("git", ["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd })).stdout.trim();
   if (branch !== "") return branch;
@@ -24,7 +24,8 @@ export interface ClaimResult extends TicketWriteResult {
 
 /**
  * Claims an open ticket for `holder`. Of several concurrent claims exactly one wins. Claiming a ticket its holder
- * already holds succeeds and changes nothing, so a session can claim the ticket Dryland claimed for it at start.
+ * already holds succeeds and changes nothing, so an agent in a ticket's worktree can claim the ticket Dryland claimed
+ * for that worktree's branch at start.
  */
 export async function claimTicket(
   runner: ProcessRunner,

@@ -43,6 +43,8 @@ export interface SessionSnapshot {
 /** What git says about the Linked worktree of one ticket. */
 export interface WorktreeGitState extends TicketRef {
   exists: boolean;
+  /** The branches of the ticket's worktrees still on disk; a claim held by one of them is not stale. */
+  branches: string[];
   aheadOfDefault: boolean;
   merged: boolean;
   /** Whether a PR or MR exists; `null` where the backend cannot say (it is optional). */
@@ -225,20 +227,21 @@ const waitingSessions: Rule = (snapshot) =>
     }));
 
 /**
- * A claim no live session holds is only flagged: releasing it is an explicit user action. A live session holds a
- * claim it is named in as holder, or one on the ticket it works on.
+ * A claim is held by a branch (ADR 0010). It is possibly stale when no live session works on its ticket and its
+ * holder is no branch checked out in a ticket worktree: the default branch, a name no worktree has, or a session id
+ * an earlier build wrote. It is only flagged: releasing it is an explicit user action.
  */
 const staleClaims: Rule = (snapshot) => {
   const { sessions } = snapshot;
   if (sessions === null) return [];
+  const worktreeBranches = new Set(snapshot.git?.worktrees.flatMap((w) => w.branches) ?? []);
   return snapshot.tickets
     .filter((t) => t.state === "claimed")
     .sort(byTicketNumber)
     .flatMap((ticket) => {
+      if (ticket.claimant !== null && worktreeBranches.has(ticket.claimant)) return [];
       const live = sessions.filter(
-        (s) =>
-          s.state !== "ended" &&
-          (s.id === ticket.claimant || (s.ticket?.map === ticket.map && s.ticket.id === ticket.id)),
+        (s) => s.state !== "ended" && s.ticket?.map === ticket.map && s.ticket.id === ticket.id,
       );
       if (live.length > 0) return [];
       return [
@@ -246,10 +249,12 @@ const staleClaims: Rule = (snapshot) => {
           ruleId: "stale-claim",
           command: null,
           target: { kind: "ticket", map: ticket.map, id: ticket.id },
-          reason: `Ticket ${ticketRef(ticket)} is claimed, possibly stale: no live Dryland session holds it.`,
+          reason: `Ticket ${ticketRef(ticket)} is claimed, possibly stale: no live Dryland session works on it and no ticket worktree is on its holder's branch.`,
           evidence: [
             { artifact: ticketRef(ticket), field: "Status", value: "claimed" },
+            { artifact: ticketRef(ticket), field: "claimant", value: ticket.claimant ?? "unknown" },
             { artifact: "sessions", field: `live sessions on ${ticketRef(ticket)}`, value: "0" },
+            { artifact: "worktrees", field: "ticket worktrees on the claimant's branch", value: "0" },
           ],
         },
       ];

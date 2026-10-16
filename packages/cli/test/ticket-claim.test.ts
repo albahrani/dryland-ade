@@ -17,32 +17,45 @@ function shopRepo(files: Record<string, string> = {}): TempRepo {
 }
 
 describe("dryland ticket claim", () => {
-  it("marks the ticket claimed for the holder and commits it", async () => {
+  it("marks the ticket claimed for the branch of its working directory and commits it", async () => {
     const repo = shopRepo();
 
-    const result = await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    const result = await repo.run(["ticket", "claim", "shop/01"]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("shop/01");
-    expect(result.stdout).toContain("session-a");
+    expect(result.stdout).toBe("Claimed shop/01 for main.\n");
     const shown = JSON.parse((await repo.run(["ticket", "show", "shop/01", "--json"])).stdout);
-    expect(shown).toMatchObject({ state: "claimed", claimant: "session-a" });
+    expect(shown).toMatchObject({ state: "claimed", claimant: "main" });
     expect(repo.git("status", "--porcelain")).toBe("");
-    expect(repo.log()[0]).toBe("Claim shop/01 for session-a");
+    expect(repo.log()[0]).toBe("Claim shop/01 for main");
   });
 
-  it("succeeds without a change or commit when the holder already holds the claim", async () => {
+  it("claims for the worktree's branch inside a Dryland session, not for DRYLAND_SESSION_ID", async () => {
     const repo = shopRepo();
-    await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    const worktree = repo.addWorktree("shop/01-cart");
+
+    const result = await repo.run(["ticket", "claim", "shop/01"], worktree, { DRYLAND_SESSION_ID: "session-a" });
+
+    expect(result.exitCode).toBe(0);
+    const shown = JSON.parse((await repo.run(["ticket", "show", "shop/01", "--json"])).stdout);
+    expect(shown.claimant).toBe("shop/01-cart");
+    expect(repo.read(TICKET_PATH)).not.toContain("session-a");
+  });
+
+  it("succeeds without a change or commit when the branch already holds the claim", async () => {
+    const repo = shopRepo();
+    const worktree = repo.addWorktree("shop/01-cart");
+    await repo.run(["ticket", "claim", "shop/01"], worktree, { DRYLAND_SESSION_ID: "session-a" });
     const claimed = repo.read(TICKET_PATH);
     const head = repo.git("rev-parse", "HEAD");
 
-    const again = await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
-    const other = await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-b" });
+    const again = await repo.run(["ticket", "claim", "shop/01"], worktree, { DRYLAND_SESSION_ID: "session-b" });
+    const other = await repo.run(["ticket", "claim", "shop/01"], repo.path);
 
     expect(again.exitCode).toBe(0);
-    expect(again.stdout).toContain("already holds");
+    expect(again.stdout).toBe("shop/01-cart already holds shop/01.\n");
     expect(other.exitCode).not.toBe(0);
+    expect(other.stderr).toContain("already claimed by shop/01-cart");
     expect(repo.read(TICKET_PATH)).toBe(claimed);
     expect(repo.git("rev-parse", "HEAD")).toBe(head);
   });
@@ -51,7 +64,7 @@ describe("dryland ticket claim", () => {
 describe("dryland ticket release", () => {
   it("restores the file exactly as it was before the claim and commits", async () => {
     const repo = shopRepo();
-    await repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: "session-a" });
+    await repo.run(["ticket", "claim", "shop/01"]);
 
     const claimed = repo.read(TICKET_PATH);
     expect(claimed).toContain("Status: claimed");
@@ -90,11 +103,10 @@ describe("dryland ticket release", () => {
 describe("dryland ticket claim under contention and from worktrees", () => {
   it("lets exactly one of several parallel claims win and tells the losers who holds it", async () => {
     const repo = shopRepo();
-    const holders = Array.from({ length: 8 }, (_, i) => `session-${i}`);
+    const holders = Array.from({ length: 8 }, (_, i) => `shop/01-cart-${i}`);
+    const worktrees = holders.map((branch) => repo.addWorktree(branch));
 
-    const results = await Promise.all(
-      holders.map((holder) => repo.run(["ticket", "claim", "shop/01"], repo.path, { DRYLAND_SESSION_ID: holder })),
-    );
+    const results = await Promise.all(worktrees.map((worktree) => repo.run(["ticket", "claim", "shop/01"], worktree)));
 
     const winners = holders.filter((_, i) => results[i]?.exitCode === 0);
     expect(winners).toHaveLength(1);
@@ -143,10 +155,10 @@ describe("dryland ticket claim commits", () => {
     const repo = shopRepo();
     repo.git("config", "dryland.autoCommit", "false");
 
-    const result = await repo.run(["ticket", "claim", "shop/01", "--commit"], repo.path, { DRYLAND_SESSION_ID: "s" });
+    const result = await repo.run(["ticket", "claim", "shop/01", "--commit"]);
 
     expect(result.exitCode).toBe(0);
-    expect(repo.log()[0]).toBe("Claim shop/01 for s");
+    expect(repo.log()[0]).toBe("Claim shop/01 for main");
     expect(repo.git("status", "--porcelain")).toBe("");
   });
 
