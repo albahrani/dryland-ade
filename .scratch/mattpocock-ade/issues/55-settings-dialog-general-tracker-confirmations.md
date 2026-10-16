@@ -24,3 +24,7 @@ Settings are global with per-project overrides where they apply (auto-commit, co
 - [ ] A setting that has a project override shows that it is overridden and offers to clear the override
 - [ ] Settings persist across restarts as local UI state
 - [ ] Tabs not yet filled say so instead of appearing broken
+
+## Comments
+
+From mattpocock-ade/75 (1e28cf0): the stop-session confirmation rule (UiState.stopConfirmation: always / busy-or-unseen / never, labels in shared/stop-session.ts) is set from a temporary Sessions menu in main/index.ts (sessionsMenu). Move it into the Settings dialog and drop that menu.

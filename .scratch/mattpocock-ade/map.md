@@ -126,6 +126,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Sessions launched with a known id](issues/74-sessions-launched-with-a-known-id.md): Claude Code launches with a Dryland-chosen --session-id recorded before spawn; hook events carry agent_session_id and keep last state, last seen and post-/clear ids in the index.
 
+- [Hidden session tabs and Stop session](issues/75-hidden-session-tabs-and-stop-session.md): Closing a session tab hides it, keeping its CLI running with bounded output replayed on Show from its ticket or map; unseen output is tracked; Stop kills the PTY and keeps claim and last state, asking per a stored rule.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.

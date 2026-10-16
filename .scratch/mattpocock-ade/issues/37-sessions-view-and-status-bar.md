@@ -27,3 +27,7 @@ The Sessions view in the activity bar as split panes, Hidden above Open (Paused 
 - [ ] Grouping switches between map, agent and none, and the choice is remembered
 - [ ] Selecting a session focuses its tab, reopening a hidden one; selecting a ticket with a session selects that session
 - [ ] The status bar shows the selected session's state and branch and the open and hidden counts; with no session selected, the counts only
+
+## Comments
+
+From mattpocock-ade/75 (1e28cf0): hidden sessions are sessions whose terminalId has no open tab in App.tsx. Show a session with App's showSession (replays TerminalManager.output via terminal:replay, then opens the tab) and stop it with requestStop (asks per stopNeedsConfirmation in shared/stop-session.ts). Unseen output is AppState.unseenSessions, kept current by onUnseenSessions; UnseenMark and LiveSessions are in renderer/src/SessionControls.tsx, ready to reuse for the pane rows.
