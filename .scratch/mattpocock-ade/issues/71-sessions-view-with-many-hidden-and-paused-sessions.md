@@ -2,6 +2,8 @@
 
 Type: prototype
 Blocked by: 69
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-16T10:56:35.327Z","was":""}} -->
 
 ## Question
 
