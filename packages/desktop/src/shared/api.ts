@@ -1,5 +1,6 @@
 import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { NextUp } from "./next-up.ts";
+import type { SessionsLayout } from "./sessions-view.ts";
 import type { StopConfirmation } from "./stop-session.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 import type { ConfirmationType, DontAsk, TicketAction } from "./tracker-actions.ts";
@@ -49,6 +50,8 @@ export interface AppState {
   unseenSessions: string[];
   /** The editor tabs last open in `project`. */
   tabs: TabsState;
+  /** The Sessions view's layout last used in `project`. */
+  sessionsLayout: SessionsLayout;
   settings: AppSettings;
 }
 
@@ -105,6 +108,8 @@ export interface DrylandApi {
   setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;
   /** Remembers the open tabs of the open project. */
   saveTabs(tabs: TabsState): Promise<void>;
+  /** Remembers the Sessions view's layout in the open project. */
+  saveSessionsLayout(layout: SessionsLayout): Promise<void>;
   /** Reads a ticket or map fresh from the open project. */
   readItem(ref: DocumentRef): Promise<ItemContent>;
   /** Starts a shell in the open project's main checkout; resolves with its id, or `null` without a project. */

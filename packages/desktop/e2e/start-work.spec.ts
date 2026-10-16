@@ -389,3 +389,68 @@ test("starts a new map with only an Agent CLI chosen, /wayfinder typed in a temp
   );
   await app.close();
 });
+
+test("lists sessions in the Sessions view's Hidden and Open panes and counts them in the status bar", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("/implement shop/02");
+
+  await window.getByRole("button", { name: "Sessions", exact: true }).click();
+  const hiddenPane = window.getByRole("region", { name: "Hidden sessions" });
+  const openPane = window.getByRole("region", { name: "Open sessions" });
+  const counts = window.getByLabel("Session counts");
+  await expect(openPane.getByRole("button", { name: "Grill the cart" })).toBeVisible();
+  await expect(counts).toHaveText("1 open · 0 hidden");
+  // The focused session tab is the selected session: its state and branch are in the status bar.
+  await expect(window.getByLabel("Selected session")).toContainText("shop/02-grill");
+
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("!");
+  await expect(window.locator(".activity-badge")).toHaveText("1");
+
+  // Closing the tab hides the session: its map group starts collapsed, but a waiting session stays in view.
+  await window.getByRole("button", { name: "Close Claude Code shop/02" }).click();
+  await expect(counts).toHaveText("0 open · 1 hidden (1 waiting)");
+  const group = hiddenPane.getByRole("button", { name: "Shop (1/1)" });
+  await expect(group).toHaveAttribute("aria-expanded", "false");
+  await expect(group).toHaveAttribute("title", "1 waiting for you");
+  await expect(hiddenPane.getByRole("img", { name: "Claude Code: waiting for you" })).toBeVisible();
+  await expect(hiddenPane.getByRole("button", { name: "Stop Grill the cart" })).toBeAttached();
+
+  // Grouping and collapsed panes are remembered, here across a reload of the window.
+  await window.getByRole("region", { name: "Sessions" }).getByRole("button", { name: "More actions" }).click();
+  await window.getByRole("radio", { name: "Group by none" }).check();
+  await openPane.getByRole("button", { name: /Open/ }).click();
+  await window.reload();
+  await window.getByRole("button", { name: "Sessions", exact: true }).click();
+  await expect(hiddenPane.getByRole("button", { name: /Shop/ })).toHaveCount(0);
+  await expect(openPane.getByRole("button", { name: /Open/ })).toHaveAttribute("aria-expanded", "false");
+  await openPane.getByRole("button", { name: /Open/ }).click();
+
+  // Dragging the sash resizes the panes, and the size is remembered too.
+  const sash = window.getByRole("separator", { name: "Resize Hidden and Open" });
+  const box = (await sash.boundingBox())!;
+  await window.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(box.x + box.width / 2, box.y - 100, { steps: 5 });
+  await window.mouse.up();
+  const share = await sash.getAttribute("aria-valuenow");
+  expect(Number(share)).toBeLessThan(50);
+  await window.reload();
+  await window.getByRole("button", { name: "Sessions", exact: true }).click();
+  await expect(sash).toHaveAttribute("aria-valuenow", share!);
+
+  // Selecting a hidden session reopens its tab with what it printed.
+  await hiddenPane.getByRole("button", { name: "Grill the cart", exact: true }).click();
+  await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute("aria-selected", "true");
+  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready");
+  await expect(counts).toHaveText("1 open · 0 hidden");
+  await expect(openPane.getByRole("listitem")).toHaveAttribute("aria-current", "true");
+
+  // A Next-up marker on a waiting hidden session shows the session itself.
+  await window.getByRole("button", { name: "Close Claude Code shop/02" }).click();
+  await window.getByRole("button", { name: "Tickets", exact: true }).click();
+  await window.getByRole("button", { name: /^Next up: .* is waiting for input\. Show the session\.$/ }).click();
+  await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute("aria-selected", "true");
+  await app.close();
+});

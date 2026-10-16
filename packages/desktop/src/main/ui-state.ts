@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
 import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
+import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
 import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
 
@@ -12,6 +13,8 @@ export interface UiState {
   legendDismissed: boolean;
   /** The editor tabs open in each project, by project path. */
   tabs: Record<string, TabsState>;
+  /** The Sessions view's grouping, collapsed panes and sash position in each project, by project path. */
+  sessionsLayout: Record<string, SessionsLayout>;
   liveEventsPanel: LiveEventsPanelMode;
   /** Whether the app's tracker writes are committed, unless a project overrides it. */
   autoCommit: boolean;
@@ -27,6 +30,7 @@ const DEFAULTS: UiState = {
   lastProject: null,
   legendDismissed: false,
   tabs: {},
+  sessionsLayout: {},
   liveEventsPanel: "expanded",
   autoCommit: true,
   projectAutoCommit: {},
@@ -42,6 +46,11 @@ export interface UiStateStore {
 function parseAllTabs(raw: unknown): Record<string, TabsState> {
   if (raw === null || typeof raw !== "object") return {};
   return Object.fromEntries(Object.entries(raw).map(([project, tabs]) => [project, parseTabs(tabs)]));
+}
+
+function parseAllLayouts(raw: unknown): Record<string, SessionsLayout> {
+  if (raw === null || typeof raw !== "object") return {};
+  return Object.fromEntries(Object.entries(raw).map(([project, layout]) => [project, parseSessionsLayout(layout)]));
 }
 
 function parseOverrides(raw: unknown): Record<string, boolean> {
@@ -69,6 +78,7 @@ function parse(text: string): UiState {
     lastProject: typeof raw.lastProject === "string" ? raw.lastProject : DEFAULTS.lastProject,
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
     tabs: parseAllTabs(raw.tabs),
+    sessionsLayout: parseAllLayouts(raw.sessionsLayout),
     liveEventsPanel: isLiveEventsPanelMode(raw.liveEventsPanel) ? raw.liveEventsPanel : DEFAULTS.liveEventsPanel,
     autoCommit: typeof raw.autoCommit === "boolean" ? raw.autoCommit : DEFAULTS.autoCommit,
     projectAutoCommit: parseOverrides(raw.projectAutoCommit),

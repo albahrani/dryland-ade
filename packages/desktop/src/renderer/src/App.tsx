@@ -1,6 +1,18 @@
 import type { LiveEvent, TreeTicket } from "@dryland/core";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { AppState, LiveEventsPanelMode, MenuCommand, ProjectView, SessionInfo } from "../../shared/api.ts";
+import {
+  mapTitle,
+  selectedSession,
+  sessionCounts,
+  sessionItemTitle,
+  type SessionsLayout,
+  splitSessions,
+  type StateSince,
+  trackStateSince,
+} from "../../shared/sessions-view.ts";
+import { SESSION_META } from "../../shared/session-meta.ts";
+import { SessionsView } from "./SessionsView.tsx";
 import { sessionTitle } from "../../shared/work-target.ts";
 import {
   activeItem,
@@ -19,7 +31,7 @@ import { Legend } from "./Legend.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
-import { disposeTerminal, existingTerminal, getOrCreateTerminal, routeTerminalEvents } from "./terminals.ts";
+import { disposeTerminal, existingTerminal, getOrCreateTerminal, lastLine, routeTerminalEvents } from "./terminals.ts";
 import { ConfirmStop, type SessionHandlers, UnseenMark } from "./SessionControls.tsx";
 import { stopNeedsConfirmation } from "../../shared/stop-session.ts";
 import { SessionBadge } from "./status.tsx";
@@ -52,6 +64,8 @@ function Sidebar({
   onRelease,
   onStartWork,
   onDialog,
+  onShowSession,
+  sessionsView,
 }: {
   view: ActivityView;
   project: ProjectView | null;
@@ -61,6 +75,9 @@ function Sidebar({
   onRelease: (ticket: TreeTicket) => void;
   onStartWork: StartWorkHandler;
   onDialog: (dialog: MenuCommand) => void;
+  /** Shows the session a Next-up marker points at, by session id. */
+  onShowSession: (sessionId: string) => void;
+  sessionsView: ReactNode;
 }) {
   if (project === null) return <p className="empty">Open a git repo to see its tickets.</p>;
   if (!project.tree.ok) {
@@ -82,6 +99,7 @@ function Sidebar({
         staleClaims={staleClaims}
         onOpen={onOpen}
         onRelease={onRelease}
+        onShowSession={onShowSession}
         onNewTicket={() => onDialog("new-ticket")}
       />
     );
@@ -98,7 +116,7 @@ function Sidebar({
       />
     );
   }
-  return <p className="empty">The {view} view arrives in a later ticket.</p>;
+  return sessionsView;
 }
 
 /** What a session tab says about its session: agent, ticket, worktree and id, as recorded at spawn; and Stop. */
@@ -156,6 +174,22 @@ export function App() {
   const [dialog, setDialog] = useState<MenuCommand | null>(null);
   // A session waiting for the user to confirm it should stop.
   const [stopping, setStopping] = useState<SessionInfo | null>(null);
+  // When each session entered its state, as this window saw it; for the Sessions view's ages.
+  const [stateSince, setStateSince] = useState<StateSince>(new Map());
+  // The clock the Sessions view's ages and last output lines refresh with, ticking while the view shows.
+  const [now, setNow] = useState(Date.now);
+
+  const sessionStatesNow = state?.sessionStates;
+  useEffect(() => {
+    if (sessionStatesNow === undefined) return;
+    setStateSince((previous) => trackStateSince(previous, [...sessions.values()], sessionStatesNow, Date.now()));
+  }, [sessions, sessionStatesNow]);
+  useEffect(() => {
+    if (activity !== "sessions") return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [activity]);
 
   // The main process marks output of every other session unseen.
   const viewedTerminal = state === null ? undefined : activeItem(state.tabs);
@@ -324,6 +358,19 @@ export function App() {
   };
   const activeTab = activeItem(tabs);
   const activeSession = activeTab?.kind === "terminal" ? sessions.get(activeTab.id) : undefined;
+  const allSessions = [...sessions.values()];
+  const { hidden: hiddenSessions, open: openSessions } = splitSessions(allSessions, sessionStates, tabs.open);
+  const selected = selectedSession(activeTab, allSessions, sessionStates);
+  const liveWaiting = allSessions.filter((session) => sessionState(session) === "waiting").length;
+  const tree = project?.tree.ok ? project.tree.tree : null;
+  const setSessionsLayout = (layout: SessionsLayout, save: boolean) => {
+    setState({ ...state, sessionsLayout: layout });
+    if (save) void window.dryland.saveSessionsLayout(layout);
+  };
+  const showSessionById = (sessionId: string) => {
+    const session = allSessions.find((s) => s.id === sessionId);
+    if (session !== undefined) void showSession(session);
+  };
   const terminalIds = tabs.open.flatMap((tab) => (tab.kind === "terminal" ? [tab.id] : []));
   const dismissLegend = () => {
     setState({ ...state, legendDismissed: true });
@@ -341,17 +388,21 @@ export function App() {
         </button>
       </header>
       <nav className="activitybar" aria-label="Activity bar">
-        {ACTIVITIES.map(({ id, label, glyph }) => (
-          <button
-            key={id}
-            title={label}
-            aria-label={label}
-            aria-pressed={activity === id}
-            onClick={() => setActivity(id)}
-          >
-            {glyph}
-          </button>
-        ))}
+        {ACTIVITIES.map(({ id, label, glyph }) => {
+          const badge = id === "sessions" && liveWaiting > 0 ? liveWaiting : null;
+          return (
+            <button
+              key={id}
+              title={badge === null ? label : `${label} (${badge} waiting)`}
+              aria-label={label}
+              aria-pressed={activity === id}
+              onClick={() => setActivity(id)}
+            >
+              {glyph}
+              {badge !== null && <span className="activity-badge">{badge}</span>}
+            </button>
+          );
+        })}
       </nav>
       <aside className="sidebar">
         {!legendDismissed && <Legend onDismiss={dismissLegend} />}
@@ -366,6 +417,25 @@ export function App() {
           }
           onStartWork={startWork}
           onDialog={setDialog}
+          onShowSession={showSessionById}
+          sessionsView={
+            <SessionsView
+              hidden={hiddenSessions}
+              open={openSessions}
+              states={sessionStates}
+              since={stateSince}
+              now={now}
+              selected={selected?.id ?? null}
+              layout={state.sessionsLayout}
+              lookups={{
+                title: (session) => sessionItemTitle(tree, session),
+                mapTitle: (name) => mapTitle(tree, name),
+                lastLine: (session) => lastLine(session.terminalId),
+              }}
+              handlers={sessionHandlers}
+              onLayout={setSessionsLayout}
+            />
+          }
         />
       </aside>
       <main className="editor">
@@ -489,6 +559,12 @@ export function App() {
           {liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
         </button>
         <span>{project === null ? "No project" : project.path}</span>
+        {selected !== undefined && (
+          <span aria-label="Selected session" title={selected.worktree.path}>
+            {selected.agent.name}: {SESSION_META[sessionState(selected)].label} · {selected.worktree.branch}
+          </span>
+        )}
+        <span aria-label="Session counts">{sessionCounts(hiddenSessions, openSessions, sessionStates)}</span>
       </footer>
     </div>
   );

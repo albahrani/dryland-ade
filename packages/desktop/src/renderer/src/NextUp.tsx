@@ -1,7 +1,22 @@
 import type { NextUpMarker } from "@dryland/core";
 
-/** The Next-up marker's star; hovering it shows the one-sentence "why this next". */
-export function NextUpStar({ marker }: { marker: NextUpMarker }) {
+/**
+ * The Next-up marker's star; hovering it shows the one-sentence "why this next". With `onShow`, for a step that
+ * targets a live session, it is a button that shows that session.
+ */
+export function NextUpStar({ marker, onShow }: { marker: NextUpMarker; onShow?: (sessionId: string) => void }) {
+  const { target } = marker.step;
+  if (onShow !== undefined && target.kind === "session")
+    return (
+      <button
+        className="next-up-star"
+        title={marker.step.reason}
+        aria-label={`Next up: ${marker.step.reason} Show the session.`}
+        onClick={() => onShow(target.id)}
+      >
+        ★
+      </button>
+    );
   return (
     <span className="next-up-star" title={marker.step.reason} role="img" aria-label={`Next up: ${marker.step.reason}`}>
       ★

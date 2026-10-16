@@ -41,6 +41,7 @@ function TicketRow({
   stale,
   onOpen,
   onRelease,
+  onShowSession,
 }: {
   ticket: TreeTicket;
   active: boolean;
@@ -50,11 +51,12 @@ function TicketRow({
   stale: boolean;
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
+  onShowSession: (sessionId: string) => void;
 }) {
   const classes = ["ticket", active && "active", marker !== undefined && "next-up"].filter(Boolean).join(" ");
   return (
     <li className={classes} title={marker?.step.reason}>
-      {marker !== undefined && <NextUpStar marker={marker} />}
+      {marker !== undefined && <NextUpStar marker={marker} onShow={onShowSession} />}
       <StatusIcon status={ticket.status} />
       {session !== undefined && <SessionBadge agent={session.agent} state={session.state} />}
       <span className="ticket-id">{ticket.id}</span>
@@ -203,6 +205,7 @@ export function TicketsView({
   staleClaims,
   onOpen,
   onRelease,
+  onShowSession,
   onNewTicket,
 }: {
   tree: TicketsTree;
@@ -216,6 +219,8 @@ export function TicketsView({
   onOpen: (ref: ItemRef) => void;
   /** Releases a possibly stale claim; a general button, so it asks for confirmation first. */
   onRelease: (ticket: TreeTicket) => void;
+  /** Shows the live session a marker's step targets, such as one waiting for input. */
+  onShowSession: (sessionId: string) => void;
   onNewTicket: () => void;
 }) {
   const [options, setOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
@@ -235,6 +240,7 @@ export function TicketsView({
       stale={staleClaims.includes(ticketKey(t))}
       onOpen={onOpen}
       onRelease={onRelease}
+      onShowSession={onShowSession}
     />
   );
   const flip = (id: string) => (current: Set<string>) => {

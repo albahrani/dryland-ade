@@ -89,6 +89,8 @@ ul {
 
 .sidebar {
   grid-area: side;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   background: var(--bg-side);
   border-right: 1px solid var(--border);
@@ -744,4 +746,136 @@ ul {
   margin: 8px 0;
   padding-left: 12px;
   border-left: 2px solid var(--border);
+}
+
+.activitybar button {
+  position: relative;
+}
+
+.activity-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--progress);
+  color: var(--bg);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+/* The Sessions view fills the sidebar; its panes scroll on their own, never the sidebar. */
+.sessions {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panes {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: none;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pane-counts {
+  display: flex;
+  gap: 4px;
+}
+
+.count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--bg-bar);
+  text-align: center;
+}
+
+.count.waiting {
+  background: var(--next-up);
+  color: var(--bg);
+}
+
+.sash {
+  flex: none;
+  height: 4px;
+  margin: -2px 0;
+  cursor: row-resize;
+  z-index: 1;
+}
+
+.sash:hover {
+  background: var(--accent);
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.session-row.active {
+  background: rgb(55 148 255 / 20%);
+}
+
+.session-title {
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.session-row .meta {
+  margin-left: auto;
+}
+
+/* Stop shows on hover; it stays in the layout so the row does not jump. */
+.session-row .row-action {
+  opacity: 0;
+}
+
+.session-row:hover .row-action,
+.session-row .row-action:focus-visible {
+  opacity: 1;
+}
+
+.session-lines {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-row.two-line .last-line {
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

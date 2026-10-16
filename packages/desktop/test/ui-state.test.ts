@@ -20,6 +20,7 @@ describe("ui state store", () => {
       lastProject: null,
       legendDismissed: false,
       tabs: {},
+      sessionsLayout: {},
       liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
@@ -35,6 +36,7 @@ describe("ui state store", () => {
       lastProject: "/repos/shop",
       legendDismissed: true,
       tabs: {},
+      sessionsLayout: {},
       liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
@@ -48,6 +50,7 @@ describe("ui state store", () => {
       lastProject: null,
       legendDismissed: false,
       tabs: {},
+      sessionsLayout: {},
       liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
@@ -57,6 +60,7 @@ describe("ui state store", () => {
       lastProject: null,
       legendDismissed: false,
       tabs: {},
+      sessionsLayout: {},
       liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
@@ -72,6 +76,20 @@ describe("ui state store", () => {
     expect(createUiStateStore(file).read().tabs).toEqual({
       "/repos/shop": saved,
       "/repos/bad": { open: [], active: null },
+    });
+  });
+
+  it("remembers each project's Sessions layout and repairs unreadable ones", () => {
+    const file = stateFile();
+    const saved = { grouping: "agent" as const, collapsed: { hidden: true, open: false }, hiddenShare: 0.3 };
+    createUiStateStore(file).update({ sessionsLayout: { "/repos/shop": saved } });
+    expect(createUiStateStore(file).read().sessionsLayout).toEqual({ "/repos/shop": saved });
+
+    writeFileSync(file, JSON.stringify({ sessionsLayout: { "/repos/shop": saved, "/repos/bad": 7 } }));
+    expect(createUiStateStore(file).read().sessionsLayout["/repos/bad"]).toEqual({
+      grouping: "map",
+      collapsed: { hidden: false, open: false },
+      hiddenShare: 0.5,
     });
   });
 

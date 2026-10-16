@@ -27,6 +27,7 @@ import {
   type TicketActionResult,
   type TreeLoad,
 } from "../shared/api.ts";
+import { DEFAULT_SESSIONS_LAYOUT, parseSessionsLayout } from "../shared/sessions-view.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState, ticketKey } from "../shared/tabs.ts";
 import {
   ASK_ALWAYS,
@@ -173,13 +174,14 @@ async function projectView(): Promise<{ view: ProjectView; mainCheckout: string 
 }
 
 async function currentState(): Promise<AppState> {
-  const { legendDismissed, tabs, liveEventsPanel } = store.read();
+  const { legendDismissed, tabs, sessionsLayout, liveEventsPanel } = store.read();
   const view = (await projectView())?.view ?? null;
   return {
     project: view,
     legendDismissed,
     liveEventsPanel,
     tabs: (view && tabs[view.path]) || EMPTY_TABS,
+    sessionsLayout: (view && sessionsLayout[view.path]) || DEFAULT_SESSIONS_LAYOUT,
     sessions: work.sessions(),
     sessionStates: status.states(),
     unseenSessions: unseen.ids(),
@@ -361,6 +363,11 @@ ipcMain.handle("tabs:save", (_event, tabs: TabsState) => {
   if (project === null) return;
   const saved = store.read().tabs;
   store.update({ tabs: { ...saved, [project.path]: parseTabs(tabs) } });
+});
+ipcMain.handle("sessions-layout:save", (_event, layout: unknown) => {
+  if (project === null) return;
+  const saved = store.read().sessionsLayout;
+  store.update({ sessionsLayout: { ...saved, [project.path]: parseSessionsLayout(layout) } });
 });
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
