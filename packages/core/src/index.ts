@@ -14,6 +14,7 @@ export * from "./next-step.ts";
 export * from "./process-runner.ts";
 export * from "./project-state.ts";
 export * from "./repo-snapshot.ts";
+export * from "./session-index.ts";
 export * from "./skills.ts";
 export * from "./ticket-edit.ts";
 export * from "./ticket.ts";

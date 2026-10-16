@@ -39,6 +39,11 @@ export interface AgentAdapter {
    * not taken for that session's children. Settings the user exports are not listed and pass through.
    */
   parentSessionEnv: readonly string[];
+  /**
+   * The variable holding the CLI's own session id in the processes a session starts, so a `dryland` command run by
+   * the agent knows which session acted (ADR 0010); `null` when the CLI sets none.
+   */
+  sessionEnv: string | null;
   /** How status hooks reach the CLI; acted on by the session status tickets. */
   hookInjection: { kind: "settings-flag"; flag: string } | { kind: "user-config" } | { kind: "none" };
   /**
@@ -75,6 +80,7 @@ export const CLAUDE_CODE: AgentAdapter = {
     "CLAUDE_CODE_MESSAGING_TOKEN",
     "CLAUDE_PID",
   ],
+  sessionEnv: "CLAUDE_CODE_SESSION_ID",
   hookInjection: { kind: "settings-flag", flag: "--settings" },
   // SessionStart (fires at launch) and SubagentStop (fires after Stop) are left out: neither changes the state.
   // PermissionRequest also fires for AskUserQuestion and ExitPlanMode, in default, plan and auto mode, so their

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
@@ -123,8 +123,11 @@ async function breakStaleLock(lockPath: string): Promise<boolean> {
   });
 }
 
-/** Takes the tracker lock, waiting for a live holder. Returns the function that releases it. */
-async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
+/**
+ * Takes the lock at `lockPath` (the tracker lock or another beside it), waiting for a live holder.
+ * Returns the function that releases it.
+ */
+export async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
   await mkdir(dirname(lockPath), { recursive: true });
   const token = randomUUID();
   const pending = `${lockPath}.${token}`;
@@ -159,21 +162,21 @@ async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
 
 function lockTimeout(lockPath: string): DrylandError {
   return new DrylandError(
-    `Another dryland command has held the tracker lock for over ${LOCK_TIMEOUT_MS / 1000} seconds.`,
+    `Another dryland command has held ${basename(lockPath)} for over ${LOCK_TIMEOUT_MS / 1000} seconds.`,
     `Retry in a moment. If no dryland command is running, delete ${lockPath}.`,
   );
 }
 const TEMP_FILE = /^.[0-9a-f-]{36}.tmp$/;
 
 /** Under the lock no write is in flight, so any temp file here was left by a process that crashed mid-write. */
-async function removeLeftoverTemps(dir: string): Promise<void> {
+export async function removeLeftoverTemps(dir: string): Promise<void> {
   for (const name of await readdir(dir).catch(() => [])) {
     if (TEMP_FILE.test(name)) await rm(join(dir, name), { force: true });
   }
 }
 
 /** Writes a file so readers see the old or the new content, never a partial one. */
-async function writeAtomically(path: string, content: string): Promise<void> {
+export async function writeAtomically(path: string, content: string): Promise<void> {
   const temp = join(dirname(path), `.${randomUUID()}.tmp`);
   await writeFile(temp, content);
   try {

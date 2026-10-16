@@ -1,10 +1,12 @@
 import {
+  AGENT_ADAPTERS,
   blockTicket,
   branchHolder,
   claimTicket,
   commentOnTicket,
   createTicket,
   createWorktree,
+  currentAgentSession,
   DrylandError,
   indexMap,
   isLiveEventKind,
@@ -14,15 +16,19 @@ import {
   mapFrontier,
   nodeProcessRunner,
   pruneWorktree,
+  readSessionIndex,
+  recordSession,
   releaseTicket,
   resolveTicket,
   runDoctor,
   sendLiveEvent,
+  sessionsOf,
   showMap,
   showTicket,
   ticketKind,
   triageTicket,
   type DoctorReport,
+  type IndexedSession,
   type LiveEvent,
   type LiveEventKind,
   type MapView,
@@ -65,7 +71,7 @@ function formatTickets(tickets: Ticket[], empty = "No tickets."): string {
     .join("");
 }
 
-function formatTicket(ticket: Ticket): string {
+function formatTicket(ticket: Ticket, sessions: IndexedSession[]): string {
   const t = ticket;
   const blockers = t.blockers === "unknown" ? "unknown" : t.blockers.length === 0 ? "none" : t.blockers.join(", ");
   const lines = [
@@ -79,6 +85,15 @@ function formatTicket(ticket: Ticket): string {
   if (t.body !== "") lines.push("", t.body);
   if (t.answer !== null) lines.push("", "Answer:", t.answer);
   if (t.comments.length > 0) lines.push("", `Comments (${t.comments.length}):`, t.comments.join("\n\n"));
+  if (sessions.length > 0) {
+    lines.push(
+      "",
+      `Sessions (${sessions.length}):`,
+      ...sessions.map(
+        (s) => `  ${s.adapter}  ${s.sessionId}  last seen ${s.lastSeen}${s.lastState ? `  ${s.lastState}` : ""}`,
+      ),
+    );
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -191,6 +206,21 @@ const changedTicket = (value: unknown): Omit<TicketChangedPayload, "command"> =>
   return { ticket: `${ticket.map}/${ticket.id}` };
 };
 
+/**
+ * Records the Agent CLI session this command runs in, if any, against `ticket` in the session index. The index is a
+ * cache, so a failure to write it is a warning: the ticket change has already been made.
+ */
+async function recordAgentSession(ticket: string): Promise<string[]> {
+  const session = currentAgentSession(AGENT_ADAPTERS, process.env);
+  if (session === null) return [];
+  try {
+    return await recordSession(nodeProcessRunner, process.cwd(), ticket, session);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return [`The session was not recorded in the session index (${reason}).`];
+  }
+}
+
 /** Whether to commit: `--commit` or `--no-commit` when given, so the app's setting wins; otherwise git's `dryland.autoCommit` decides. */
 const autoCommit = (flags: Flags) => flags.commit;
 
@@ -209,6 +239,8 @@ const COMMANDS: Record<
      * command succeeds the app is told with a `ticket.changed` live event, whatever the tracker backend.
      */
     changed?: (value: unknown, target: string) => Omit<TicketChangedPayload, "command">;
+    /** Set on commands that act on one ticket: run inside an Agent CLI session, that session is recorded on it. */
+    recordsSession?: true;
     run: (target: string, flags: Flags) => Promise<Output>;
   }
 > = {
@@ -223,12 +255,15 @@ const COMMANDS: Record<
     target: true,
     run: async (target) => {
       const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
-      return { value: ticket, text: formatTicket(ticket) };
+      const { index, warnings } = await readSessionIndex(nodeProcessRunner, process.cwd());
+      const sessions = sessionsOf(index, `${ticket.map}/${ticket.id}`);
+      return { value: { ...ticket, sessions }, text: formatTicket(ticket, sessions), warnings };
     },
   },
   "ticket claim": {
     target: true,
     changed: changedTicket,
+    recordsSession: true,
     run: async (target, flags) => {
       // Always the branch, even inside a Dryland session: a claim outlives its session (ADR 0010).
       const holder = await branchHolder(nodeProcessRunner, process.cwd());
@@ -244,6 +279,7 @@ const COMMANDS: Record<
   "ticket release": {
     target: true,
     changed: changedTicket,
+    recordsSession: true,
     run: async (target, flags) => {
       const { ticket, warnings } = await releaseTicket(nodeProcessRunner, process.cwd(), target, {
         autoCommit: autoCommit(flags),
@@ -277,6 +313,7 @@ const COMMANDS: Record<
   "ticket resolve": {
     target: true,
     changed: changedTicket,
+    recordsSession: true,
     options: ["answer"],
     run: async (target, flags) => {
       const { ticket, warnings } = await resolveTicket(
@@ -292,6 +329,7 @@ const COMMANDS: Record<
   "ticket block": {
     target: true,
     changed: changedTicket,
+    recordsSession: true,
     options: ["add", "remove"],
     run: async (target, flags) => {
       const { ticket, warnings } = await blockTicket(
@@ -309,6 +347,7 @@ const COMMANDS: Record<
   "ticket comment": {
     target: true,
     changed: changedTicket,
+    recordsSession: true,
     options: ["text"],
     run: async (target, flags) => {
       const { ticket, warnings } = await commentOnTicket(
@@ -324,6 +363,7 @@ const COMMANDS: Record<
   "ticket triage": {
     target: true,
     changed: changedTicket,
+    recordsSession: true,
     options: ["role"],
     run: async (target, flags) => {
       const { ticket, warnings } = await triageTicket(
@@ -464,6 +504,10 @@ async function run(args: string[]): Promise<number> {
       }
     }
     const { value, text, warnings = [], exitCode = 0 } = await entry.run(target ?? "", flags);
+    if (entry.recordsSession) {
+      const ticket = value as Ticket;
+      warnings.push(...(await recordAgentSession(`${ticket.map}/${ticket.id}`)));
+    }
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
     if (entry.changed !== undefined) {

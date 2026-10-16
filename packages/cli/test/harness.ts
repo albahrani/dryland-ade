@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { envKey } from "@dryland/core";
+import { AGENT_ADAPTERS, envKey } from "@dryland/core";
 
 const BUNDLE = fileURLToPath(new URL("../dist/dryland.mjs", import.meta.url));
 
@@ -29,7 +29,11 @@ const NO_APP_DIR = mkdtempSync(join(tmpdir(), "dryland-no-app-"));
 export function runDryland(args: string[], opts: { cwd: string; env?: Record<string, string> }): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const env: Record<string, string | undefined> = { ...process.env, DRYLAND_APP_DIR: NO_APP_DIR, ...opts.env };
-    for (const name of ["DRYLAND_PORT", "DRYLAND_TOKEN"]) if (opts.env?.[name] === undefined) delete env[name];
+    // The tests may run inside an Agent CLI session, whose id would otherwise be recorded by every ticket command.
+    const sessionVars = AGENT_ADAPTERS.flatMap((adapter) => (adapter.sessionEnv === null ? [] : [adapter.sessionEnv]));
+    for (const name of ["DRYLAND_PORT", "DRYLAND_TOKEN", ...sessionVars]) {
+      if (opts.env?.[name] === undefined) delete env[name];
+    }
     const child = spawn(process.execPath, [BUNDLE, ...args], { cwd: opts.cwd, env });
     let stdout = "";
     let stderr = "";

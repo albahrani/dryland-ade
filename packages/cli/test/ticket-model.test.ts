@@ -102,6 +102,7 @@ describe("dryland ticket show", () => {
       answer: "Through a hosted page.",
       comments: ["### First\n\nLooks right.", "Second thought."],
       raw: { "Claimed by": "alex", Spec: "[spec](../spec.md)" },
+      sessions: [],
     });
   });
 
