@@ -1,6 +1,8 @@
 <!doctype html>
 <!-- PROTOTYPE (throwaway): "Views and UX" round 5. Layout A (VS Code style) is the base; the three variants differ only in how the left side handles ticket overload, map stats and sub-categories.
-     ?variant=A|B|C, bottom bar or arrow keys. REAL data + SAMPLE data (scenarios.js). In-memory state only. -->
+     ?variant=A|B|C, bottom bar or arrow keys. REAL data + SAMPLE data (scenarios.js). In-memory state only.
+     Ticket 71 (round 7): sessions-scale-data.js + sessions-scale.js add variants B, C, D of the Sessions view at scale (open / hidden / paused). -->
+
 <html lang="en"><head><meta charset="utf-8"><title>ADE IDE prototype</title>
 <style>
 *{box-sizing:border-box}
@@ -105,7 +107,7 @@ select,textarea{background:#3c3c3c;color:#ddd;border:1px solid #555;border-radiu
 <div id="root" style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
 <div id="bar"><button id="prev">&lsaquo;</button><span id="vlabel"></span><button id="next">&rsaquo;</button></div>
 <div id="tip"></div>
-<script src="data.js"></script><script src="scenarios.js"></script><script src="screens.js"></script>
+<script src="data.js"></script><script src="scenarios.js"></script><script src="sessions-scale-data.js"></script><script src="screens.js"></script>
 <script>
 // ================= data (REAL snapshot + optional simulation) =================
 const MAPS=REAL.maps;
@@ -128,7 +130,7 @@ let leftHidden=false,rightHidden=false;
 const byId=id=>allT().find(t=>t.id===id),mapOf=id=>MAPS.find(m=>m.id===id);
 const sessT=id=>SESS.find(s=>s.ticket===id&&s.state!=="ended")||SESS.filter(s=>s.ticket===id).at(-1);
 const sessM=id=>SESS.filter(s=>s.map===id).at(-1);
-const live=()=>SESS.filter(s=>s.state!=="ended");
+const live=()=>SESS.filter(s=>s.state!=="ended"&&s.state!=="paused");
 const blocked=t=>t.blocked.some(b=>byId(b).status!=="resolved");
 const frontier=m=>allT().filter(t=>t.map===m&&t.status==="open"&&!blocked(t)&&!(sessT(t.id)&&sessT(t.id).state!=="ended"));
 function nextSet(){const s=new Set();MAPS.forEach(m=>{const f=frontier(m.id);if(f.length)s.add(f[0].id);else if(m.fog.length)s.add("map:"+m.id)});return s}
@@ -141,8 +143,9 @@ const SPATH={
  working:[`<path d="M6 1.5a4.5 4.5 0 1 1-4.5 4.5"/>`,"#6fa8dc","spin"],
  waiting:[`<path d="M1.5 2h9v6h-5l-2.5 2.2V8h-1.5z"/>`,"#d6b36a",""],
  idle:[`<path d="M2.5 6h7"/>`,"#8a8a8a",""],
- ended:[`<rect x="3" y="3" width="6" height="6" rx="1"/>`,"#707070",""]};
-const STXT={working:"working",waiting:"waiting for you",idle:"idle",ended:"ended (read-only transcript)"};
+ ended:[`<rect x="3" y="3" width="6" height="6" rx="1"/>`,"#707070",""],
+ paused:[`<path d="M4.2 3v6M7.8 3v6"/>`,"#a99bd0",""]};
+const STXT={working:"working",waiting:"waiting for you",idle:"idle",ended:"ended (read-only transcript)",paused:"paused"};
 const AG={"Claude Code":["#d97757",`<path d="M7 1.5v11M1.5 7h11M3.1 3.1l7.8 7.8M10.9 3.1 3.1 10.9"/>`],
  "GitHub Copilot":["#b8c0cc",`<rect x="2" y="4" width="10" height="7.5" rx="3"/><path d="M5 7.5v1M9 7.5v1M7 4V2"/>`],
  "Codex CLI":["#74aa9c",`<path d="M7 1.5l4.8 2.75v5.5L7 12.5 2.2 9.75v-5.5z"/><path d="M5.3 6l1.6 1-1.6 1"/>`],
@@ -373,7 +376,7 @@ function VA(){const c=ctx(),L={maps:"Maps",tickets:"Tickets",sessions:"Sessions"
   ${rightHidden?"":`<div class="side" style="width:330px"><div style="display:flex;align-items:center;border-bottom:1px solid #333">${[["files","Explorer"],["git","Source Control"]].map(([k,n])=>`<div class="stab ${rightSel===k?'on':''}" data-right="${k}">${n}${k==="git"?` <span class="pill">${WT[wtKey(c)].files.filter(f=>f[1]).length}</span>`:""}</div>`).join("")}<span class="acts" style="margin-left:auto;padding-right:6px">${rightActs}${vmBtn(rightSel==="git"?"git":"files")}</span></div><div class="body">${rightSel==="git"?gitView():filesView()}</div></div>`}`}
 const V={A:["VS Code style (round 6)",VA]},keys=Object.keys(V);
 const cur=()=>new URLSearchParams(location.search).get("variant")||"A";
-function render(){const v=cur(),c=ctx();hideTip();
+function render(){const v=V[cur()]?cur():"A",c=ctx();hideTip();
  document.getElementById("root").innerHTML=menuBar()+`<div id="main">${V[v][1]()}</div>`+statusBar(c)
   +(modal?`<div id="modal" data-closemodal="1">${modalHtml()}</div>`:"");
  document.getElementById("bar").style.display=keys.length>1?"":"none";document.getElementById("vlabel").textContent=v+" ("+V[v][0]+")";
@@ -424,6 +427,6 @@ function hideTip(){tipEl.style.display="none"}
 document.addEventListener("mouseover",e=>{const x=e.target.closest("[data-tip]");if(!x){hideTip();return}tipEl.textContent=x.dataset.tip;tipEl.style.display="block"});
 document.addEventListener("mousemove",e=>{if(tipEl.style.display==="none")return;const w=tipEl.offsetWidth,h=tipEl.offsetHeight;tipEl.style.left=Math.min(e.clientX+14,innerWidth-w-8)+"px";tipEl.style.top=Math.min(e.clientY+16,innerHeight-h-8)+"px"});
 render();
-</script></body></html>
+</script><script src="sessions-scale.js"></script></body></html>
 
 
