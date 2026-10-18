@@ -1,7 +1,7 @@
 # Resume a paused session
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 65, 75
 
 Spec: [spec](../spec.md), user stories 98, 99. "Sessions, pausing and resuming" (the paused-session bullet). ADR 0010. Layout detail: `prototype/views-and-ux/index.html?variant=B` (open a ticket with a paused session). `research/agent-cli-session-resume.md`.
@@ -17,14 +17,18 @@ A ticket whose session is paused offers to continue that same Agent CLI session.
 
 ## Acceptance criteria
 
-- [ ] A ticket with a paused session shows the paused box with its label and Resume
-- [ ] Resume launches the CLI with resume-by-id in the ticket's worktree with hooks injected; the session is live and the claim unchanged
-- [ ] With the session's history missing (fake home directory in the test), Resume opens the picker and says why
-- [ ] Start fresh opens a new session with the command pre-typed; the older session stays in the index
-- [ ] Tickets tree rows and tabs show the pause badge in the colour of the label
-- [ ] The last output line shows for a session paused during this run and is left out after a restart
-- [ ] A Playwright test stops a session and resumes it with the fake-CLI stub
+- [x] A ticket with a paused session shows the paused box with its label and Resume
+- [x] Resume launches the CLI with resume-by-id in the ticket's worktree with hooks injected; the session is live and the claim unchanged
+- [x] With the session's history missing (fake home directory in the test), Resume opens the picker and says why
+- [x] Start fresh opens a new session with the command pre-typed; the older session stays in the index
+- [x] Tickets tree rows and tabs show the pause badge in the colour of the label
+- [x] The last output line shows for a session paused during this run and is left out after a restart
+- [x] A Playwright test stops a session and resumes it with the fake-CLI stub
 
 ## Comments
 
 From mattpocock-ade/74 (e273a26): resumeArgs(adapter, id | null) in core gives the resume arguments ([--resume, id], or [--resume] for the picker; null when the CLI cannot resume), and sessionIdArgs the launch ones. SessionInfo.agentSessionId is the id given at launch; after /clear the newest id lives only in the index (sessionsOf(index, item)[0]), so resume should read the index, not SessionInfo. sessionItem(session) in desktop/src/main/session-recording.ts maps a session to its index item.
+
+## Answer
+
+Built in 93cde7b. core: AgentAdapter.historyFile (Claude Code: ~/.claude/projects/<cwd, non-alphanumerics as -> /<id>.jsonl) and sessionExists(). desktop main: WorkStarter.resumeSession(project, ticket, 'resume'|'pick') reads the newest indexed session, checks it exists, launches the CLI with resume-by-id (or the picker, with a warning saying why when the history is gone) in the ticket's worktree with hooks injected, nothing pre-typed, no claim call, and re-records the entry; IPC work:resume. Renderer: PausedBox (label, agent, CLI session id, last seen, branch, last output line, resume command; Resume / Pick another session / Start fresh) replaces the start box; PausedBadge (gold waiting, red interrupted, plain otherwise) on Tickets rows and ticket tabs; header pill. TreeLoad.pausedClaims now carries PausedSession records. Start fresh is startWork with no skill chosen, so the old entry stays. Known limits: tickets only (map tabs wait for map sessions); Start fresh offers no skill chooser; the last output line skips Dryland's own '[session stopped]' notice; an index entry whose adapter is unknown gives Start fresh an empty agent id. The existing hooks e2e now starts its second session through Start fresh, since an ended session leaves a paused claim.
