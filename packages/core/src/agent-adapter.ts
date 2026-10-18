@@ -1,7 +1,7 @@
 import type { LiveEventKind } from "./live-reporting.ts";
-import type { SessionSnapshot } from "./next-step.ts";
+import type { LiveSessionSnapshot } from "./next-step.ts";
 
-export type SessionState = SessionSnapshot["state"];
+export type SessionState = LiveSessionSnapshot["state"];
 
 /**
  * An Agent adapter (ADR 0006): the declarative description of one Agent CLI that Dryland launches in a PTY,

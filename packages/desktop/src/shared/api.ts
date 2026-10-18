@@ -14,6 +14,8 @@ export type TreeLoad =
       nextUp: NextUp;
       /** The `map/id` of every claim no live Dryland session holds: claimed, possibly stale. */
       staleClaims: string[];
+      /** The label (such as "Paused: interrupted") of every claim whose session is paused, by `map/id`: resumable, never stale. */
+      pausedClaims: Record<string, string>;
     }
   | { ok: false; message: string; nextAction: string };
 

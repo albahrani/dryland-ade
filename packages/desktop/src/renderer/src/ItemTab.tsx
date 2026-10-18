@@ -66,14 +66,14 @@ export interface HeaderState {
 }
 
 /** "Why not this?" on a ticket without a marker: the answer shows on request. */
-function WhyNot({ ticket, nextUp }: { ticket: TreeTicket; nextUp: NextUp }) {
+function WhyNot({ ticket, nextUp, paused }: { ticket: TreeTicket; nextUp: NextUp; paused: string | null }) {
   const [shown, setShown] = useState(false);
   return (
     <section className="why-not" aria-label="Why not this">
       <button aria-expanded={shown} onClick={() => setShown(!shown)}>
         Why not this?
       </button>
-      {shown && <p>{whyNotText(ticket, nextUp.ranked)}</p>}
+      {shown && <p>{whyNotText(ticket, nextUp.ranked, paused)}</p>}
     </section>
   );
 }
@@ -83,13 +83,18 @@ function NextUpSection({
   marker,
   treeTicket,
   nextUp,
+  paused = null,
 }: {
   marker?: NextUpMarker;
   treeTicket?: TreeTicket;
   nextUp: NextUp;
+  /** The label of the ticket's paused session, if its claim is held by one. */
+  paused?: string | null;
 }) {
   if (marker !== undefined) return <NextUpExplanation marker={marker} />;
-  if (treeTicket !== undefined && treeTicket.status !== "done") return <WhyNot ticket={treeTicket} nextUp={nextUp} />;
+  if (treeTicket !== undefined && treeTicket.status !== "done") {
+    return <WhyNot ticket={treeTicket} nextUp={nextUp} paused={paused} />;
+  }
   return null;
 }
 
@@ -99,6 +104,7 @@ function TicketContent({
   nextUp,
   treeTicket,
   stale,
+  paused,
   sessions,
   sessionHandlers,
   onStartWork,
@@ -114,6 +120,8 @@ function TicketContent({
   treeTicket: TreeTicket | undefined;
   /** Whether its claim is held by no live Dryland session. */
   stale: boolean;
+  /** The label of its paused session, if its claim is held by one. */
+  paused: string | null;
   onStartWork: StartWorkHandler;
   onAction: TicketActionHandler;
 }) {
@@ -149,7 +157,7 @@ function TicketContent({
         <Field name="Blocked by">{formatBlockers(ticket.blockers) ?? "none"}</Field>
         <Field name="Map">{ticket.mapTitle}</Field>
       </Details>
-      <NextUpSection marker={marker} treeTicket={treeTicket} nextUp={nextUp} />
+      <NextUpSection marker={marker} treeTicket={treeTicket} nextUp={nextUp} paused={paused} />
       <div className="content">
         <Markdown>{ticket.body}</Markdown>
         {ticket.answer !== null && (
@@ -209,6 +217,7 @@ export function ItemTab({
         nextUp={nextUp}
         treeTicket={treeTicket}
         stale={project.tree.ok && project.tree.staleClaims.includes(ticketKey(content.ticket))}
+        paused={(project.tree.ok && project.tree.pausedClaims[ticketKey(content.ticket)]) || null}
         sessions={sessions.filter((s) => s.ticket !== null && ticketKey(s.ticket) === ticketKey(content.ticket))}
         sessionHandlers={sessionHandlers}
         onStartWork={onStartWork}

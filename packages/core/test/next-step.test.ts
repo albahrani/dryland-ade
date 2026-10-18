@@ -194,6 +194,56 @@ describe("nextSteps session and claim rules", () => {
     expect(nextSteps(snapshot([effort("shop")], claimed))).toEqual([]);
   });
 
+  it("does not flag a claim whose session is paused, however it was left", () => {
+    const claimed = [ticket("shop", "02", ["Type: task", "Status: claimed"])];
+    const pausedWas = (was: "waiting" | "interrupted" | null) =>
+      snapshot([effort("shop")], claimed, {
+        sessions: [{ id: "c1", ticket: { map: "shop", id: "02" }, state: "paused", was }],
+      });
+
+    expect(nextSteps(pausedWas(null))).toEqual([]);
+    expect(nextSteps(pausedWas("interrupted"))).toEqual([]);
+  });
+
+  it("a paused session that was waiting on you is a next step on its ticket, with no skill command", () => {
+    const steps = nextSteps(
+      snapshot([effort("shop")], [ticket("shop", "02", ["Type: task", "Status: claimed"])], {
+        sessions: [{ id: "c1", ticket: { map: "shop", id: "02" }, state: "paused", was: "waiting" }],
+      }),
+    );
+
+    expect(steps).toEqual([
+      {
+        ruleId: "paused-was-waiting",
+        command: null,
+        target: { kind: "ticket", map: "shop", id: "02" },
+        reason: "Ticket shop/02 has a paused session (c1) that was waiting on you.",
+        evidence: [
+          { artifact: "session c1", field: "state", value: "paused" },
+          { artifact: "session c1", field: "was", value: "waiting" },
+        ],
+      },
+    ]);
+  });
+
+  it("ranks a paused session that was waiting after live waiting sessions and before stale claims", () => {
+    const claimed = ["01", "02", "03"].map((id) => ticket("shop", id, ["Type: task", "Status: claimed"]));
+    const steps = nextSteps(
+      snapshot([effort("shop")], claimed, {
+        sessions: [
+          { id: "c2", ticket: { map: "shop", id: "02" }, state: "paused", was: "waiting" },
+          { id: "s3", ticket: { map: "shop", id: "03" }, state: "waiting" },
+        ],
+      }),
+    );
+
+    expect(steps.map((s) => [s.ruleId, s.target.kind === "ticket" ? s.target.id : s.target.kind])).toEqual([
+      ["waiting-session", "session"],
+      ["paused-was-waiting", "02"],
+      ["stale-claim", "01"],
+    ]);
+  });
+
   /** Ticket shop/02 claimed by `holder`, with no live session, and the given ticket worktree branches on disk. */
   function heldBy(holder: string, branches: string[]): RepoSnapshot {
     const claim = `<!-- dryland: {"claim":{"holder":"${holder}","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->`;

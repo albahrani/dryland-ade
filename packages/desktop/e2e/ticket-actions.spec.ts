@@ -50,6 +50,8 @@ function claimOutside(repo: string, ref: string, holder: string): void {
   if (!existsSync(worktree)) git(repo, "worktree", "add", "--quiet", "-b", holder, worktree);
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.DRYLAND_SESSION_ID;
+  // Outside any Agent CLI session, or the claim would be recorded in the session index and read as paused.
+  delete env.CLAUDE_CODE_SESSION_ID;
   delete env.DRYLAND_PORT;
   delete env.DRYLAND_TOKEN;
   execFileSync(process.execPath, [resolve("out/main/dryland.js"), "ticket", "claim", ref], { cwd: worktree, env });

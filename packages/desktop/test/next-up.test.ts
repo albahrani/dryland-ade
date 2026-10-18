@@ -43,6 +43,15 @@ describe("whyNotText", () => {
     expect(whyNotText(row({ status: "in-progress", claimant: "alex" }), [])).toBe("It is claimed by alex.");
   });
 
+  it("says a claimed ticket with a paused session is paused, not stale", () => {
+    expect(whyNotText(row({ status: "in-progress", claimant: "shop/03-cart" }), [], "Paused")).toBe(
+      "Paused. Not stale: it is claimed by shop/03-cart and its session can be resumed.",
+    );
+    expect(whyNotText(row({ status: "in-progress", claimant: null }), [], "Paused: was waiting on you")).toBe(
+      "Paused: was waiting on you. Not stale: it is claimed and its session can be resumed.",
+    );
+  });
+
   it("says a done ticket needs nothing", () => {
     expect(whyNotText(row({ status: "done" }), [])).toBe("It is done.");
   });

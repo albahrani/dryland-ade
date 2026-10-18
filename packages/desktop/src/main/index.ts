@@ -11,6 +11,7 @@ import {
   nextUpMarkers,
   nodeProcessRunner,
   readMapDetail,
+  pausedLabel,
   readProjectState,
   readTicketDetail,
   startLiveListener,
@@ -160,7 +161,12 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
     const staleClaims = steps.flatMap(({ ruleId, target }) =>
       ruleId === "stale-claim" && target.kind === "ticket" ? [ticketKey(target)] : [],
     );
-    return { tree: { ok: true, tree, nextUp, staleClaims }, mainCheckout };
+    const pausedClaims = Object.fromEntries(
+      (snapshot.sessions ?? []).flatMap((s) =>
+        s.state === "paused" ? [[ticketKey(s.ticket), pausedLabel(s.was)]] : [],
+      ),
+    );
+    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims }, mainCheckout };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
     return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: null };

@@ -33,11 +33,33 @@ export interface TicketRef {
   id: string;
 }
 
-export interface SessionSnapshot {
+/** A session Dryland runs now. */
+export interface LiveSessionSnapshot {
   id: string;
   /** The ticket the session works on, `null` for a scratch session. */
   ticket: TicketRef | null;
   state: "launched" | "running" | "waiting" | "idle" | "ended";
+}
+
+/** How a paused session was left: waiting on the user, interrupted mid-turn, or neither (idle, or no state seen). */
+export type PausedWas = "waiting" | "interrupted" | null;
+
+/** A session no live Dryland session runs but the session index knows for a claimed ticket (ADR 0010). */
+export interface PausedSessionSnapshot {
+  /** The Agent CLI's own session id, the one it resumes by. */
+  id: string;
+  ticket: TicketRef;
+  state: "paused";
+  was: PausedWas;
+}
+
+export type SessionSnapshot = LiveSessionSnapshot | PausedSessionSnapshot;
+
+/** The label a paused session shows: what it was doing when Dryland quit. */
+export function pausedLabel(was: PausedWas): string {
+  if (was === "waiting") return "Paused: was waiting on you";
+  if (was === "interrupted") return "Paused: interrupted";
+  return "Paused";
 }
 
 /** What git says about the Linked worktree of one ticket. */
@@ -226,10 +248,29 @@ const waitingSessions: Rule = (snapshot) =>
       evidence: [{ artifact: `session ${session.id}`, field: "state", value: "waiting" }],
     }));
 
+/** Whether `session` holds the claim on `ticket`: it works on it and has not ended. A paused session holds it too. */
+export const holdsClaim = (session: SessionSnapshot, ticket: TicketRef): boolean =>
+  session.state !== "ended" && session.ticket?.map === ticket.map && session.ticket.id === ticket.id;
+
+/** A paused session that was waiting on the user: it needs them as soon as it resumes, so it ranks after live ones. */
+const pausedWasWaiting: Rule = (snapshot) =>
+  (snapshot.sessions ?? [])
+    .filter((session): session is PausedSessionSnapshot => session.state === "paused" && session.was === "waiting")
+    .map((session) => ({
+      ruleId: "paused-was-waiting",
+      command: null,
+      target: { kind: "ticket", map: session.ticket.map, id: session.ticket.id },
+      reason: `Ticket ${session.ticket.map}/${session.ticket.id} has a paused session (${session.id}) that was waiting on you.`,
+      evidence: [
+        { artifact: `session ${session.id}`, field: "state", value: "paused" },
+        { artifact: `session ${session.id}`, field: "was", value: "waiting" },
+      ],
+    }));
+
 /**
- * A claim is held by a branch (ADR 0010). It is possibly stale when no live session works on its ticket and its
- * holder is no branch checked out in a ticket worktree: the default branch, a name no worktree has, or a session id
- * an earlier build wrote. It is only flagged: releasing it is an explicit user action.
+ * A claim is held by a branch (ADR 0010). It is possibly stale when no live or paused session works on its ticket
+ * and its holder is no branch checked out in a ticket worktree: the default branch, a name no worktree has, or a
+ * session id an earlier build wrote. It is only flagged: releasing it is an explicit user action.
  */
 const staleClaims: Rule = (snapshot) => {
   const { sessions } = snapshot;
@@ -240,10 +281,7 @@ const staleClaims: Rule = (snapshot) => {
     .sort(byTicketNumber)
     .flatMap((ticket) => {
       if (ticket.claimant !== null && worktreeBranches.has(ticket.claimant)) return [];
-      const live = sessions.filter(
-        (s) => s.state !== "ended" && s.ticket?.map === ticket.map && s.ticket.id === ticket.id,
-      );
-      if (live.length > 0) return [];
+      if (sessions.some((s) => holdsClaim(s, ticket))) return [];
       return [
         {
           ruleId: "stale-claim",
@@ -393,6 +431,7 @@ const retro: Rule = (snapshot) =>
 const RULES: Rule[] = [
   noSetupConfig,
   waitingSessions,
+  pausedWasWaiting,
   staleClaims,
   mapFrontier,
   implementSpec,

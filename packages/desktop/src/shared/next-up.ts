@@ -26,11 +26,15 @@ export function mapMarker(nextUp: NextUp, map: string): NextUpMarker | undefined
 }
 
 /** "Why not this?" for a ticket without a marker: its unresolved blockers, or what else keeps it unmarked. */
-export function whyNotText(ticket: TreeTicket, ranked: NextUpMarker[]): string {
+export function whyNotText(ticket: TreeTicket, ranked: NextUpMarker[], pausedLabel: string | null = null): string {
   if (ticket.blockers === "unknown") return "Blocking unknown: the tracker cannot say what blocks this ticket.";
   const blockers = formatBlockers(ticket.blockers);
   if (blockers !== null) return `Blocked by ${blockers}: not resolved yet.`;
   if (ticket.status === "done") return "It is done.";
+  if (pausedLabel !== null) {
+    const holder = ticket.claimant === null ? "claimed" : `claimed by ${ticket.claimant}`;
+    return `${pausedLabel}. Not stale: it is ${holder} and its session can be resumed.`;
+  }
   if (ticket.claimant !== null) return `It is claimed by ${ticket.claimant}.`;
   const rank = ranked.findIndex(({ item }) => isTicket(item, ticket.map, ticket.id));
   if (rank === -1) return "Nothing blocks it, but no rule recommends it.";
