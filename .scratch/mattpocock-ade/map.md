@@ -130,6 +130,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Sessions view panes and status bar](issues/37-sessions-view-and-status-bar.md): Hidden and Open panes (grouped tree, collapse, sash, per-project layout), selected-session status bar and waiting badge; next-up markers on waiting sessions show the session.
 
+- [Feed live and paused sessions into the repo snapshot](issues/65-feed-live-sessions-into-the-repo-snapshot.md): Claimed tickets with an indexed session and no live one read as paused, never stale; paused-was-waiting ranks between live waiting and stale claims, and Why not this? says paused.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
