@@ -5,9 +5,26 @@ import { readEfforts } from "./efforts.ts";
 import { exists } from "./env-fs.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import { claudeHistoryDir, type HistoryFile, reconcileIndex, updateSessionIndex } from "./session-index.ts";
+import { type HistoryFile, reconcileIndex, updateSessionIndex } from "./session-index.ts";
 import { readTickets } from "./tickets.ts";
 import { listWorktrees } from "./worktree.ts";
+
+/** Claude Code's name for a working directory's history folder: every character that is not a letter or digit is `-`. */
+export function claudeProjectSlug(path: string): string | null {
+  const slug = path.replace(/[^a-zA-Z0-9]/g, "-");
+  // Past 200 characters Claude Code truncates and appends a hash of the path that is not documented.
+  return slug.length > 200 ? null : slug;
+}
+
+/**
+ * The folder holding Claude Code's history for sessions run in `directory`, or `null` when its name cannot be worked
+ * out. The config root is `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+ */
+export function claudeHistoryDir(env: NodeJS.ProcessEnv, home: string, directory: string): string | null {
+  const slug = claudeProjectSlug(directory);
+  if (slug === null) return null;
+  return join(env["CLAUDE_CONFIG_DIR"]?.trim() || join(home, ".claude"), "projects", slug);
+}
 
 const SCRATCH_BRANCH = /^([^/]+)\/scratch-.+$/;
 
@@ -59,12 +76,10 @@ export async function reconcileSessionIndex(
     listWorktrees(runner, mainCheckout),
   ]);
   const maps = new Set(efforts.map((e) => e.name));
-  const claimed = new Set(tickets.filter((t) => t.state === "claimed").map((t) => `${t.map}/${t.id}`));
-
+  const claimed = new Set<string>();
   const dropped = new Set<string>();
   for (const ticket of tickets) {
-    const key = `${ticket.map}/${ticket.id}`;
-    if (!claimed.has(key)) dropped.add(key);
+    (ticket.state === "claimed" ? claimed : dropped).add(`${ticket.map}/${ticket.id}`);
   }
 
   const claudeHistory: Record<string, HistoryFile[]> = {};

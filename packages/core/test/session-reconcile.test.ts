@@ -22,6 +22,10 @@ describe("claudeProjectSlug", () => {
   it("turns every character that is not a letter or digit into a dash, on Windows paths", () => {
     // The folder name Claude Code made for this very project.
     expect(claudeProjectSlug("T:\\Development\\mattpocock-ide")).toBe("T--Development-mattpocock-ide");
+    // The folder Claude Code made for a worktree of this project, recorded in the research.
+    expect(claudeProjectSlug("T:\\Development\\mattpocock-ide-worktrees\\hook-verify")).toBe(
+      "T--Development-mattpocock-ide-worktrees-hook-verify",
+    );
     expect(claudeProjectSlug("C:\\Users\\dev\\my repo.worktrees\\shop-01")).toBe(
       "C--Users-dev-my-repo-worktrees-shop-01",
     );

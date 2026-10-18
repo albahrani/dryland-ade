@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { AgentAdapter } from "./agent-adapter.ts";
+import { type AgentAdapter, CLAUDE_CODE } from "./agent-adapter.ts";
 import { DrylandError } from "./errors.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { acquireLock, removeLeftoverTemps, writeAtomically } from "./tracker-write.ts";
@@ -191,15 +191,15 @@ export function reconcileIndex(
     const known = items[item] ?? [];
     const kept = known.filter(
       (s) =>
-        s.adapter !== "claude-code" ||
+        s.adapter !== CLAUDE_CODE.id ||
         present.has(s.sessionId) ||
         now.getTime() - Date.parse(s.lastSeen) < HISTORY_GRACE_MS,
     );
-    const knownIds = new Set(known.filter((s) => s.adapter === "claude-code").map((s) => s.sessionId));
+    const knownIds = new Set(known.filter((s) => s.adapter === CLAUDE_CODE.id).map((s) => s.sessionId));
     const added: IndexedSession[] = files
       .filter((f) => !knownIds.has(f.sessionId))
       .map((f) => ({
-        adapter: "claude-code",
+        adapter: CLAUDE_CODE.id,
         sessionId: f.sessionId,
         lastSeen: f.modified.toISOString(),
         found: true,
@@ -211,23 +211,6 @@ export function reconcileIndex(
   }
   const result = withoutExpired({ items }, now, retentionDays);
   return JSON.stringify(result) === JSON.stringify(index) ? index : result;
-}
-
-/** Claude Code's name for a working directory's history folder: every character that is not a letter or digit is `-`. */
-export function claudeProjectSlug(path: string): string | null {
-  const slug = path.replace(/[^a-zA-Z0-9]/g, "-");
-  // Past 200 characters Claude Code truncates and appends a hash of the path that is not documented.
-  return slug.length > 200 ? null : slug;
-}
-
-/**
- * The folder holding Claude Code's history for sessions run in `directory`, or `null` when its name cannot be worked
- * out. The config root is `CLAUDE_CONFIG_DIR`, else `~/.claude`.
- */
-export function claudeHistoryDir(env: NodeJS.ProcessEnv, home: string, directory: string): string | null {
-  const slug = claudeProjectSlug(directory);
-  if (slug === null) return null;
-  return join(env["CLAUDE_CONFIG_DIR"]?.trim() || join(home, ".claude"), "projects", slug);
 }
 
 export interface RecordSessionOptions {

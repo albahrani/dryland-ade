@@ -281,6 +281,9 @@ async function openProject(path: string): Promise<void> {
 }
 
 let reconciling = false;
+let lastReconciled = 0;
+/** Focus comes in bursts (alt-tabbing, dialogs); a reconcile this recent already saw what a new one would. */
+const RECONCILE_MIN_INTERVAL_MS = 3000;
 
 /**
  * Brings the session index in line with the tracker, git and Claude Code's history, in this process and never the
@@ -288,7 +291,7 @@ let reconciling = false;
  * a failure is logged, never shown.
  */
 async function reconcileSessions(): Promise<void> {
-  if (project === null || reconciling) return;
+  if (project === null || reconciling || Date.now() - lastReconciled < RECONCILE_MIN_INTERVAL_MS) return;
   reconciling = true;
   try {
     const { changed, warnings } = await reconcileSessionIndex(nodeProcessRunner, project.path);
@@ -298,6 +301,7 @@ async function reconcileSessions(): Promise<void> {
     if (!(error instanceof DrylandError)) console.warn("The session index was not reconciled.", error);
   } finally {
     reconciling = false;
+    lastReconciled = Date.now();
   }
 }
 
