@@ -87,6 +87,7 @@ Main sources:
 - **Contents are internal.** "The entry format is internal to Claude Code and changes between versions" (CC-sessions).
 - **Retention.** 30 days via `cleanupPeriodDays`. `claude purge` deletes a project's transcripts.
 - **Worktrees.** Each worktree path is its own `<project>` directory. Verified locally: `T--Development-mattpocock-ide` and `T--Development-mattpocock-ide-worktrees-hook-verify`.
+- **Slug examples.** Observed on Windows: `T:Developmentmattpocock-ide` becomes `T--Development-mattpocock-ide`. No POSIX folder has been observed yet; by the documented rule `/home/dev/shop.worktrees/shop-01-cart` becomes `-home-dev-shop-worktrees-shop-01-cart` (derived, not observed). Replace it with a real one when a Mac or Linux machine is at hand.
 - **Readable without parsing.** File name means session id, mtime means last activity, size is available too. Next to the transcripts sit `<session-id>/` folders (`subagents/`, `tool-results/`) and a `memory/` folder. These are not sessions.
 - **Sessions that leave their directory.** A session moved with `/cd`, or resumed from another directory, lives in that directory's project folder.
 
