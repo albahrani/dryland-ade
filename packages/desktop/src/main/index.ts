@@ -27,6 +27,7 @@ import {
   type ItemContent,
   type MenuCommand,
   type ProjectView,
+  type ResumedAllResult,
   type StartWorkResult,
   type TicketActionResult,
   type TreeLoad,
@@ -48,6 +49,8 @@ import { quitConfirmation, runShutdown, shutdownSteps } from "./lifecycle.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
+import { pausedTickets } from "../shared/paused-session.ts";
+import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
 import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
@@ -122,6 +125,7 @@ function settings(): AppSettings {
     autoCommit: project === null ? saved.autoCommit : autoCommitFor(saved, project.path),
     dontAsk: saved.dontAsk,
     stopConfirmation: saved.stopConfirmation,
+    resumeOnStart: saved.resumeOnStart,
   };
 }
 const sendSettings = () => sendToWindow("settings:changed", settings());
@@ -131,6 +135,29 @@ const sendSettings = () => sendToWindow("settings:changed", settings());
 function liveSessions(): SessionSnapshot[] {
   const states = status.states();
   return work.sessions().map(({ id, ticket }) => ({ id, ticket, state: states[id] ?? "launched" }));
+}
+
+/**
+ * Resumes the paused sessions of the open project, or of one map, hidden: the window learns of them but opens no tab.
+ * One after another, so the CLIs do not all start at once.
+ */
+async function resumeAllPaused(map: string | null): Promise<ResumedAllResult> {
+  if (project === null) return { resumed: 0, warnings: ["No project is open."] };
+  const { path } = project;
+  const { tree } = await loadTree(path);
+  if (!tree.ok) return { resumed: 0, warnings: [`${tree.message} ${tree.nextAction}`] };
+  const { sessions, warnings } = await resumeAll(pausedTickets(tree.pausedClaims, map), async (ticket) => {
+    const started = await work.resumeSession(path, ticket, "resume");
+    status.launched(started.session.id);
+    return started;
+  });
+  if (sessions.length > 0) {
+    sendToWindow("sessions:started", sessions);
+    sendSessionStates();
+    // Their claims are held by live sessions again, so they no longer read as paused.
+    void refresh();
+  }
+  return { resumed: sessions.length, warnings };
 }
 
 /** Ends the session in terminal `id`, if one runs there: its CLI exited, or Dryland closed the terminal. */
@@ -339,10 +366,27 @@ function trackerMenu(): MenuItemConstructorOptions[] {
   ];
 }
 
-/** When stopping a session asks first, until Settings has it. */
+/** Shows what went wrong with sessions resumed from the menu or at start; nothing when all went well. */
+function notifyWarnings(warnings: string[]): void {
+  if (warnings.length > 0) sendToWindow("notice", warnings.join(" "));
+}
+
+/** Resume all and when stopping a session asks first, until Settings has them. */
 function sessionsMenu(): MenuItemConstructorOptions[] {
-  const current = store.read().stopConfirmation;
+  const { stopConfirmation: current, resumeOnStart } = store.read();
   return [
+    {
+      label: "Resume All Paused Sessions",
+      enabled: project !== null,
+      click: () => void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings)),
+    },
+    {
+      label: "Resume Sessions on Start",
+      type: "checkbox",
+      checked: resumeOnStart,
+      click: () => changeSettings({ resumeOnStart: !store.read().resumeOnStart }),
+    },
+    { type: "separator" },
     {
       label: "Ask Before Stopping a Session",
       submenu: STOP_CONFIRMATIONS.map((rule) => ({
@@ -458,6 +502,10 @@ ipcMain.handle("work:resume", async (_event, ticket: unknown, mode: unknown): Pr
     return { ok: false, message: error.message, nextAction: error.nextAction };
   }
 });
+ipcMain.handle("work:resume-all", (_event, map: unknown): Promise<ResumedAllResult> => {
+  if (map !== null && typeof map !== "string") return Promise.resolve({ resumed: 0, warnings: ["That is not a map."] });
+  return resumeAllPaused(map);
+});
 ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): Promise<TicketActionResult> => {
   if (!isTicketAction(action) || typeof commit !== "boolean")
     return { ok: false, message: "That is not a ticket action.", nextAction: "Retry from the ticket." };
@@ -522,6 +570,7 @@ void app.whenReady().then(async () => {
   if (lastProject !== null) {
     await openProject(lastProject);
     await refresh();
+    if (store.read().resumeOnStart) void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings));
   }
 });
 

@@ -39,6 +39,8 @@ export interface AppSettings {
   autoCommit: boolean;
   dontAsk: DontAsk;
   stopConfirmation: StopConfirmation;
+  /** Whether starting the app resumes every paused session, hidden. */
+  resumeOnStart: boolean;
 }
 
 export interface AppState {
@@ -98,6 +100,12 @@ export type StartWorkResult =
 /** How a paused session continues: the CLI resumes it by id, or lets the user pick a session. */
 export type ResumeMode = "resume" | "pick";
 
+/** What resuming several paused sessions together did. */
+export interface ResumedAllResult {
+  resumed: number;
+  warnings: string[];
+}
+
 /** How a tracker write went: `dryland`'s warnings, or its error and the next action it names. */
 export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
@@ -134,6 +142,11 @@ export interface DrylandApi {
    * worktree ('pick'), which is also what a session the CLI no longer has falls back to, with a warning saying so.
    */
   resumeSession(ticket: TicketRef, mode: ResumeMode): Promise<StartWorkResult>;
+  /**
+   * Resumes the paused sessions of the open project, or of one map, as hidden sessions: no tab opens. Each one
+   * reaches `onSessionsStarted`; resolves with how many started and what went wrong with the rest.
+   */
+  resumeAll(map: string | null): Promise<ResumedAllResult>;
   /** Runs a ticket action through `dryland` in the open project; asking for confirmation is the caller's part. */
   runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */
@@ -162,6 +175,10 @@ export interface DrylandApi {
   onMenuCommand(callback: (command: MenuCommand) => void): () => void;
   /** Called with every session's state whenever one changes. Returns an unsubscribe function. */
   onSessionStates(callback: (states: Readonly<Record<string, SessionState>>) => void): () => void;
+  /** Called with a message for the user the main process has no dialog for, such as sessions that did not resume. */
+  onNotice(callback: (message: string) => void): () => void;
+  /** Called with sessions the main process started on its own, such as by Resume all. Returns an unsubscribe function. */
+  onSessionsStarted(callback: (sessions: SessionInfo[]) => void): () => void;
   /** Called with the sessions that have unseen output whenever that changes. Returns an unsubscribe function. */
   onUnseenSessions(callback: (sessionIds: string[]) => void): () => void;
 }

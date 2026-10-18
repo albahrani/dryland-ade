@@ -212,6 +212,9 @@ function TicketContent({
 
 export type ResumeHandler = (ticket: TicketRef, mode: ResumeMode) => Promise<void>;
 
+/** Resumes the paused sessions of one map, hidden. */
+export type ResumeAllHandler = (map: string) => Promise<void>;
+
 export type StartWorkHandler = (target: WorkTarget, agentId: string, skill: string | null) => Promise<void>;
 
 export function ItemTab({
@@ -224,6 +227,7 @@ export function ItemTab({
   lastOutput,
   onStartWork,
   onResume,
+  onResumeAll,
   onTicketAction,
 }: {
   item: DocumentRef;
@@ -238,6 +242,7 @@ export function ItemTab({
   lastOutput: (ticketKey: string) => string | null;
   onStartWork: StartWorkHandler;
   onResume: ResumeHandler;
+  onResumeAll: ResumeAllHandler;
   onTicketAction: TicketActionHandler;
 }) {
   const content = useItem(item, project);
@@ -274,6 +279,7 @@ export function ItemTab({
   const detail =
     content.kind === "map" ? content.map : { name: map?.name ?? "", title: map?.title ?? "", markdown: "" };
   const marker = mapMarker(nextUp, detail.name);
+  const pausedOnMap = [...paused.keys()].filter((key) => key.startsWith(`${detail.name}/`)).length;
   return (
     <article>
       <StartWork
@@ -281,6 +287,12 @@ export function ItemTab({
         label={(agent) => `Continue map with ${agent}`}
         onStart={(agentId, skill) => onStartWork({ kind: "map", map: detail.name }, agentId, skill)}
       />
+      {pausedOnMap > 0 && (
+        <p className="resume-all">
+          <button onClick={() => void onResumeAll(detail.name)}>Resume all on this map</button> {pausedOnMap} paused{" "}
+          {pausedOnMap === 1 ? "session" : "sessions"}, resumed hidden.
+        </p>
+      )}
       {/* The map's own session and those on its tickets. */}
       <LiveSessions sessions={sessions.filter((s) => s.map === detail.name)} handlers={sessionHandlers} />
       <Details

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { closeTab, EMPTY_TABS, focusTab, openTab, parseTabs, tabKey, type ItemRef } from "../src/shared/tabs.ts";
+import {
+  closeTab,
+  EMPTY_TABS,
+  focusTab,
+  openTab,
+  parseTabs,
+  replaceTab,
+  savedTabs,
+  tabKey,
+  type ItemRef,
+} from "../src/shared/tabs.ts";
 
 const ticket = (id: string): ItemRef => ({ kind: "ticket", map: "shop", id });
 const shopMap: ItemRef = { kind: "map", name: "shop" };
@@ -33,7 +43,7 @@ describe("terminal tabs", () => {
     expect(closeTab(opened, tabKey(terminal)).active).toBe(tabKey(ticket("01")));
   });
 
-  it("are not restored: parseTabs drops them", () => {
+  it("are not read back: parseTabs drops them", () => {
     const saved = openTab(openTab(EMPTY_TABS, ticket("01")), terminal);
     expect(parseTabs(saved)).toEqual({ open: [ticket("01")], active: tabKey(ticket("01")) });
   });
@@ -83,5 +93,53 @@ describe("parseTabs", () => {
     expect(parseTabs(undefined)).toEqual(EMPTY_TABS);
     expect(parseTabs("tabs")).toEqual(EMPTY_TABS);
     expect(parseTabs({ open: "all" })).toEqual(EMPTY_TABS);
+  });
+});
+
+describe("session tabs", () => {
+  const session: ItemRef = { kind: "session", map: "shop", id: "01" };
+  const terminal: ItemRef = { kind: "terminal", id: "t1" };
+  const ticketOf = (id: string) => (id === "t1" ? { map: "shop", id: "01" } : null);
+
+  it("are keyed apart from the ticket tab and the terminal", () => {
+    expect(tabKey(session)).not.toBe(tabKey(ticket("01")));
+    expect(tabKey(session)).not.toBe(tabKey(terminal));
+  });
+
+  it("are saved in place of the terminal a session runs in, and read back", () => {
+    const open = [ticket("02"), terminal].reduce(openTab, EMPTY_TABS);
+    const saved = savedTabs(open, ticketOf);
+    expect(saved).toEqual({ open: [ticket("02"), session], active: tabKey(session) });
+    expect(parseTabs(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+  });
+
+  it("drop plain terminals and move focus to the last tab saved", () => {
+    const open = [ticket("02"), { kind: "terminal", id: "plain" } as ItemRef].reduce(openTab, EMPTY_TABS);
+    expect(savedTabs(open, ticketOf)).toEqual({ open: [ticket("02")], active: tabKey(ticket("02")) });
+  });
+
+  it("are saved once, however many terminals ran the ticket", () => {
+    const open = [terminal, session].reduce(openTab, EMPTY_TABS);
+    expect(savedTabs(open, ticketOf).open).toEqual([session]);
+  });
+
+  it("are replaced in place by the terminal they resume into, keeping focus", () => {
+    const open = [ticket("02"), session, ticket("03")].reduce(openTab, EMPTY_TABS);
+    const shown = replaceTab(focusTab(open, tabKey(session)), tabKey(session), terminal);
+    expect(shown.open).toEqual([ticket("02"), terminal, ticket("03")]);
+    expect(shown.active).toBe(tabKey(terminal));
+  });
+
+  it("keep focus where it was when another tab is replaced", () => {
+    const open = [session, ticket("03")].reduce(openTab, EMPTY_TABS);
+    expect(replaceTab(open, tabKey(session), terminal).active).toBe(tabKey(ticket("03")));
+  });
+
+  it("merge into an open tab of the same item when replaced by it", () => {
+    const open = [ticket("01"), session].reduce(openTab, EMPTY_TABS);
+    expect(replaceTab(open, tabKey(session), ticket("01"))).toEqual({
+      open: [ticket("01")],
+      active: tabKey(ticket("01")),
+    });
   });
 });

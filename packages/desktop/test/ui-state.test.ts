@@ -12,6 +12,7 @@ const SETTINGS_DEFAULTS = {
   projectAutoCommit: {},
   dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
   stopConfirmation: "busy-or-unseen",
+  resumeOnStart: false,
 };
 
 describe("ui state store", () => {
@@ -129,6 +130,16 @@ describe("ui state store", () => {
 
     writeFileSync(file, JSON.stringify({ stopConfirmation: "sometimes" }));
     expect(createUiStateStore(file).read().stopConfirmation).toBe("busy-or-unseen");
+  });
+
+  it("leaves resuming sessions on start off until it is turned on, and remembers it", () => {
+    const file = stateFile();
+    expect(createUiStateStore(file).read().resumeOnStart).toBe(false);
+    createUiStateStore(file).update({ resumeOnStart: true });
+    expect(createUiStateStore(file).read().resumeOnStart).toBe(true);
+
+    writeFileSync(file, JSON.stringify({ resumeOnStart: "yes" }));
+    expect(createUiStateStore(file).read().resumeOnStart).toBe(false);
   });
 
   it("remembers auto-commit globally and per project, dropping overrides that are not on or off", () => {

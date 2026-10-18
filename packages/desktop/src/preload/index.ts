@@ -1,6 +1,6 @@
 import type { LiveEvent, SessionState } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppSettings, DrylandApi, MenuCommand, ProjectView } from "../shared/api.ts";
+import type { AppSettings, DrylandApi, MenuCommand, ProjectView, SessionInfo } from "../shared/api.ts";
 
 const api: DrylandApi = {
   getState: () => ipcRenderer.invoke("state:get"),
@@ -15,6 +15,7 @@ const api: DrylandApi = {
   listSkills: (agentId) => ipcRenderer.invoke("skills:list", agentId),
   startWork: (target, agentId, skill) => ipcRenderer.invoke("work:start", target, agentId, skill),
   resumeSession: (ticket, mode) => ipcRenderer.invoke("work:resume", ticket, mode),
+  resumeAll: (map) => ipcRenderer.invoke("work:resume-all", map),
   runTicketAction: (action, commit) => ipcRenderer.invoke("tracker:run", action, commit),
   dontAskAgain: (type) => ipcRenderer.invoke("confirmations:dont-ask", type),
   writeTerminal: (id, data) => ipcRenderer.send("terminal:write", id, data),
@@ -57,6 +58,16 @@ const api: DrylandApi = {
     const listener = (_event: unknown, states: Readonly<Record<string, SessionState>>) => callback(states);
     ipcRenderer.on("sessions:states", listener);
     return () => ipcRenderer.removeListener("sessions:states", listener);
+  },
+  onNotice(callback) {
+    const listener = (_event: unknown, message: string) => callback(message);
+    ipcRenderer.on("notice", listener);
+    return () => ipcRenderer.removeListener("notice", listener);
+  },
+  onSessionsStarted(callback) {
+    const listener = (_event: unknown, sessions: SessionInfo[]) => callback(sessions);
+    ipcRenderer.on("sessions:started", listener);
+    return () => ipcRenderer.removeListener("sessions:started", listener);
   },
   onUnseenSessions(callback) {
     const listener = (_event: unknown, sessionIds: string[]) => callback(sessionIds);

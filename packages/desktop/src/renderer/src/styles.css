@@ -967,3 +967,8 @@ ul {
   display: flex;
   gap: 8px;
 }
+
+.resume-all {
+  margin: 0 0 8px;
+  color: var(--muted, #9d9d9d);
+}

@@ -173,7 +173,7 @@ export function selectedSession<S extends ViewSession>(
   if (active.kind === "terminal") return sessions.find((s) => s.terminalId === active.id);
   const live = sessions.filter((s) => {
     if (stateOf(states, s) === "ended") return false;
-    if (active.kind === "ticket") return s.ticket !== null && ticketKey(s.ticket) === ticketKey(active);
+    if (active.kind !== "map") return s.ticket !== null && ticketKey(s.ticket) === ticketKey(active);
     return s.ticket === null && s.map === active.name;
   });
   return waitingFirst(live, states)[0];

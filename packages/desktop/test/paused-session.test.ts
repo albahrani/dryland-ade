@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pausedBadge, pausedSessions } from "../src/shared/paused-session.ts";
+import { pausedBadge, pausedSessions, pausedTickets } from "../src/shared/paused-session.ts";
 
 describe("the badge of a paused session", () => {
   it("is gold when it was waiting on the user and red when it was interrupted", () => {
@@ -29,5 +29,34 @@ describe("the paused sessions of a project", () => {
     expect(pausedSessions({ "shop/02": paused }, sessions, { s1: "ended" }).get("shop/02")).toEqual(paused);
     expect(pausedSessions({ "shop/02": paused }, sessions, { s1: "idle" }).has("shop/02")).toBe(false);
     expect(pausedSessions({ "shop/03": paused }, sessions, { s1: "idle" }).has("shop/03")).toBe(true);
+  });
+});
+
+describe("the tickets to resume together", () => {
+  const paused = (branch: string) => ({
+    sessionId: "c",
+    agentId: "claude-code",
+    agent: "Claude Code",
+    resumeCommand: null,
+    was: null,
+    lastSeen: "",
+    branch,
+  });
+  const claims = { "shop/02": paused("a"), "shop/03": paused("b"), "blog/01": paused("c") };
+
+  it("are every paused one without a map", () => {
+    expect(pausedTickets(claims, null)).toEqual([
+      { map: "shop", id: "02" },
+      { map: "shop", id: "03" },
+      { map: "blog", id: "01" },
+    ]);
+  });
+
+  it("are only those on the map when one is named", () => {
+    expect(pausedTickets(claims, "shop")).toEqual([
+      { map: "shop", id: "02" },
+      { map: "shop", id: "03" },
+    ]);
+    expect(pausedTickets(claims, "none")).toEqual([]);
   });
 });

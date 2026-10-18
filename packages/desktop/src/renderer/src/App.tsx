@@ -1,6 +1,13 @@
-import type { LiveEvent, TreeTicket } from "@dryland/core";
+import type { LiveEvent, TicketRef, TreeTicket } from "@dryland/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import type { AppState, LiveEventsPanelMode, MenuCommand, ProjectView, SessionInfo } from "../../shared/api.ts";
+import type {
+  AppState,
+  LiveEventsPanelMode,
+  MenuCommand,
+  ProjectView,
+  ResumeMode,
+  SessionInfo,
+} from "../../shared/api.ts";
 import {
   mapTitle,
   selectedSession,
@@ -20,12 +27,15 @@ import {
   focusTab,
   type ItemRef,
   openTab,
+  replaceTab,
+  savedTabs,
+  type SessionRef,
   tabKey,
   type TabsState,
   ticketKey,
 } from "../../shared/tabs.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
-import { ItemTab, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
+import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
 import { NewMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
@@ -51,9 +61,15 @@ const ACTIVITIES: { id: ActivityView; label: string; glyph: string }[] = [
   { id: "sessions", label: "Sessions", glyph: "▶" },
 ];
 
-function tabLabel(ref: ItemRef, terminalTitles: ReadonlyMap<string, string>): string {
+function tabLabel(
+  ref: ItemRef,
+  terminalTitles: ReadonlyMap<string, string>,
+  paused: ReadonlyMap<string, PausedSession>,
+): string {
   if (ref.kind === "terminal") return terminalTitles.get(ref.id) ?? "Terminal";
-  return ref.kind === "ticket" ? `${ref.map}/${ref.id}` : ref.name;
+  // A restored session tab reads as the terminal it becomes, not as the ticket's own tab.
+  if (ref.kind === "session") return `${paused.get(ticketKey(ref))?.agent ?? "Session"} ${ticketKey(ref)}`;
+  return ref.kind === "map" ? ref.name : `${ref.map}/${ref.id}`;
 }
 
 function Sidebar({
@@ -200,12 +216,34 @@ export function App() {
   const viewedTerminalId = viewedTerminal?.kind === "terminal" ? viewedTerminal.id : null;
   useEffect(() => window.dryland.viewTerminal(viewedTerminalId), [viewedTerminalId]);
 
+  // Session tabs are saved by their ticket, so a restart brings them back (as tabs that resume when shown).
+  const tabsNow = state?.tabs;
+  useEffect(() => {
+    if (tabsNow === undefined) return;
+    void window.dryland.saveTabs(savedTabs(tabsNow, (terminalId) => sessions.get(terminalId)?.ticket ?? null));
+  }, [tabsNow, sessions]);
+
+  // A restored session tab brings its session up the first time it is shown; the handler is the latest render's.
+  const restoreSession = useRef<(ref: SessionRef) => void>(() => undefined);
+  const shown = state === null ? undefined : activeItem(state.tabs);
+  const shownSession = shown?.kind === "session" ? shown : undefined;
+  const treeReady = state?.project?.tree.ok === true;
+  useEffect(() => {
+    if (shownSession !== undefined && treeReady) restoreSession.current(shownSession);
+    // Once per tab shown, once the project has loaded: the tab is replaced by what it restores.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownSession === undefined ? null : tabKey(shownSession), treeReady]);
+
   useEffect(() => {
     void window.dryland.getState().then((loaded) => {
       setState(loaded);
-      // After a reload the main process still knows the sessions this app started.
-      setSessions(new Map(loaded.sessions.map((session) => [session.terminalId, session])));
+      // After a reload the main process still knows the sessions this app started; some may already have arrived.
+      setSessions((current) => new Map([...loaded.sessions.map((s) => [s.terminalId, s] as const), ...current]));
     });
+    const stopStarted = window.dryland.onSessionsStarted((started) =>
+      setSessions((current) => new Map([...current, ...started.map((s) => [s.terminalId, s] as const)])),
+    );
+    const stopNotice = window.dryland.onNotice(setNotice);
     const stopProject = window.dryland.onProjectChanged((project) =>
       setState((current) => current && { ...current, project }),
     );
@@ -224,6 +262,8 @@ export function App() {
     );
     const stopMenu = window.dryland.onMenuCommand(setDialog);
     return () => {
+      stopStarted();
+      stopNotice();
       stopMenu();
       stopProject();
       stopTerminals();
@@ -251,7 +291,6 @@ export function App() {
   };
   const setTabs = (next: TabsState) => {
     setState({ ...state, tabs: next });
-    void window.dryland.saveTabs(next);
   };
   const closeItem = (ref: ItemRef) => {
     if (ref.kind === "terminal") {
@@ -270,11 +309,21 @@ export function App() {
     setSessions((current) => new Map([...current].filter(([id]) => kept.has(id))));
     setState(next);
   };
-  /** Shows terminal `id` in a new, focused tab; registered first, so its first output is not dropped. */
-  const showTerminal = (id: string, title: string) => {
+  /**
+   * Shows terminal `id` in a new, focused tab, or in place of the tab `replacing`; registered first, so its first
+   * output is not dropped.
+   */
+  const showTerminal = (id: string, title: string, replacing?: string) => {
     getOrCreateTerminal(id);
     setTerminalTitles((current) => new Map(current).set(id, title));
-    setState((current) => current && { ...current, tabs: openTab(current.tabs, { kind: "terminal", id }) });
+    const ref = { kind: "terminal" as const, id };
+    setState(
+      (current) =>
+        current && {
+          ...current,
+          tabs: replacing === undefined ? openTab(current.tabs, ref) : replaceTab(current.tabs, replacing, ref),
+        },
+    );
   };
   const startWork: StartWorkHandler = async (target, agentId, skill) => {
     setTerminalError(null);
@@ -288,17 +337,54 @@ export function App() {
     setSessions((current) => new Map(current).set(session.terminalId, session));
     showTerminal(session.terminalId, sessionTitle(session));
   };
-  const resumeSession: ResumeHandler = async (ticket, mode) => {
+  /** Resumes a ticket's session (a hidden one until shown); `null` with the error shown when it could not. */
+  const launchResume = async (ticket: TicketRef, mode: ResumeMode): Promise<SessionInfo | null> => {
     setTerminalError(null);
     const result = await window.dryland.resumeSession(ticket, mode);
     if (!result.ok) {
       setTerminalError(`${result.message} ${result.nextAction}`);
-      return;
+      return null;
     }
     const { session, warnings } = result;
     setNotice(warnings.length === 0 ? null : warnings.join(" "));
     setSessions((current) => new Map(current).set(session.terminalId, session));
-    showTerminal(session.terminalId, sessionTitle(session));
+    return session;
+  };
+  const resumeSession: ResumeHandler = async (ticket, mode) => {
+    const session = await launchResume(ticket, mode);
+    if (session !== null) showTerminal(session.terminalId, sessionTitle(session));
+  };
+  const resumeAllOnMap: ResumeAllHandler = async (map) => {
+    const { warnings } = await window.dryland.resumeAll(map);
+    setNotice(warnings.length === 0 ? null : warnings.join(" "));
+  };
+  /** Turns a restored session tab into what it stands for: the running session, the resumed one, or its ticket. */
+  restoreSession.current = (ref) => {
+    const key = tabKey(ref);
+    const toTicket = () =>
+      setState(
+        (current) =>
+          current && { ...current, tabs: replaceTab(current.tabs, key, { kind: "ticket", map: ref.map, id: ref.id }) },
+      );
+    const live = [...sessions.values()]
+      .filter((s) => s.ticket !== null && ticketKey(s.ticket) === ticketKey(ref) && sessionState(s) !== "ended")
+      .at(-1);
+    if (live !== undefined) {
+      // Resumed hidden (at start or by Resume all): its output is replayed into the tab's new view.
+      void window.dryland.replayTerminal(live.terminalId).then((output) => {
+        if (output === null) return toTicket();
+        if (existingTerminal(live.terminalId) === undefined) {
+          getOrCreateTerminal(live.terminalId).term.write(output);
+        }
+        showTerminal(live.terminalId, sessionTitle(live), key);
+      });
+    } else if (pausedMap.has(ticketKey(ref))) {
+      void launchResume({ map: ref.map, id: ref.id }, "resume").then((session) =>
+        session === null ? toTicket() : showTerminal(session.terminalId, sessionTitle(session), key),
+      );
+    } else {
+      toTicket();
+    }
   };
   /** The last line the newest stopped session on a ticket printed, while this run still holds its terminal. */
   const pausedLastLine = (key: string): string | null => {
@@ -384,6 +470,7 @@ export function App() {
     void runAction(pending.action);
   };
   const activeTab = activeItem(tabs);
+  const activeDocument = activeTab?.kind === "ticket" || activeTab?.kind === "map" ? activeTab : undefined;
   const activeSession = activeTab?.kind === "terminal" ? sessions.get(activeTab.id) : undefined;
   const allSessions = [...sessions.values()];
   const { hidden: hiddenSessions, open: openSessions } = splitSessions(allSessions, sessionStates, tabs.open);
@@ -471,7 +558,8 @@ export function App() {
           <div className="tabbar" role="tablist" aria-label="Open items">
             {tabs.open.map((tab) => {
               const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
-              const paused = tab.kind === "ticket" ? pausedMap.get(ticketKey(tab)) : undefined;
+              const paused =
+                tab.kind === "ticket" || tab.kind === "session" ? pausedMap.get(ticketKey(tab)) : undefined;
               return (
                 <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
                   {paused !== undefined && <PausedBadge agent={paused.agent} was={paused.was} />}
@@ -482,9 +570,12 @@ export function App() {
                     aria-selected={tabKey(tab) === tabs.active}
                     onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
                   >
-                    {tabLabel(tab, terminalTitles)}
+                    {tabLabel(tab, terminalTitles, pausedMap)}
                   </button>
-                  <button aria-label={`Close ${tabLabel(tab, terminalTitles)}`} onClick={() => closeItem(tab)}>
+                  <button
+                    aria-label={`Close ${tabLabel(tab, terminalTitles, pausedMap)}`}
+                    onClick={() => closeItem(tab)}
+                  >
                     ×
                   </button>
                 </span>
@@ -515,10 +606,11 @@ export function App() {
         {terminalIds.map((id) => (
           <TerminalTab key={id} id={id} active={activeTab?.kind === "terminal" && activeTab.id === id} />
         ))}
-        {project !== null && activeTab !== undefined && activeTab.kind !== "terminal" ? (
+        {activeTab?.kind === "session" && <p className="empty">Resuming {ticketKey(activeTab)}...</p>}
+        {project !== null && activeDocument !== undefined ? (
           <ItemTab
-            key={tabKey(activeTab)}
-            item={activeTab}
+            key={tabKey(activeDocument)}
+            item={activeDocument}
             project={project}
             sessions={[...sessions.values()]}
             sessionHandlers={sessionHandlers}
@@ -526,19 +618,22 @@ export function App() {
             lastOutput={pausedLastLine}
             onStartWork={startWork}
             onResume={resumeSession}
+            onResumeAll={resumeAllOnMap}
             onTicketAction={(action) => requestAction(action, "ticket")}
             header={{
-              open: !collapsedHeaders.has(tabKey(activeTab)),
+              open: !collapsedHeaders.has(tabKey(activeDocument)),
               onToggle: () =>
                 setCollapsedHeaders((current) => {
                   const next = new Set(current);
-                  if (!next.delete(tabKey(activeTab))) next.add(tabKey(activeTab));
+                  if (!next.delete(tabKey(activeDocument))) next.add(tabKey(activeDocument));
                   return next;
                 }),
             }}
           />
         ) : (
-          activeTab?.kind !== "terminal" && <p className="empty">Select a ticket or map to open it here.</p>
+          (activeTab === undefined || activeDocument !== undefined) && (
+            <p className="empty">Select a ticket or map to open it here.</p>
+          )
         )}
       </main>
       <aside className="right-side">

@@ -1,4 +1,4 @@
-import type { PausedWas, SessionState } from "@dryland/core";
+import type { PausedWas, SessionState, TicketRef } from "@dryland/core";
 
 /** A claimed ticket's session no live Dryland session runs, as the tab and the tree show it (ADR 0010). */
 export interface PausedSession {
@@ -46,4 +46,16 @@ export function pausedSessions(
     ),
   );
   return new Map(Object.entries(paused).filter(([key]) => !live.has(key)));
+}
+
+/**
+ * The tickets of `paused` (by `ticketKey`) to resume together: all of them, or those on `map`. A ticket key is
+ * `<map>/<id>`; the id never holds a slash.
+ */
+export function pausedTickets(paused: Readonly<Record<string, PausedSession>>, map: string | null): TicketRef[] {
+  return Object.keys(paused).flatMap((key) => {
+    const slash = key.lastIndexOf("/");
+    const ticket = { map: key.slice(0, slash), id: key.slice(slash + 1) };
+    return slash > 0 && (map === null || ticket.map === map) ? [ticket] : [];
+  });
 }

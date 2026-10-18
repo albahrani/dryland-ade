@@ -24,6 +24,8 @@ export interface UiState {
   dontAsk: DontAsk;
   /** When stopping a session asks first. */
   stopConfirmation: StopConfirmation;
+  /** Whether starting the app resumes every paused session, hidden. */
+  resumeOnStart: boolean;
 }
 
 const DEFAULTS: UiState = {
@@ -36,6 +38,7 @@ const DEFAULTS: UiState = {
   projectAutoCommit: {},
   dontAsk: ASK_ALWAYS,
   stopConfirmation: DEFAULT_STOP_CONFIRMATION,
+  resumeOnStart: false,
 };
 
 export interface UiStateStore {
@@ -84,6 +87,7 @@ function parse(text: string): UiState {
     projectAutoCommit: parseOverrides(raw.projectAutoCommit),
     dontAsk: parseDontAsk(raw.dontAsk),
     stopConfirmation: isStopConfirmation(raw.stopConfirmation) ? raw.stopConfirmation : DEFAULTS.stopConfirmation,
+    resumeOnStart: typeof raw.resumeOnStart === "boolean" ? raw.resumeOnStart : DEFAULTS.resumeOnStart,
   };
 }
 

@@ -106,6 +106,10 @@ function withPath(edit: (dirs: string[]) => string[]): Record<string, string> {
 async function openTicket(env: Record<string, string>) {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
+  return { ...(await openProjectAt(env, repo, userData)), userData };
+}
+
+async function openProjectAt(env: Record<string, string>, repo: string, userData: string) {
   const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`], env });
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
@@ -508,4 +512,95 @@ test("stops a session and resumes it from the paused box, in its worktree with t
   await expect(screen).not.toContainText("/implement shop/02");
   expect(readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8")).toBe(claimed);
   await app.close();
+});
+
+/** Starts the app again on the same project and settings, which it opens by itself. */
+async function relaunch(env: Record<string, string>, userData: string) {
+  const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`], env });
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+  });
+  return { app, window: await app.firstWindow() };
+}
+
+/** Clicks an item of the application menu, as the user would. */
+const clickMenu = (app: Awaited<ReturnType<typeof electron.launch>>, menu: string, label: string) =>
+  app.evaluate(
+    ({ Menu }, [menuLabel, itemLabel]) => {
+      const top = Menu.getApplicationMenu()?.items.find((item) => item.label === menuLabel);
+      top?.submenu?.items.find((item) => item.label === itemLabel)?.click();
+    },
+    [menu, label],
+  );
+
+function resumeEnv() {
+  const home = mkdtempSync(join(tmpdir(), "dryland-e2e-home-"));
+  return {
+    ...withPath((dirs) => [stubAgent(), ...dirs]),
+    HOME: home,
+    USERPROFILE: home,
+    STUB_WRITES_HISTORY: "1",
+  };
+}
+
+test("brings session tabs back after a restart, resuming a session only when its tab is first shown", async () => {
+  const env = resumeEnv();
+  const { app, window, repo, userData } = await openTicket(env);
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready");
+  const id = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")).items["shop/02"][0].sessionId;
+  // Another tab after it, so it is not the one shown after the restart.
+  await window.getByRole("button", { name: "Maps" }).click();
+  await window.getByRole("button", { name: /^Shop/ }).click();
+  await app.close();
+
+  const second = await relaunch(env, userData);
+  const tab = second.window.getByRole("tab", { name: "Claude Code shop/02" });
+  await expect(tab).toBeVisible();
+  await expect(second.window.getByRole("tab", { name: "shop", exact: true })).toHaveAttribute("aria-selected", "true");
+  await second.window.waitForTimeout(1000);
+  await expect(second.window.getByLabel("Session counts")).toHaveText("0 open · 0 hidden");
+
+  await tab.click();
+  await expect(second.window.locator(".xterm-rows:visible")).toContainText(`resume=${id}`);
+  await expect(second.window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(second.window.getByLabel("Session counts")).toHaveText("1 open · 0 hidden");
+  await second.app.close();
+});
+
+test("Resume all resumes paused sessions hidden, on a map or everywhere, and a setting does it at start", async () => {
+  const env = resumeEnv();
+  const { app, window, userData } = await openTicket(env);
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready");
+  await window.getByRole("button", { name: "Close Claude Code shop/02" }).click();
+  await app.close();
+
+  // On the map: its paused session resumes and no tab opens for it.
+  const second = await relaunch(env, userData);
+  await expect(second.window.getByRole("tab")).toHaveCount(0);
+  await second.window.getByRole("button", { name: "Maps" }).click();
+  await second.window.getByRole("button", { name: /^Shop/ }).click();
+  await second.window.getByRole("button", { name: "Resume all on this map" }).click();
+  await expect(second.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");
+  await expect(second.window.getByRole("button", { name: "Resume all on this map" })).toHaveCount(0);
+  await expect(second.window.getByRole("tab")).toHaveCount(2); // the ticket and the map, none for the session
+  await second.app.close();
+
+  // From the Sessions menu: the same, for every map.
+  const third = await relaunch(env, userData);
+  await expect(third.window.getByLabel("Session counts")).toHaveText("0 open · 0 hidden");
+  await clickMenu(third.app, "Sessions", "Resume All Paused Sessions");
+  await expect(third.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");
+  await expect(third.window.getByRole("tab", { name: /Claude Code/ })).toHaveCount(0);
+
+  // With the setting on, the next start does it by itself.
+  await clickMenu(third.app, "Sessions", "Resume Sessions on Start");
+  await third.app.close();
+  const fourth = await relaunch(env, userData);
+  await expect(fourth.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");
+  await fourth.app.close();
 });
