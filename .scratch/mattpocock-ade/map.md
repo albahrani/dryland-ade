@@ -144,6 +144,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [GitHub backend: read](issues/45-github-backend-read.md): Read tickets and maps from GitHub through gh into the normalized model; claim is the assignee, blockers are native dependencies or unknown.
 
+- [Explorer with file and diff tabs](issues/49-explorer-with-file-and-diff-tabs.md): Right-side Explorer follows the selected ticket or session worktree and opens read-only highlighted file tabs and diff tabs, watching only open directories.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
