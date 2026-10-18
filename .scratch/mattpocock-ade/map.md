@@ -142,6 +142,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Skill setup state](issues/53-skill-setup-state.md): Skills and docs/agents are fingerprinted against a shipped mirror into not-set-up, default, default with extras or modified, shown in the sidebar.
 
+- [GitHub backend: read](issues/45-github-backend-read.md): Read tickets and maps from GitHub through gh into the normalized model; claim is the assignee, blockers are native dependencies or unknown.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
