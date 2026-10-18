@@ -68,6 +68,7 @@ export async function reconcileSessionIndex(
   }
 
   const claudeHistory: Record<string, HistoryFile[]> = {};
+  const unreadable = new Set<string>();
   for (const worktree of worktrees) {
     if (worktree.main || !(await exists(worktree.path))) continue;
     const { ticket } = worktree.link;
@@ -81,9 +82,11 @@ export async function reconcileSessionIndex(
     if (item === null) continue;
     const directory = claudeHistoryDir(env, home, worktree.path);
     const files = directory === null ? null : await listHistory(directory);
-    // A history that could not be listed says nothing; the item keeps what it has.
-    if (files !== null) claudeHistory[item] = [...(claudeHistory[item] ?? []), ...files];
+    if (files === null) unreadable.add(item);
+    else claudeHistory[item] = [...(claudeHistory[item] ?? []), ...files];
   }
+  // A history that could not be listed says nothing, so an item with one keeps the sessions it has.
+  for (const item of unreadable) delete claudeHistory[item];
 
   const { warnings, written } = await updateSessionIndex(runner, mainCheckout, (index) =>
     reconcileIndex(index, { dropped, claudeHistory }, now, options.retentionDays),

@@ -46,9 +46,6 @@ describe("claudeHistoryDir", () => {
     expect(claudeHistoryDir({ CLAUDE_CONFIG_DIR: "/cfg" }, "/home/dev", "/work/shop")).toBe(
       join("/cfg", "projects", "-work-shop"),
     );
-    expect(claudeHistoryDir({ CLAUDE_CODE_PROJECT_DIR_NAME: "pinned" }, "/home/dev", "/work/shop")).toBe(
-      join("/home/dev", ".claude", "projects", "pinned"),
-    );
   });
 });
 

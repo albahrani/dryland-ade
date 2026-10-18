@@ -225,7 +225,7 @@ export function claudeProjectSlug(path: string): string | null {
  * out. The config root is `CLAUDE_CONFIG_DIR`, else `~/.claude`.
  */
 export function claudeHistoryDir(env: NodeJS.ProcessEnv, home: string, directory: string): string | null {
-  const slug = env["CLAUDE_CODE_PROJECT_DIR_NAME"]?.trim() || claudeProjectSlug(directory);
+  const slug = claudeProjectSlug(directory);
   if (slug === null) return null;
   return join(env["CLAUDE_CONFIG_DIR"]?.trim() || join(home, ".claude"), "projects", slug);
 }
