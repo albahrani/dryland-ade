@@ -17,6 +17,7 @@ import {
   resumeArgs,
   sessionsOf,
   readTicketDetail,
+  reconcileSessionIndex,
   startLiveListener,
 } from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions, powerMonitor } from "electron";
@@ -279,6 +280,27 @@ async function openProject(path: string): Promise<void> {
   sendSettings();
 }
 
+let reconciling = false;
+
+/**
+ * Brings the session index in line with the tracker, git and Claude Code's history, in this process and never the
+ * renderer. One run at a time; the window re-reads the project only when the index changed. The index is a cache, so
+ * a failure is logged, never shown.
+ */
+async function reconcileSessions(): Promise<void> {
+  if (project === null || reconciling) return;
+  reconciling = true;
+  try {
+    const { changed, warnings } = await reconcileSessionIndex(nodeProcessRunner, project.path);
+    warnings.forEach((message) => console.warn(message));
+    if (changed) void refresh();
+  } catch (error) {
+    if (!(error instanceof DrylandError)) console.warn("The session index was not reconciled.", error);
+  } finally {
+    reconciling = false;
+  }
+}
+
 /** Re-reads the project and sends it to the window; a read overtaken by a newer one is dropped, not sent late. */
 const refresh = latestOnly(projectView, (loaded) => {
   if (loaded !== null) sendToWindow("project:changed", loaded.view);
@@ -316,7 +338,10 @@ function createWindow(): void {
   window.on("session-end", () => void shutDown());
   window.on("closed", () => (window = null));
   // Git state behind the next steps changes outside the watched tracker files, e.g. a commit made in a terminal.
-  window.on("focus", () => void refresh());
+  window.on("focus", () => {
+    void refresh();
+    void reconcileSessions();
+  });
   if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
@@ -569,6 +594,7 @@ void app.whenReady().then(async () => {
   const { lastProject } = store.read();
   if (lastProject !== null) {
     await openProject(lastProject);
+    await reconcileSessions();
     await refresh();
     if (store.read().resumeOnStart) void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings));
   }

@@ -21,6 +21,8 @@ export interface IndexedSession {
   lastSeen: string;
   /** The state the app last saw; only the app writes it. */
   lastState?: (typeof LAST_STATES)[number];
+  /** Set on a session reconciliation found in the CLI's history, which no `dryland` command recorded. */
+  found?: true;
 }
 
 /** A session as it is recorded: its last state only when the app saw one, which then replaces the old. */
@@ -60,7 +62,8 @@ function isSession(value: unknown): value is IndexedSession {
     typeof s["sessionId"] === "string" &&
     typeof s["lastSeen"] === "string" &&
     !Number.isNaN(Date.parse(s["lastSeen"])) &&
-    (s["lastState"] === undefined || (LAST_STATES as readonly unknown[]).includes(s["lastState"]))
+    (s["lastState"] === undefined || (LAST_STATES as readonly unknown[]).includes(s["lastState"])) &&
+    (s["found"] === undefined || s["found"] === true)
   );
 }
 
@@ -133,18 +136,127 @@ export function withSession(
     ...index.items,
     [item]: [recorded, ...sessionsOf(index, item).filter((s) => !same(s))],
   };
+  return withoutExpired({ items }, now, retentionDays);
+}
+
+/** `index` without the sessions last seen before the retention period, and the items they leave empty. */
+function withoutExpired(index: SessionIndex, now: Date, retentionDays: number): SessionIndex {
   const cutoff = now.getTime() - retentionDays * DAY_MS;
   const result: SessionIndex = { items: {} };
-  for (const [key, sessions] of Object.entries(items)) {
+  for (const [key, sessions] of Object.entries(index.items)) {
     const kept = sessions.filter((s) => Date.parse(s.lastSeen) >= cutoff);
     if (kept.length > 0) result.items[key] = kept;
   }
   return result;
 }
 
+/** A Claude Code history file: the session id from its name, and when it was last written. */
+export interface HistoryFile {
+  sessionId: string;
+  modified: Date;
+}
+
+/** What reconciliation learned from outside the index. */
+export interface ReconcileFindings {
+  /** Items to remove whole: their ticket is resolved or its claim was released. */
+  dropped: ReadonlySet<string>;
+  /**
+   * Per item, the Claude Code history files of its worktrees; absent where the history could not be listed, so
+   * nothing is concluded from it.
+   */
+  claudeHistory: Readonly<Record<string, readonly HistoryFile[]>>;
+}
+
+/** How long a recorded Claude Code session may lack a history file: the CLI writes it with its first message. */
+export const HISTORY_GRACE_MS = 10 * 60_000;
+
+/**
+ * `index` brought in line with `findings`: dropped items removed, Claude Code sessions whose history file is gone
+ * removed (unless recorded within the grace period), history files the index lacks added as found, and retention
+ * applied. Returns `index` itself when nothing changed.
+ */
+export function reconcileIndex(
+  index: SessionIndex,
+  findings: ReconcileFindings,
+  now: Date,
+  retentionDays: number = DEFAULT_SESSION_RETENTION_DAYS,
+): SessionIndex {
+  const items: Record<string, IndexedSession[]> = {};
+  for (const [item, sessions] of Object.entries(index.items)) {
+    if (!findings.dropped.has(item)) items[item] = sessions;
+  }
+  for (const [item, files] of Object.entries(findings.claudeHistory)) {
+    if (findings.dropped.has(item)) continue;
+    const present = new Set(files.map((f) => f.sessionId));
+    const known = items[item] ?? [];
+    const kept = known.filter(
+      (s) =>
+        s.adapter !== "claude-code" ||
+        present.has(s.sessionId) ||
+        now.getTime() - Date.parse(s.lastSeen) < HISTORY_GRACE_MS,
+    );
+    const knownIds = new Set(known.filter((s) => s.adapter === "claude-code").map((s) => s.sessionId));
+    const added: IndexedSession[] = files
+      .filter((f) => !knownIds.has(f.sessionId))
+      .map((f) => ({
+        adapter: "claude-code",
+        sessionId: f.sessionId,
+        lastSeen: f.modified.toISOString(),
+        found: true,
+      }));
+    const merged =
+      added.length === 0 ? kept : [...kept, ...added].sort((a, b) => Date.parse(b.lastSeen) - Date.parse(a.lastSeen));
+    if (merged.length > 0) items[item] = merged;
+    else delete items[item];
+  }
+  const result = withoutExpired({ items }, now, retentionDays);
+  return JSON.stringify(result) === JSON.stringify(index) ? index : result;
+}
+
+/** Claude Code's name for a working directory's history folder: every character that is not a letter or digit is `-`. */
+export function claudeProjectSlug(path: string): string | null {
+  const slug = path.replace(/[^a-zA-Z0-9]/g, "-");
+  // Past 200 characters Claude Code truncates and appends a hash of the path that is not documented.
+  return slug.length > 200 ? null : slug;
+}
+
+/**
+ * The folder holding Claude Code's history for sessions run in `directory`, or `null` when its name cannot be worked
+ * out. The config root is `CLAUDE_CONFIG_DIR`, else `~/.claude`.
+ */
+export function claudeHistoryDir(env: NodeJS.ProcessEnv, home: string, directory: string): string | null {
+  const slug = env["CLAUDE_CODE_PROJECT_DIR_NAME"]?.trim() || claudeProjectSlug(directory);
+  if (slug === null) return null;
+  return join(env["CLAUDE_CONFIG_DIR"]?.trim() || join(home, ".claude"), "projects", slug);
+}
+
 export interface RecordSessionOptions {
   retentionDays?: number;
   now?: Date;
+}
+
+/**
+ * Applies `change` to the session index under the index's own lock beside the tracker lock and atomically, so
+ * parallel `dryland` processes lose no entry. Writes nothing when `change` returns the index it was given. Returns
+ * warnings about an index it had to replace, and whether it wrote.
+ */
+export async function updateSessionIndex(
+  runner: ProcessRunner,
+  cwd: string,
+  change: (index: SessionIndex) => SessionIndex,
+): Promise<{ warnings: string[]; written: boolean }> {
+  const path = await sessionIndexPath(runner, cwd);
+  const release = await acquireLock(join(dirname(path), "sessions.lock"));
+  try {
+    const { index, warnings } = await readIndexFile(path);
+    const updated = change(index);
+    if (updated === index && warnings.length === 0) return { warnings, written: false };
+    await removeLeftoverTemps(dirname(path));
+    await writeAtomically(path, `${JSON.stringify(updated, null, 2)}\n`);
+    return { warnings, written: true };
+  } finally {
+    await release();
+  }
 }
 
 /**
@@ -158,17 +270,11 @@ export async function recordSession(
   session: RecordedSession,
   options: RecordSessionOptions = {},
 ): Promise<string[]> {
-  const path = await sessionIndexPath(runner, cwd);
-  const release = await acquireLock(join(dirname(path), "sessions.lock"));
-  try {
-    const { index, warnings } = await readIndexFile(path);
-    const updated = withSession(index, item, session, options.now ?? new Date(), options.retentionDays);
-    await removeLeftoverTemps(dirname(path));
-    await writeAtomically(path, `${JSON.stringify(updated, null, 2)}\n`);
-    return warnings;
-  } finally {
-    await release();
-  }
+  const now = options.now ?? new Date();
+  const { warnings } = await updateSessionIndex(runner, cwd, (index) =>
+    withSession(index, item, session, now, options.retentionDays),
+  );
+  return warnings;
 }
 
 /** The Agent CLI session the current process runs in, from the first adapter whose session variable is set. */
