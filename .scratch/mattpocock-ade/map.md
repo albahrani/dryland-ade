@@ -132,6 +132,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Feed live and paused sessions into the repo snapshot](issues/65-feed-live-sessions-into-the-repo-snapshot.md): Claimed tickets with an indexed session and no live one read as paused, never stale; paused-was-waiting ranks between live waiting and stale claims, and Why not this? says paused.
 
+- [Resume a paused session](issues/76-resume-a-paused-session.md): A ticket with a paused session shows a paused box whose Resume relaunches the CLI by session id in the ticket's worktree, with fallbacks to the picker and a fresh start.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
