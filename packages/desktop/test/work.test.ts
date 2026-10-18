@@ -410,6 +410,14 @@ describe("resuming a paused session", () => {
     return { repo, session, ...setup(bin.dir, { HOME: home, USERPROFILE: home }) };
   }
 
+  it("does not start a second session on a ticket whose resumed one is still running", async () => {
+    const { repo, starter, provider } = await paused(true);
+    await starter.resumeSession(repo, ticket, "resume");
+
+    await expect(starter.resumeSession(repo, ticket, "resume")).rejects.toBeInstanceOf(DrylandError);
+    expect(provider.spawned).toHaveLength(1);
+  });
+
   it("launches the CLI with resume-by-id in the ticket's worktree, hooks injected and nothing typed", async () => {
     const { repo, session: old, provider, starter, hooksDir } = await paused(true);
 

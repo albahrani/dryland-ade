@@ -78,8 +78,8 @@ export interface WorkStarter {
    * Continues the newest session the index holds for the ticket, in the ticket's worktree: the CLI is launched with
    * resume-by-id, hooks injected and nothing typed, and the claim is not touched. When the CLI no longer has the
    * session, or with `mode` "pick", it opens its own picker instead; the first comes with a warning saying why.
-   * Fails with a `DrylandError`, before launching anything, when the ticket has no indexed session or its CLI
-   * cannot resume.
+   * Fails with a `DrylandError`, before launching anything, when the ticket has no indexed session, its CLI
+   * cannot resume, or a session of it is already running.
    */
   resumeSession(projectPath: string, ticket: TicketRef, mode: "resume" | "pick"): Promise<StartedWork>;
   /** The sessions started so far, as recorded at spawn. */
@@ -269,6 +269,11 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
           `${adapter.name} is not installed: \`${adapter.binary}\` is not on PATH.`,
           `Install ${adapter.name}, then resume the session.`,
         );
+      }
+      // Resume all, resume on start and a restored tab can race: a ticket already running is not started twice.
+      const running = new Set(terminals.liveIds());
+      if (started.some((s) => running.has(s.terminalId) && s.ticket?.map === ticket.map && s.ticket.id === ticket.id)) {
+        throw new DrylandError(`${item} already has a running session.`, "Show that session instead.");
       }
       if (resumeArgs(adapter, null) === null) {
         throw new DrylandError(`${adapter.name} cannot resume a session.`, "Start fresh instead.");
