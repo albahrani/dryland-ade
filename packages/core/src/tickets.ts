@@ -1,31 +1,45 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DrylandError } from "./errors.ts";
+import { GITHUB_MAP_LABEL, readGithubTracker } from "./github-backend.ts";
 import { readLocalMarkdownTickets, ticketFile } from "./local-markdown.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import { findSpecsWithoutTickets, frontierOf, type MapModel, readMapFile } from "./map.ts";
-import type { ProcessRunner } from "./process-runner.ts";
+import { nodeProcessRunner, type ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
-import { readTrackerKind } from "./tracker.ts";
+import { readTrackerKind, type TrackerKind } from "./tracker.ts";
 import { readTriageVocabulary } from "./triage-labels.ts";
 
-/** Every ticket of the repo containing `cwd`, plus where its main checkout is. */
-async function loadTickets(runner: ProcessRunner, cwd: string): Promise<{ mainCheckout: string; tickets: Ticket[] }> {
-  const mainCheckout = await findMainCheckout(runner, cwd);
-  return { mainCheckout, tickets: await readTickets(mainCheckout) };
+interface LoadedTracker {
+  kind: TrackerKind;
+  tickets: Ticket[];
+  /** The maps the tracker itself holds; `null` for local markdown, whose maps are files read on demand. */
+  maps: MapModel[] | null;
 }
 
-/** Every ticket of the main checkout, from the tracker its docs name. */
-export async function readTickets(mainCheckout: string): Promise<Ticket[]> {
+/** Every ticket (and, for a remote tracker, every map) of the main checkout, from the tracker its docs name. */
+async function loadTracker(runner: ProcessRunner, mainCheckout: string): Promise<LoadedTracker> {
   const kind = await readTrackerKind(mainCheckout);
-  if (kind !== "local-markdown") {
+  if (kind === "gitlab") {
     throw new DrylandError(
       `The ${kind} tracker is not supported by this version of dryland yet.`,
-      "Use a local-markdown tracker for now (/setup-matt-pocock-skills).",
+      "Use a local-markdown or GitHub tracker for now (/setup-matt-pocock-skills).",
     );
   }
   const vocabulary = await readTriageVocabulary(mainCheckout);
-  return readLocalMarkdownTickets(mainCheckout, vocabulary);
+  if (kind === "github") return { kind, ...(await readGithubTracker(runner, mainCheckout, vocabulary)) };
+  return { kind, tickets: await readLocalMarkdownTickets(mainCheckout, vocabulary), maps: null };
+}
+
+/** Every ticket of the repo containing `cwd`, plus where its main checkout is. */
+async function loadTickets(runner: ProcessRunner, cwd: string): Promise<{ mainCheckout: string } & LoadedTracker> {
+  const mainCheckout = await findMainCheckout(runner, cwd);
+  return { mainCheckout, ...(await loadTracker(runner, mainCheckout)) };
+}
+
+/** Every ticket of the main checkout, from the tracker its docs name. */
+export async function readTickets(mainCheckout: string, runner: ProcessRunner = nodeProcessRunner): Promise<Ticket[]> {
+  return (await loadTracker(runner, mainCheckout)).tickets;
 }
 
 /** Lists the tickets of the repo containing `cwd`, from the tracker its docs name. */
@@ -85,8 +99,14 @@ export interface MapView extends MapModel {
 }
 
 export async function showMap(runner: ProcessRunner, cwd: string, name: string): Promise<MapView> {
-  const { mainCheckout, tickets } = await loadTickets(runner, cwd);
-  const map = await readMapFile(mainCheckout, name);
+  const { mainCheckout, tickets, maps } = await loadTickets(runner, cwd);
+  const map = maps === null ? await readMapFile(mainCheckout, name) : maps.find((m) => m.name === name);
+  if (map === undefined) {
+    throw new DrylandError(
+      `There is no map "${name}": no issue labelled "${GITHUB_MAP_LABEL}" has that number.`,
+      "Run `dryland ticket list` to see the maps that have tickets, or start one with /wayfinder.",
+    );
+  }
   return { ...map, tickets: tickets.filter((t) => t.map === name) };
 }
 
@@ -97,8 +117,9 @@ export async function mapFrontier(runner: ProcessRunner, cwd: string, name: stri
 
 /** Efforts with a spec but no tickets. */
 export async function specsWithoutTickets(runner: ProcessRunner, cwd: string): Promise<string[]> {
-  const { mainCheckout, tickets } = await loadTickets(runner, cwd);
-  return findSpecsWithoutTickets(mainCheckout, tickets);
+  const { mainCheckout, kind, tickets } = await loadTickets(runner, cwd);
+  // Specs are local files; a remote tracker names its maps by issue number, so no effort could match them.
+  return kind === "local-markdown" ? findSpecsWithoutTickets(mainCheckout, tickets) : [];
 }
 
 /** What a tracker write returns: the ticket as it now stands, and anything the user should know. */
