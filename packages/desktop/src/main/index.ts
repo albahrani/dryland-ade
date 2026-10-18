@@ -1,4 +1,4 @@
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import {
   AGENT_ADAPTERS,
   DrylandError,
@@ -57,8 +57,11 @@ import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { createUnseenOutput } from "./unseen-output.ts";
 import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../shared/stop-session.ts";
+import { createExplorer } from "./explorer.ts";
+import { createExplorerWatcher } from "./explorer-watch.ts";
 import { watchProject } from "./watch-project.ts";
 import { createWorkStarter } from "./work.ts";
+import { isRootHint } from "../shared/explorer.ts";
 import { isSkillChoice, isWorkTarget } from "../shared/work-target.ts";
 
 /** A terminal can print after its window is gone, between the window closing and the app quitting. */
@@ -271,6 +274,7 @@ async function readItem(ref: DocumentRef): Promise<ItemContent> {
 async function openProject(path: string): Promise<void> {
   stopWatching?.();
   stopWatching = null;
+  explorerWatcher.stop();
   project = { path };
   const loaded = await projectView();
   if (loaded?.view.tree.ok) store.update({ lastProject: path });
@@ -477,6 +481,41 @@ ipcMain.handle("sessions-layout:save", (_event, layout: unknown) => {
   store.update({ sessionsLayout: { ...saved, [project.path]: parseSessionsLayout(layout) } });
 });
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
+/** The Explorer reads the open project's worktrees; nothing without a project. */
+const explorerFor = () => {
+  if (project === null) throw new DrylandError("No project is open.", "opening a project");
+  return createExplorer(nodeProcessRunner, project.path);
+};
+const explorerWatcher = createExplorerWatcher(() => sendToWindow("explorer:changed"));
+const text = (value: unknown, what: string): string => {
+  if (typeof value !== "string") throw new TypeError(`${what} must be a string`);
+  return value;
+};
+ipcMain.handle("explorer:root", (_event, hint: unknown) => {
+  if (!isRootHint(hint)) throw new TypeError("not a worktree hint");
+  return explorerFor().resolveRoot(hint);
+});
+ipcMain.handle("explorer:list", (_event, root: unknown, dir: unknown) =>
+  explorerFor().listDirectory(text(root, "root"), text(dir, "dir")),
+);
+ipcMain.handle("explorer:read", (_event, root: unknown, path: unknown) =>
+  explorerFor().readFile(text(root, "root"), text(path, "path")),
+);
+ipcMain.handle("explorer:changes", (_event, root: unknown) => explorerFor().changes(text(root, "root")));
+ipcMain.handle("explorer:diff", (_event, root: unknown, path: unknown) =>
+  explorerFor().diff(text(root, "root"), text(path, "path")),
+);
+ipcMain.handle("explorer:watch", async (_event, root: unknown, dirs: unknown) => {
+  // Directories inside the worktree only: relative, and never stepping out of it.
+  if (
+    !Array.isArray(dirs) ||
+    !dirs.every((dir) => typeof dir === "string" && !isAbsolute(dir) && !dir.split(/[\\/]/).includes(".."))
+  )
+    throw new TypeError("dirs must be relative directories of the worktree");
+  // Only a worktree of the project is watched; reading its root first validates it.
+  await explorerFor().changes(text(root, "root"));
+  explorerWatcher.set(root as string, dirs as string[]);
+});
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
   if (isLiveEventsPanelMode(mode)) store.update({ liveEventsPanel: mode });
@@ -621,6 +660,7 @@ const runningSessions = () => {
 async function stopEverything(): Promise<void> {
   stopWatching?.();
   stopWatching = null;
+  explorerWatcher.stop();
   const report = await runShutdown(shutdownSteps(terminals, [{ name: "flush session index", run: recorder.flush }]));
   if (report.failed.length > 0 || report.abandoned.length > 0) console.error("Shutdown was cut short.", report);
 }

@@ -17,8 +17,22 @@ export interface SessionRef {
   id: string;
 }
 
+/** A file of a worktree, read-only. `root` is the worktree's path and `path` the file's, relative to it, with `/`. */
+export interface FileRef {
+  kind: "file";
+  root: string;
+  path: string;
+}
+
+/** A changed file of a worktree, as a diff against the worktree's base. */
+export interface DiffRef {
+  kind: "diff";
+  root: string;
+  path: string;
+}
+
 /** What an editor tab shows. */
-export type ItemRef = DocumentRef | TerminalRef | SessionRef;
+export type ItemRef = DocumentRef | TerminalRef | SessionRef | FileRef | DiffRef;
 
 export interface TabsState {
   open: ItemRef[];
@@ -31,6 +45,7 @@ export const EMPTY_TABS: TabsState = { open: [], active: null };
 export function tabKey(ref: ItemRef): string {
   if (ref.kind === "terminal") return `terminal:${ref.id}`;
   if (ref.kind === "session") return `session:${ticketKey(ref)}`;
+  if (ref.kind === "file" || ref.kind === "diff") return `${ref.kind}:${ref.root}|${ref.path}`;
   return ref.kind === "ticket" ? `ticket:${ticketKey(ref)}` : `map:${ref.name}`;
 }
 
@@ -78,7 +93,7 @@ export function replaceTab(state: TabsState, key: string, ref: ItemRef): TabsSta
 
 /**
  * The tabs to save: a terminal tab is saved as the session of its ticket (`ticketOf` names it), and dropped when
- * it has none, since a terminal's id does not outlive the app.
+ * it has none, since a terminal's id does not outlive the app. File and diff tabs are dropped too.
  */
 export function savedTabs(
   state: TabsState,
@@ -92,6 +107,8 @@ export function savedTabs(
       const ticket = ticketOf(tab.id);
       ref = ticket === null ? null : { kind: "session", map: ticket.map, id: ticket.id };
     }
+    // A worktree a file was open in may be gone by the next start.
+    if (tab.kind === "file" || tab.kind === "diff") ref = null;
     if (ref === null) continue;
     keyOf.set(tabKey(tab), tabKey(ref));
     if (!open.some((saved) => tabKey(saved) === tabKey(ref))) open.push(ref);

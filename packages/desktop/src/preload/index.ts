@@ -10,6 +10,12 @@ const api: DrylandApi = {
   saveTabs: (tabs) => ipcRenderer.invoke("tabs:save", tabs),
   saveSessionsLayout: (layout) => ipcRenderer.invoke("sessions-layout:save", layout),
   readItem: (ref) => ipcRenderer.invoke("item:read", ref),
+  explorerRoot: (hint) => ipcRenderer.invoke("explorer:root", hint),
+  explorerList: (root, dir) => ipcRenderer.invoke("explorer:list", root, dir),
+  explorerRead: (root, path) => ipcRenderer.invoke("explorer:read", root, path),
+  explorerChanges: (root) => ipcRenderer.invoke("explorer:changes", root),
+  explorerDiff: (root, path) => ipcRenderer.invoke("explorer:diff", root, path),
+  explorerWatch: (root, dirs) => ipcRenderer.invoke("explorer:watch", root, dirs),
   openTerminal: () => ipcRenderer.invoke("terminal:open"),
   listAgents: () => ipcRenderer.invoke("agents:list"),
   listSkills: (agentId) => ipcRenderer.invoke("skills:list", agentId),
@@ -43,6 +49,11 @@ const api: DrylandApi = {
     const listener = (_event: unknown, event: LiveEvent) => callback(event);
     ipcRenderer.on("live:event", listener);
     return () => ipcRenderer.removeListener("live:event", listener);
+  },
+  onExplorerChanged(callback) {
+    const listener = () => callback();
+    ipcRenderer.on("explorer:changed", listener);
+    return () => ipcRenderer.removeListener("explorer:changed", listener);
   },
   onSettingsChanged(callback) {
     const listener = (_event: unknown, settings: AppSettings) => callback(settings);

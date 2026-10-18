@@ -21,6 +21,7 @@
     "@xterm/xterm": "6.0.0",
     "electron": "44.7.1",
     "electron-vite": "5.0.0",
+    "highlight.js": "11.11.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "10.1.0",

@@ -330,6 +330,7 @@ export function selectedSession<S extends ViewSession>(
 ): S | undefined {
   if (active === undefined) return undefined;
   if (active.kind === "terminal") return sessions.find((s) => s.terminalId === active.id);
+  if (active.kind === "file" || active.kind === "diff") return undefined;
   const live = sessions.filter((s) => {
     if (stateOf(states, s) === "ended") return false;
     if (active.kind !== "map") return s.ticket !== null && ticketKey(s.ticket) === ticketKey(active);

@@ -7,6 +7,7 @@ import type {
   TicketRef,
   TicketsTree,
 } from "@dryland/core";
+import type { ChangedFile, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
 import type { NextUp } from "./next-up.ts";
 import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
@@ -136,6 +137,20 @@ export interface DrylandApi {
   saveSessionsLayout(layout: SessionsLayout): Promise<void>;
   /** Reads a ticket or map fresh from the open project. */
   readItem(ref: DocumentRef): Promise<ItemContent>;
+  /** The worktree the Explorer shows for a selection; the main checkout when the selection has no worktree. */
+  explorerRoot(hint: RootHint): Promise<ExplorerRoot>;
+  /** The entries of directory `dir` (`""` for the top) of a worktree, a directory at a time. */
+  explorerList(root: string, dir: string): Promise<DirectoryListing>;
+  /** A file of a worktree, read fresh; large files come cut and binary ones not at all. */
+  explorerRead(root: string, path: string): Promise<FileContent>;
+  /** The files changed in a worktree since its base, uncommitted and untracked ones included. */
+  explorerChanges(root: string): Promise<ChangedFile[]>;
+  /** `git diff` of one changed file against the worktree's base. */
+  explorerDiff(root: string, path: string): Promise<string>;
+  /** Watches exactly these directories of a worktree (`""` is its top); `onExplorerChanged` fires when they change. */
+  explorerWatch(root: string, dirs: string[]): Promise<void>;
+  /** Called after files change in the watched directories. Returns an unsubscribe function. */
+  onExplorerChanged(callback: () => void): () => void;
   /** Starts a shell in the open project's main checkout; resolves with its id, or `null` without a project. */
   openTerminal(): Promise<string | null>;
   /** The Agent CLIs work can start with, and whether each is installed. */

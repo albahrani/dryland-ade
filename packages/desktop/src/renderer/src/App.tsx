@@ -39,6 +39,9 @@ import {
   ticketKey,
 } from "../../shared/tabs.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
+import { Explorer } from "./Explorer.tsx";
+import { DiffTab, FileTab } from "./FileTab.tsx";
+import type { RootHint } from "../../shared/explorer.ts";
 import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
 import { NewMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
@@ -73,7 +76,20 @@ function tabLabel(
   if (ref.kind === "terminal") return terminalTitles.get(ref.id) ?? "Terminal";
   // A restored session tab reads as the terminal it becomes, not as the ticket's own tab.
   if (ref.kind === "session") return `${paused.get(ticketKey(ref))?.agent ?? "Session"} ${ticketKey(ref)}`;
+  if (ref.kind === "file") return ref.path.split("/").at(-1) ?? ref.path;
+  if (ref.kind === "diff") return `${ref.path.split("/").at(-1) ?? ref.path} (diff)`;
   return ref.kind === "map" ? ref.name : `${ref.map}/${ref.id}`;
+}
+
+/** Which worktree the Explorer shows for the focused tab: a session's own, a ticket's, a file's; else the main checkout. */
+function explorerHint(active: ItemRef | undefined, sessions: ReadonlyMap<string, SessionInfo>): RootHint {
+  if (active === undefined || active.kind === "map") return null;
+  if (active.kind === "file" || active.kind === "diff") return { kind: "worktree", path: active.root };
+  if (active.kind === "terminal") {
+    const session = sessions.get(active.id);
+    return session === undefined ? null : { kind: "worktree", path: session.worktree.path };
+  }
+  return { kind: "ticket", ticket: { map: active.map, id: active.id } };
 }
 
 function Sidebar({
@@ -206,6 +222,8 @@ export function App() {
   const [stateSince, setStateSince] = useState<StateSince>(new Map());
   // The clock the Sessions view's ages and last output lines refresh with, ticking while the view shows.
   const [now, setNow] = useState(Date.now);
+  // Counts the changes the Explorer's watched directories report; open file tabs and the tree read again on each.
+  const [explorerRevision, setExplorerRevision] = useState(0);
 
   const sessionStatesNow = state?.sessionStates;
   useEffect(() => {
@@ -268,7 +286,9 @@ export function App() {
       setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
     );
     const stopMenu = window.dryland.onMenuCommand(setDialog);
+    const stopExplorer = window.dryland.onExplorerChanged(() => setExplorerRevision((revision) => revision + 1));
     return () => {
+      stopExplorer();
       stopStarted();
       stopNotice();
       stopMenu();
@@ -630,6 +650,8 @@ export function App() {
           <TerminalTab key={id} id={id} active={activeTab?.kind === "terminal" && activeTab.id === id} />
         ))}
         {activeTab?.kind === "session" && <p className="empty">Resuming {ticketKey(activeTab)}...</p>}
+        {activeTab?.kind === "file" && <FileTab key={tabKey(activeTab)} item={activeTab} revision={explorerRevision} />}
+        {activeTab?.kind === "diff" && <DiffTab key={tabKey(activeTab)} item={activeTab} revision={explorerRevision} />}
         {project !== null && activeDocument !== undefined ? (
           <ItemTab
             key={tabKey(activeDocument)}
@@ -662,13 +684,33 @@ export function App() {
         )}
       </main>
       <aside className="right-side">
-        <p className="empty">Explorer and Source Control</p>
+        {project === null ? (
+          <p className="empty">Open a git repo to browse its files.</p>
+        ) : (
+          <Explorer
+            hint={explorerHint(activeTab, sessions)}
+            projectView={project}
+            revision={explorerRevision}
+            watchedDirs={(root) =>
+              tabs.open.flatMap((tab) =>
+                (tab.kind === "file" || tab.kind === "diff") && tab.root === root
+                  ? [tab.path.split("/").slice(0, -1).join("/")]
+                  : [],
+              )
+            }
+            onOpenFile={(root, path) => setTabs(openTab(tabs, { kind: "file", root, path }))}
+            onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
+          />
+        )}
       </aside>
       {dialog === "new-ticket" && project?.tree.ok && (
         <NewTicketDialog
           tree={project.tree.tree}
           initialMap={
-            activeTab === undefined || activeTab.kind === "terminal"
+            activeTab === undefined ||
+            activeTab.kind === "terminal" ||
+            activeTab.kind === "file" ||
+            activeTab.kind === "diff"
               ? null
               : activeTab.kind === "map"
                 ? activeTab.name

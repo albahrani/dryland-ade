@@ -143,3 +143,27 @@ describe("session tabs", () => {
     });
   });
 });
+
+describe("file and diff tabs", () => {
+  const file: ItemRef = { kind: "file", root: "/repo", path: "src/a.ts" };
+  const diff: ItemRef = { kind: "diff", root: "/repo", path: "src/a.ts" };
+
+  it("keeps a file's tab and its diff tab apart, and reuses each", () => {
+    const state = openTab(openTab(openTab(EMPTY_TABS, file), diff), file);
+
+    expect(state.open).toEqual([file, diff]);
+    expect(state.active).toBe(tabKey(file));
+    expect(tabKey(file)).not.toBe(tabKey(diff));
+  });
+
+  it("tells the same path in two worktrees apart", () => {
+    expect(tabKey(file)).not.toBe(tabKey({ ...file, root: "/repo-wt" }));
+  });
+
+  it("does not save them: the worktree they were open in may be gone", () => {
+    const state = openTab(openTab(EMPTY_TABS, ticket("01")), file);
+
+    expect(savedTabs(state, () => null)).toEqual({ open: [ticket("01")], active: tabKey(ticket("01")) });
+    expect(parseTabs({ open: [file, diff], active: tabKey(file) })).toEqual(EMPTY_TABS);
+  });
+});
