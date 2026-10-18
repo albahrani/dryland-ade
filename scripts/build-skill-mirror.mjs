@@ -4,6 +4,7 @@ import { readdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { format, resolveConfig } from "prettier";
 
 // core's sources are TypeScript with parameter properties, which Node cannot strip, so bundle the one module needed.
 const bundled = await build({
@@ -48,5 +49,7 @@ ${lines.join("\n")}
   core: ${JSON.stringify(CORE)},
 };
 `;
-await writeFile(new URL("../packages/core/src/skill-mirror.ts", import.meta.url), source);
+const target = fileURLToPath(new URL("../packages/core/src/skill-mirror.ts", import.meta.url));
+// Formatted here so that the file passes `prettier --check` as generated.
+await writeFile(target, await format(source, { ...(await resolveConfig(target)), filepath: target }));
 console.log(`Mirrored ${names.length} skills.`);

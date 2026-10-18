@@ -37,8 +37,14 @@ export interface SkillSetupReport {
   deviations: SkillDeviation[];
   /** Installed skills the mirror does not know, sorted. */
   extras: string[];
-  /** Stable for the same setup, different once a skill or a `docs/agents` file changes. */
+  /** Stable for the same setup, different once a skill or a `docs/agents` file changes. A verdict is tied to it. */
   fingerprint: string;
+  /**
+   * Stable while the deviations are the same, whatever else changes: an extra skill or an edit to a skill that
+   * matches the default leaves it alone. An edit to a skill that differs changes it. Accepting deviations is
+   * stored against it.
+   */
+  deviationFingerprint: string;
 }
 
 const sha256 = (content: string | Buffer): string => createHash("sha256").update(content).digest("hex");
@@ -119,6 +125,7 @@ export async function readSkillSetup(
   const deviations: SkillDeviation[] = [];
   const extras: string[] = [];
   const fingerprint = createHash("sha256");
+  const deviationFingerprint = createHash("sha256");
 
   for (const [name, dirs] of [...installed].sort(([a], [b]) => a.localeCompare(b))) {
     const prints = await Promise.all(dirs.map(fingerprintSkill));
@@ -127,6 +134,7 @@ export async function readSkillSetup(
     if (known === undefined) extras.push(name);
     else if (prints.some((print) => print !== known)) {
       deviations.push({ kind: "skill-differs", skill: name, detail: `Skill ${name} differs from the default.` });
+      deviationFingerprint.update(`differs:${name}:${prints.join(",")}\n`);
     }
   }
   for (const line of await docHashes(mainCheckout)) fingerprint.update(`${line}\n`);
@@ -144,6 +152,10 @@ export async function readSkillSetup(
   const tracker = await trackerDeviation(mainCheckout);
   if (tracker !== null) deviations.push(tracker);
 
+  for (const deviation of deviations) {
+    if (deviation.kind !== "skill-differs") deviationFingerprint.update(`${deviation.kind}:${deviation.detail}\n`);
+  }
+
   const state: SkillSetupState = notSetUp
     ? "not-set-up"
     : deviations.length > 0
@@ -151,5 +163,11 @@ export async function readSkillSetup(
       : extras.length > 0
         ? "default-with-extras"
         : "default";
-  return { state, deviations, extras, fingerprint: fingerprint.digest("hex") };
+  return {
+    state,
+    deviations,
+    extras,
+    fingerprint: fingerprint.digest("hex"),
+    deviationFingerprint: deviationFingerprint.digest("hex"),
+  };
 }

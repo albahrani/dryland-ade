@@ -153,6 +153,31 @@ describe("readSkillSetup", () => {
   });
 });
 
+describe("deviationFingerprint", () => {
+  const files = { ...tdd, ...triage, "docs/agents/issue-tracker.md": LOCAL_TRACKER };
+
+  it("ignores changes that add no deviation: an extra skill, an edited doc", async () => {
+    const { root, mirror } = await setup(files);
+    const before = (await readSkillSetup(root, mirror)).deviationFingerprint;
+
+    write(root, { ".agents/skills/mine/SKILL.md": "# mine\n", "docs/agents/domain.md": "# Domain\n" });
+    expect((await readSkillSetup(root, mirror)).deviationFingerprint).toBe(before);
+  });
+
+  it("changes when a deviation appears, and when a skill that already differs changes again", async () => {
+    const { root, mirror } = await setup(files);
+    const clean = (await readSkillSetup(root, mirror)).deviationFingerprint;
+
+    write(root, { ".agents/skills/tdd/SKILL.md": "# tdd, my way\n" });
+    const differs = (await readSkillSetup(root, mirror)).deviationFingerprint;
+    expect(differs).not.toBe(clean);
+    expect((await readSkillSetup(root, mirror)).deviationFingerprint).toBe(differs);
+
+    write(root, { ".agents/skills/tdd/SKILL.md": "# tdd, another way\n" });
+    expect((await readSkillSetup(root, mirror)).deviationFingerprint).not.toBe(differs);
+  });
+});
+
 describe("DEFAULT_SKILL_MIRROR", () => {
   it("ships every core skill", () => {
     for (const skill of DEFAULT_SKILL_MIRROR.core) expect(DEFAULT_SKILL_MIRROR.skills).toHaveProperty(skill);
