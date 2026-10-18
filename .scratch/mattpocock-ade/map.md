@@ -140,6 +140,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Reconcile the session index](issues/78-reconcile-the-session-index.md): The session index is reconciled on start and focus: found Claude Code sessions added, resolved or released items and sessions with no history file removed.
 
+- [Skill setup state](issues/53-skill-setup-state.md): Skills and docs/agents are fingerprinted against a shipped mirror into not-set-up, default, default with extras or modified, shown in the sidebar.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
