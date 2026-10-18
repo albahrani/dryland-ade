@@ -879,3 +879,91 @@ ul {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.session-badge.paused .badge {
+  color: var(--bg);
+}
+
+.session-badge.paused.gold .badge {
+  background: var(--progress);
+}
+
+.session-badge.paused.red .badge {
+  background: var(--blocked);
+}
+
+.session-badge.paused.plain .badge {
+  color: var(--fg-dim);
+}
+
+.pill.paused {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.pill.paused.gold {
+  color: var(--progress);
+}
+
+.pill.paused.red {
+  color: var(--blocked);
+}
+
+.pill.paused.plain {
+  color: var(--fg-dim);
+}
+
+.paused-box {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fg-dim);
+  border-radius: 3px;
+  background: var(--bg-side);
+}
+
+.paused-box.gold {
+  border-left-color: var(--progress);
+}
+
+.paused-box.red {
+  border-left-color: var(--blocked);
+}
+
+.paused-box h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.paused-box dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 6px;
+}
+
+.paused-box dt {
+  display: inline;
+  color: var(--fg-dim);
+}
+
+.paused-box dd {
+  display: inline;
+  margin: 0 0 0 4px;
+}
+
+.paused-last-line {
+  margin: 4px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  color: var(--fg-dim);
+  font-family: monospace;
+}
+
+.paused-actions {
+  display: flex;
+  gap: 8px;
+}

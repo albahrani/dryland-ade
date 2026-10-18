@@ -13,7 +13,8 @@ import { mapMarker, type NextUp, ticketMarker } from "../../shared/next-up.ts";
 import { NextUpStar } from "./NextUp.tsx";
 import type { TicketSession } from "../../shared/session-meta.ts";
 import { type ItemRef, tabKey, ticketKey } from "../../shared/tabs.ts";
-import { SessionBadge, StatusIcon } from "./status.tsx";
+import type { PausedSession } from "../../shared/paused-session.ts";
+import { PausedBadge, SessionBadge, StatusIcon } from "./status.tsx";
 
 /** The ticket kinds a map lists after its fog, in workflow order. */
 const KINDS = [
@@ -37,6 +38,7 @@ function TicketRow({
   ticket,
   active,
   session,
+  paused,
   marker,
   stale,
   onOpen,
@@ -46,6 +48,8 @@ function TicketRow({
   ticket: TreeTicket;
   active: boolean;
   session: TicketSession | undefined;
+  /** Its paused session, when no live one works on it. */
+  paused: PausedSession | undefined;
   marker: NextUpMarker | undefined;
   /** Whether its claim is held by no live Dryland session. */
   stale: boolean;
@@ -58,7 +62,11 @@ function TicketRow({
     <li className={classes} title={marker?.step.reason}>
       {marker !== undefined && <NextUpStar marker={marker} onShow={onShowSession} />}
       <StatusIcon status={ticket.status} />
-      {session !== undefined && <SessionBadge agent={session.agent} state={session.state} />}
+      {paused !== undefined ? (
+        <PausedBadge agent={paused.agent} was={paused.was} />
+      ) : (
+        session !== undefined && <SessionBadge agent={session.agent} state={session.state} />
+      )}
       <span className="ticket-id">{ticket.id}</span>
       <button
         className="ticket-title"
@@ -201,6 +209,7 @@ export function TicketsView({
   tree,
   activeKey,
   sessions,
+  paused,
   nextUp,
   staleClaims,
   onOpen,
@@ -213,6 +222,8 @@ export function TicketsView({
   activeKey: string | null;
   /** The session working on each ticket, by `map/id`. */
   sessions: ReadonlyMap<string, TicketSession>;
+  /** The paused session of each ticket no live session works on, by `map/id`. */
+  paused: ReadonlyMap<string, PausedSession>;
   nextUp: NextUp;
   /** The `map/id` of every claim no live Dryland session holds. */
   staleClaims: readonly string[];
@@ -236,6 +247,7 @@ export function TicketsView({
       ticket={t}
       active={isActive(t)}
       session={sessions.get(ticketKey(t))}
+      paused={paused.get(ticketKey(t))}
       marker={ticketMarker(nextUp, t.map, t.id)}
       stale={staleClaims.includes(ticketKey(t))}
       onOpen={onOpen}

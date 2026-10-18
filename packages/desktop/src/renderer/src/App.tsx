@@ -25,7 +25,8 @@ import {
   ticketKey,
 } from "../../shared/tabs.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
-import { ItemTab, type StartWorkHandler } from "./ItemTab.tsx";
+import { ItemTab, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
+import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
 import { NewMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
@@ -34,7 +35,7 @@ import { TerminalTab } from "./TerminalTab.tsx";
 import { disposeTerminal, existingTerminal, getOrCreateTerminal, lastLine, routeTerminalEvents } from "./terminals.ts";
 import { ConfirmStop, type SessionHandlers, UnseenMark } from "./SessionControls.tsx";
 import { stopNeedsConfirmation } from "../../shared/stop-session.ts";
-import { SessionBadge } from "./status.tsx";
+import { PausedBadge, SessionBadge } from "./status.tsx";
 import { TicketsView } from "./TicketsView.tsx";
 import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts";
 import { type ActionSource, commandLine, type TicketAction, trackerArgs } from "../../shared/tracker-actions.ts";
@@ -60,6 +61,7 @@ function Sidebar({
   project,
   tabs,
   ticketSessions,
+  paused,
   onOpen,
   onRelease,
   onStartWork,
@@ -71,6 +73,7 @@ function Sidebar({
   project: ProjectView | null;
   tabs: TabsState;
   ticketSessions: ReadonlyMap<string, TicketSession>;
+  paused: ReadonlyMap<string, PausedSession>;
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
   onStartWork: StartWorkHandler;
@@ -95,6 +98,7 @@ function Sidebar({
         tree={tree}
         activeKey={tabs.active}
         sessions={ticketSessions}
+        paused={paused}
         nextUp={nextUp}
         staleClaims={staleClaims}
         onOpen={onOpen}
@@ -235,6 +239,11 @@ export function App() {
   const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
   const isUnseen = (session: SessionInfo) => unseenSessions.includes(session.id);
   const ticketSessionMap = ticketSessions([...sessions.values()], sessionStates);
+  const pausedMap = pausedSessions(
+    project?.tree.ok ? project.tree.pausedClaims : {},
+    [...sessions.values()],
+    sessionStates,
+  );
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
   const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
     setState({ ...state, liveEventsPanel: mode });
@@ -278,6 +287,24 @@ export function App() {
     setNotice(warnings.length === 0 ? null : warnings.join(" "));
     setSessions((current) => new Map(current).set(session.terminalId, session));
     showTerminal(session.terminalId, sessionTitle(session));
+  };
+  const resumeSession: ResumeHandler = async (ticket, mode) => {
+    setTerminalError(null);
+    const result = await window.dryland.resumeSession(ticket, mode);
+    if (!result.ok) {
+      setTerminalError(`${result.message} ${result.nextAction}`);
+      return;
+    }
+    const { session, warnings } = result;
+    setNotice(warnings.length === 0 ? null : warnings.join(" "));
+    setSessions((current) => new Map(current).set(session.terminalId, session));
+    showTerminal(session.terminalId, sessionTitle(session));
+  };
+  /** The last line the newest stopped session on a ticket printed, while this run still holds its terminal. */
+  const pausedLastLine = (key: string): string | null => {
+    const stopped = [...sessions.values()].filter((s) => s.ticket !== null && ticketKey(s.ticket) === key);
+    const newest = stopped[stopped.length - 1];
+    return newest === undefined ? null : lastLine(newest.terminalId);
   };
   /** Shows a session in its tab; a hidden one gets a new tab with the output it printed meanwhile. */
   const showSession = async (session: SessionInfo) => {
@@ -411,6 +438,7 @@ export function App() {
           project={project}
           tabs={tabs}
           ticketSessions={ticketSessionMap}
+          paused={pausedMap}
           onOpen={(ref) => setTabs(openTab(tabs, ref))}
           onRelease={(ticket) =>
             void requestAction({ kind: "release", ticket: { map: ticket.map, id: ticket.id } }, "general-button")
@@ -443,8 +471,10 @@ export function App() {
           <div className="tabbar" role="tablist" aria-label="Open items">
             {tabs.open.map((tab) => {
               const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
+              const paused = tab.kind === "ticket" ? pausedMap.get(ticketKey(tab)) : undefined;
               return (
                 <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
+                  {paused !== undefined && <PausedBadge agent={paused.agent} was={paused.was} />}
                   {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
                   {session !== undefined && isUnseen(session) && <UnseenMark />}
                   <button
@@ -492,7 +522,10 @@ export function App() {
             project={project}
             sessions={[...sessions.values()]}
             sessionHandlers={sessionHandlers}
+            paused={pausedMap}
+            lastOutput={pausedLastLine}
             onStartWork={startWork}
+            onResume={resumeSession}
             onTicketAction={(action) => requestAction(action, "ticket")}
             header={{
               open: !collapsedHeaders.has(tabKey(activeTab)),

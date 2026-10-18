@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner, readSessionIndex } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
@@ -383,5 +383,104 @@ describe("launching any installed skill", () => {
     await expect(starter.startWork(repo, onTicket("02"), "claude-code", "notes")).rejects.toThrow(DrylandError);
     expect(provider.spawned).toEqual([]);
     expect(worktreeCount(repo)).toBe(1);
+  });
+});
+
+describe("resuming a paused session", () => {
+  const ticket = { map: "shop", id: "02" };
+
+  /** A home where Claude Code holds the history of `sessionId` run in `worktree`. */
+  function homeWithHistory(worktree: string, sessionId: string): string {
+    const home = mkdtempSync(join(tmpdir(), "dryland-home-"));
+    const file = CLAUDE_CODE.historyFile?.(home, worktree, sessionId) ?? "";
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, "{}\n");
+    return home;
+  }
+
+  /** Work started on ticket 02 and its CLI stopped: the app is `setup` over `home`, which the history lives in. */
+  async function paused(withHistory: boolean) {
+    const repo = fixtureRepo();
+    const first = setup();
+    const { session } = await first.starter.startWork(repo, onTicket("02"), "claude-code");
+    const home = withHistory
+      ? homeWithHistory(session.worktree.path, session.agentSessionId ?? "")
+      : mkdtempSync(join(tmpdir(), "dryland-home-"));
+    const bin = stubBin();
+    return { repo, session, ...setup(bin.dir, { HOME: home, USERPROFILE: home }) };
+  }
+
+  it("launches the CLI with resume-by-id in the ticket's worktree, hooks injected and nothing typed", async () => {
+    const { repo, session: old, provider, starter, hooksDir } = await paused(true);
+
+    const { session, warnings } = await starter.resumeSession(repo, ticket, "resume");
+
+    expect(warnings).toEqual([]);
+    expect(session.worktree).toEqual(old.worktree);
+    expect(session.agentSessionId).toBe(old.agentSessionId);
+    expect(session.command).toBeNull();
+    const spawned = provider.spawned[0]?.options;
+    expect(spawned?.cwd).toBe(old.worktree.path);
+    expect(spawned?.args).toEqual(["--resume", old.agentSessionId, "--settings", join(hooksDir, "claude-code.json")]);
+    provider.spawned[0]?.emit("❯ ");
+    await pause(80);
+    expect(typed(provider.spawned[0])).toBe("");
+  });
+
+  it("makes the indexed session live again and leaves the claim as it was", async () => {
+    const { repo, session: old, starter } = await paused(true);
+    const claimed = grill(repo);
+    const before = await readSessionIndex(nodeProcessRunner, repo);
+
+    await starter.resumeSession(repo, ticket, "resume");
+
+    const { index } = await readSessionIndex(nodeProcessRunner, repo);
+    expect(index.items["shop/02"]?.map((s) => s.sessionId)).toEqual([old.agentSessionId]);
+    expect(Date.parse(index.items["shop/02"]?.[0]?.lastSeen ?? "")).toBeGreaterThanOrEqual(
+      Date.parse(before.index.items["shop/02"]?.[0]?.lastSeen ?? ""),
+    );
+    expect(grill(repo)).toBe(claimed);
+  });
+
+  it("opens the CLI's own picker, and says why, when the CLI no longer has the session", async () => {
+    const { repo, session: old, provider, starter } = await paused(false);
+
+    const { session, warnings } = await starter.resumeSession(repo, ticket, "resume");
+
+    expect(provider.spawned[0]?.options.args.slice(0, 1)).toEqual(["--resume"]);
+    expect(provider.spawned[0]?.options.args).not.toContain(old.agentSessionId);
+    expect(provider.spawned[0]?.options.cwd).toBe(old.worktree.path);
+    expect(session.agentSessionId).toBeNull();
+    expect(warnings).toEqual([expect.stringContaining("no longer has the session")]);
+  });
+
+  it("opens the picker directly, without a warning, for Pick another session", async () => {
+    const { repo, provider, starter } = await paused(true);
+
+    const { warnings } = await starter.resumeSession(repo, ticket, "pick");
+
+    expect(provider.spawned[0]?.options.args.slice(0, 1)).toEqual(["--resume"]);
+    expect(provider.spawned[0]?.options.args[1]).toBe("--settings");
+    expect(warnings).toEqual([]);
+  });
+
+  it("fails before launching anything when the ticket has no indexed session", async () => {
+    const { provider, starter } = setup();
+
+    await expect(starter.resumeSession(fixtureRepo(), ticket, "resume")).rejects.toBeInstanceOf(DrylandError);
+    expect(provider.spawned).toEqual([]);
+  });
+
+  it("keeps the older session in the index when work starts fresh", async () => {
+    const { repo, session: old, starter } = await paused(true);
+
+    installSkill(repo, "implement");
+
+    const { session } = await starter.startWork(repo, onTicket("02"), "claude-code", "implement");
+
+    const { index } = await readSessionIndex(nodeProcessRunner, repo);
+    expect(index.items["shop/02"]?.map((s) => s.sessionId)).toEqual([session.agentSessionId, old.agentSessionId]);
+    expect(session.agentSessionId).not.toBe(old.agentSessionId);
+    expect(session.command).toBe("/implement shop/02");
   });
 });

@@ -1,5 +1,6 @@
 import { basename, join } from "node:path";
 import {
+  AGENT_ADAPTERS,
   DrylandError,
   findMainCheckout,
   type LiveEvent,
@@ -11,8 +12,10 @@ import {
   nextUpMarkers,
   nodeProcessRunner,
   readMapDetail,
-  pausedLabel,
   readProjectState,
+  readSessionIndex,
+  resumeArgs,
+  sessionsOf,
   readTicketDetail,
   startLiveListener,
 } from "@dryland/core";
@@ -35,6 +38,7 @@ import {
   autoCommitFor,
   isConfirmationType,
   isTicketAction,
+  isTicketRef,
   trackerArgs,
 } from "../shared/tracker-actions.ts";
 import { createDrylandCli } from "./dryland-cli.ts";
@@ -161,10 +165,34 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
     const staleClaims = steps.flatMap(({ ruleId, target }) =>
       ruleId === "stale-claim" && target.kind === "ticket" ? [ticketKey(target)] : [],
     );
-    const pausedClaims = Object.fromEntries(
-      (snapshot.sessions ?? []).flatMap((s) =>
-        s.state === "paused" ? [[ticketKey(s.ticket), pausedLabel(s.was)]] : [],
+    const index = (await readSessionIndex(nodeProcessRunner, mainCheckout)).index;
+    const claimants = new Map(
+      tree.maps.flatMap((m) =>
+        [...m.planning, ...m.implementation, ...m.done].map((t) => [ticketKey(t), t.claimant] as const),
       ),
+    );
+    const pausedClaims = Object.fromEntries(
+      (snapshot.sessions ?? []).flatMap((s) => {
+        if (s.state !== "paused") return [];
+        const key = ticketKey(s.ticket);
+        const known = sessionsOf(index, key)[0];
+        const adapter = AGENT_ADAPTERS.find((a) => a.id === known?.adapter);
+        return [
+          [
+            key,
+            {
+              sessionId: s.id,
+              agentId: known?.adapter ?? "",
+              agent: adapter?.name ?? known?.adapter ?? "agent",
+              resumeCommand:
+                adapter === undefined ? null : [adapter.binary, ...(resumeArgs(adapter, s.id) ?? [])].join(" "),
+              was: s.was,
+              lastSeen: known?.lastSeen ?? "",
+              branch: claimants.get(key) ?? null,
+            },
+          ],
+        ];
+      }),
     );
     return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims }, mainCheckout };
   } catch (error) {
@@ -414,6 +442,22 @@ ipcMain.handle(
     }
   },
 );
+ipcMain.handle("work:resume", async (_event, ticket: unknown, mode: unknown): Promise<StartWorkResult> => {
+  if (!isTicketRef(ticket) || (mode !== "resume" && mode !== "pick"))
+    return { ok: false, message: "That is not a session to resume.", nextAction: "Retry from the app." };
+  if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
+  try {
+    const { session, warnings } = await work.resumeSession(project.path, ticket, mode);
+    status.launched(session.id);
+    sendSessionStates();
+    // The claim is held by a live session again, so it no longer reads as paused.
+    void refresh();
+    return { ok: true, session, warnings };
+  } catch (error) {
+    if (!(error instanceof DrylandError)) throw error;
+    return { ok: false, message: error.message, nextAction: error.nextAction };
+  }
+});
 ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): Promise<TicketActionResult> => {
   if (!isTicketAction(action) || typeof commit !== "boolean")
     return { ok: false, message: "That is not a ticket action.", nextAction: "Retry from the ticket." };

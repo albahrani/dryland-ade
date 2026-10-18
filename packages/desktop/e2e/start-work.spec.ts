@@ -58,6 +58,17 @@ function stubAgent(): string {
       "const { basename } = require('node:path');",
       "const set = (name) => (process.env[name] ? 'set' : 'missing');",
       "console.log(`agent-ready cwd=${basename(process.cwd())} pid=${process.pid}`);",
+      // With STUB_WRITES_HISTORY, like the real CLI the stub files its session's history under the home.
+      "const args = process.argv.slice(2);",
+      "const launchedId = args[args.indexOf('--session-id') + 1];",
+      "if (process.env.STUB_WRITES_HISTORY && args.includes('--session-id')) {",
+      "  const { homedir } = require('node:os'); const { join } = require('node:path'); const fs = require('node:fs');",
+      "  const dir = join(homedir(), '.claude', 'projects', process.cwd().replace(/[^a-zA-Z0-9]/g, '-'));",
+      "  fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(join(dir, launchedId + '.jsonl'), '{}');",
+      "}",
+      // Hooks report the CLI's own session id, as Claude Code's do; the other tests keep the fake's fixed one.
+      "const sid = process.env.STUB_WRITES_HISTORY ? (args.includes('--session-id') ? launchedId : args[args.indexOf('--resume') + 1]) : undefined;",
+      "console.log(`resume=${args.includes('--resume') ? args[args.indexOf('--resume') + 1] ?? 'picker' : 'no'}`);",
       "console.log(`session=${set('DRYLAND_SESSION_ID')} pane=${set('DRYLAND_PANE_KEY')} port=${set('DRYLAND_PORT')} token=${set('DRYLAND_TOKEN')}`);",
       "console.log(execSync('dryland ticket list', { encoding: 'utf8' }));",
       `const hooks = require(${JSON.stringify(FAKE_HOOKS)});`,
@@ -65,11 +76,11 @@ function stubAgent(): string {
       "process.stdin.setRawMode(true);",
       "process.stdin.on('data', (d) => {",
       "  const keys = d.toString();",
-      "  if (keys.includes('\\r')) hooks.fire(settings, 'UserPromptSubmit');",
-      "  if (keys.includes('!')) ['PermissionRequest', 'Notification:permission_prompt'].forEach((e) => hooks.fire(settings, e));",
-      "  if (keys.includes('~')) hooks.fire(settings, 'Stop');",
-      "  if (keys.includes('#')) { hooks.fire(settings, 'SessionEnd'); process.exit(0); }",
-      "  if (keys.includes('*')) setTimeout(() => { process.stdout.write('\\r\\nLATER-OUTPUT\\r\\n'); hooks.fire(settings, 'Stop'); }, 1500);",
+      "  if (keys.includes('\\r')) hooks.fire(settings, 'UserPromptSubmit', sid);",
+      "  if (keys.includes('!')) ['PermissionRequest', 'Notification:permission_prompt'].forEach((e) => hooks.fire(settings, e, sid));",
+      "  if (keys.includes('~')) hooks.fire(settings, 'Stop', sid);",
+      "  if (keys.includes('#')) { hooks.fire(settings, 'SessionEnd', sid); process.exit(0); }",
+      "  if (keys.includes('*')) setTimeout(() => { process.stdout.write('\\r\\nLATER-OUTPUT\\r\\n'); hooks.fire(settings, 'Stop', sid); }, 1500);",
       "  process.stdout.write(keys.includes('\\r') ? '\\r\\nSUBMITTED\\r\\n' : keys);",
       "});",
     ].join("\n"),
@@ -161,8 +172,9 @@ test("shows the session's state from Claude Code's hooks on its tab and on its t
   // A second session on the ticket: the ticket shows it over the ended one.
   const ticketBadge = (state: string) =>
     window.getByRole("region", { name: "Tickets" }).getByRole("img", { name: `Claude Code: ${state}` });
+  // An ended session leaves its claim paused, so the ticket offers to continue it; Start fresh is the second session.
   await window.getByRole("tab", { name: "shop/02", exact: true }).click();
-  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await window.getByRole("region", { name: "Paused session" }).getByRole("button", { name: "Start fresh" }).click();
   await expect(ticketBadge("launched")).toBeVisible();
   // Closing its tab hides the session; its CLI keeps running.
   await window.getByRole("button", { name: "Close Claude Code shop/02" }).last().click();
@@ -452,5 +464,48 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   await window.getByRole("button", { name: "Tickets", exact: true }).click();
   await window.getByRole("button", { name: /^Next up: .* is waiting for input\. Show the session\.$/ }).click();
   await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute("aria-selected", "true");
+  await app.close();
+});
+
+test("stops a session and resumes it from the paused box, in its worktree with the claim untouched", async () => {
+  const home = mkdtempSync(join(tmpdir(), "dryland-e2e-home-"));
+  const env = {
+    ...withPath((dirs) => [stubAgent(), ...dirs]),
+    HOME: home,
+    USERPROFILE: home,
+    STUB_WRITES_HISTORY: "1",
+  };
+  const { app, window, repo } = await openTicket(env);
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/implement shop/02");
+  const id = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")).items["shop/02"][0].sessionId;
+  const claimed = readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8");
+
+  // Idle, then stopped.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("~");
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: idle" })).toBeVisible();
+  await window.getByLabel("Session", { exact: true }).getByRole("button", { name: "Stop session" }).click();
+  await expect(screen).toContainText("[session stopped]");
+
+  // The ticket tab offers the paused session instead of the start box, with the pause badge on tab and row.
+  await window.getByRole("tab", { name: "shop/02", exact: true }).click();
+  const box = window.getByRole("region", { name: "Paused session" });
+  await expect(box).toContainText("Paused");
+  await expect(box).toContainText(id);
+  // This run still holds the session's terminal, so its last output line shows (but not the stop notice).
+  await expect(box.locator(".paused-last-line")).not.toHaveText("[session stopped]");
+  await expect(box.locator(".paused-last-line")).toBeVisible();
+  await expect(box).toContainText(`claude --resume ${id}`);
+  await expect(window.getByRole("button", { name: "Start with Claude Code" })).toHaveCount(0);
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: Paused" })).toBeVisible();
+
+  // Resume continues the same CLI session in the same worktree; the claim is as it was.
+  await box.getByRole("button", { name: "Resume" }).click();
+  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(screen).toContainText(`resume=${id}`);
+  await expect(screen).not.toContainText("/implement shop/02");
+  expect(readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8")).toBe(claimed);
   await app.close();
 });

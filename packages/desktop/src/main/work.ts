@@ -16,9 +16,14 @@ import {
   nextSteps,
   type ProcessRunner,
   readRepoSnapshot,
+  readSessionIndex,
   readTickets,
   recordSession,
+  resumeArgs,
+  sessionExists,
   sessionIdArgs,
+  sessionsOf,
+  type TicketRef,
   skillCommand,
   worktreeForScratch,
   worktreeForTicket,
@@ -69,6 +74,14 @@ export interface WorkStarter {
    * a `DrylandError`, before touching anything, when the CLI or the skill is not installed.
    */
   startWork(projectPath: string, target: WorkTarget, agentId: string, skill?: string | null): Promise<StartedWork>;
+  /**
+   * Continues the newest session the index holds for the ticket, in the ticket's worktree: the CLI is launched with
+   * resume-by-id, hooks injected and nothing typed, and the claim is not touched. When the CLI no longer has the
+   * session, or with `mode` "pick", it opens its own picker instead; the first comes with a warning saying why.
+   * Fails with a `DrylandError`, before launching anything, when the ticket has no indexed session or its CLI
+   * cannot resume.
+   */
+  resumeSession(projectPath: string, ticket: TicketRef, mode: "resume" | "pick"): Promise<StartedWork>;
   /** The sessions started so far, as recorded at spawn. */
   sessions(): SessionInfo[];
 }
@@ -82,12 +95,12 @@ function programFor(executable: string, args: string[], env: Record<string, stri
 }
 
 /**
- * The adapter's launch arguments, the CLI session id Dryland chose for it, and its settings flag naming a file in
- * `hooksDir` that holds the status hooks, written fresh on every launch. A file rather than inline JSON, which
- * `cmd.exe` would mangle.
+ * The adapter's launch arguments, the arguments that name or resume the CLI's session, and its settings flag naming
+ * a file in `hooksDir` that holds the status hooks, written fresh on every launch. A file rather than inline JSON,
+ * which `cmd.exe` would mangle.
  */
-function launchArgs(adapter: AgentAdapter, hooksDir: string, agentSessionId: string | null): string[] {
-  const args = [...adapter.launchArgs, ...(agentSessionId === null ? [] : sessionIdArgs(adapter, agentSessionId))];
+function launchArgs(adapter: AgentAdapter, hooksDir: string, sessionArgs: readonly string[]): string[] {
+  const args = [...adapter.launchArgs, ...sessionArgs];
   if (adapter.hookInjection.kind !== "settings-flag") return args;
   mkdirSync(hooksDir, { recursive: true });
   const file = join(hooksDir, `${adapter.id}.json`);
@@ -219,7 +232,11 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
             });
       terminalId = terminals.open({
         cwd: worktree.path,
-        program: programFor(executable, launchArgs(adapter, hooksDir, agentSessionId), env),
+        program: programFor(
+          executable,
+          launchArgs(adapter, hooksDir, agentSessionId === null ? [] : sessionIdArgs(adapter, agentSessionId)),
+          env,
+        ),
         env: (id) => sessionEnv(adapter, sessionId, id),
         onOutput: pretyper,
       });
@@ -232,6 +249,62 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         map,
         worktree: { branch: worktree.branch, path: worktree.path },
         command: typed,
+        startedAt: new Date().toISOString(),
+      };
+      started.push(session);
+      return { session, warnings };
+    },
+
+    async resumeSession(projectPath, ticket, mode) {
+      const mainCheckout = await findMainCheckout(runner, projectPath);
+      const item = `${ticket.map}/${ticket.id}`;
+      const known = sessionsOf((await readSessionIndex(runner, mainCheckout)).index, item)[0];
+      if (known === undefined) {
+        throw new DrylandError(`${item} has no session to resume.`, "Start work on the ticket instead.");
+      }
+      const adapter = adapterFor(known.adapter);
+      const executable = await findExecutable(adapter.binary, env);
+      if (executable === null) {
+        throw new DrylandError(
+          `${adapter.name} is not installed: \`${adapter.binary}\` is not on PATH.`,
+          `Install ${adapter.name}, then resume the session.`,
+        );
+      }
+      if (resumeArgs(adapter, null) === null) {
+        throw new DrylandError(`${adapter.name} cannot resume a session.`, "Start fresh instead.");
+      }
+      const worktree = await worktreeForTicket(runner, mainCheckout, item);
+      const warnings: string[] = [];
+      let agentSessionId: string | null = null;
+      if (mode === "resume" && (await sessionExists(adapter, homeOf(env), worktree.path, known.sessionId))) {
+        agentSessionId = known.sessionId;
+        // The same id, seen now: its entry moves to the front and reads as live again.
+        try {
+          const recorded = { adapter: adapter.id, sessionId: known.sessionId };
+          warnings.push(...(await recordSession(runner, worktree.path, item, recorded)));
+        } catch (error) {
+          warnings.push(`The session was not recorded in the session index (${(error as Error).message}).`);
+        }
+      } else if (mode === "resume") {
+        warnings.push(
+          `${adapter.name} no longer has the session ${known.sessionId}, so its own picker opens: pick a session to continue.`,
+        );
+      }
+      const sessionId = randomUUID();
+      const terminalId = terminals.open({
+        cwd: worktree.path,
+        program: programFor(executable, launchArgs(adapter, hooksDir, resumeArgs(adapter, agentSessionId) ?? []), env),
+        env: (id) => sessionEnv(adapter, sessionId, id),
+      });
+      const session: SessionInfo = {
+        id: sessionId,
+        terminalId,
+        agent: { id: adapter.id, name: adapter.name },
+        agentSessionId,
+        ticket: { map: ticket.map, id: ticket.id },
+        map: ticket.map,
+        worktree: { branch: worktree.branch, path: worktree.path },
+        command: null,
         startedAt: new Date().toISOString(),
       };
       started.push(session);

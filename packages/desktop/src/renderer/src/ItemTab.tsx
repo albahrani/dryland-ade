@@ -1,7 +1,9 @@
-import type { NextUpMarker, TicketDetail, TreeTicket } from "@dryland/core";
+import type { NextUpMarker, TicketDetail, TicketRef, TreeTicket } from "@dryland/core";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
-import type { ItemContent, ProjectView, SessionInfo } from "../../shared/api.ts";
+import type { ItemContent, ProjectView, ResumeMode, SessionInfo } from "../../shared/api.ts";
+import { pausedBadge, type PausedSession } from "../../shared/paused-session.ts";
+import { PausedBox } from "./PausedBox.tsx";
 import { LiveSessions, type SessionHandlers } from "./SessionControls.tsx";
 import { formatBlockers } from "../../shared/blockers.ts";
 import { mapMarker, NO_NEXT_UP, type NextUp, ticketMarker, whyNotText } from "../../shared/next-up.ts";
@@ -105,9 +107,11 @@ function TicketContent({
   treeTicket,
   stale,
   paused,
+  lastOutput,
   sessions,
   sessionHandlers,
   onStartWork,
+  onResume,
   onAction,
 }: {
   ticket: TicketDetail;
@@ -120,15 +124,39 @@ function TicketContent({
   treeTicket: TreeTicket | undefined;
   /** Whether its claim is held by no live Dryland session. */
   stale: boolean;
-  /** The label of its paused session, if its claim is held by one. */
-  paused: string | null;
+  /** Its paused session, if its claim is held by one and no live session works on it. */
+  paused: PausedSession | null;
+  /** The paused session's last output line, while Dryland still holds it. */
+  lastOutput: string | null;
   onStartWork: StartWorkHandler;
+  onResume: ResumeHandler;
   onAction: TicketActionHandler;
 }) {
   const marker = ticketMarker(nextUp, ticket.map, ticket.id);
+  const [resuming, setResuming] = useState(false);
+  const resume = async (mode: ResumeMode) => {
+    setResuming(true);
+    try {
+      await onResume({ map: ticket.map, id: ticket.id }, mode);
+    } finally {
+      setResuming(false);
+    }
+  };
+  const pausedLabel = paused === null ? null : pausedBadge(paused.was).label;
   return (
     <article>
-      {ticket.status !== "done" && (
+      {ticket.status !== "done" && paused !== null && (
+        <PausedBox
+          paused={paused}
+          lastOutput={lastOutput}
+          busy={resuming}
+          onResume={(mode) => void resume(mode)}
+          onStartFresh={() =>
+            void onStartWork({ kind: "ticket", ticket: { map: ticket.map, id: ticket.id } }, paused.agentId, null)
+          }
+        />
+      )}
+      {ticket.status !== "done" && paused === null && (
         <StartWork
           chooseSkill
           onStart={(agentId, skill) =>
@@ -145,6 +173,7 @@ function TicketContent({
           <>
             {marker !== undefined && <NextUpStar marker={marker} />}
             <StatusIcon status={ticket.status} /> {ticket.map}/{ticket.id} {ticket.title}
+            {paused !== null && <span className={`pill paused ${pausedBadge(paused.was).tone}`}>{pausedLabel}</span>}
           </>
         }
       >
@@ -157,7 +186,7 @@ function TicketContent({
         <Field name="Blocked by">{formatBlockers(ticket.blockers) ?? "none"}</Field>
         <Field name="Map">{ticket.mapTitle}</Field>
       </Details>
-      <NextUpSection marker={marker} treeTicket={treeTicket} nextUp={nextUp} paused={paused} />
+      <NextUpSection marker={marker} treeTicket={treeTicket} nextUp={nextUp} paused={pausedLabel} />
       <div className="content">
         <Markdown>{ticket.body}</Markdown>
         {ticket.answer !== null && (
@@ -181,6 +210,8 @@ function TicketContent({
   );
 }
 
+export type ResumeHandler = (ticket: TicketRef, mode: ResumeMode) => Promise<void>;
+
 export type StartWorkHandler = (target: WorkTarget, agentId: string, skill: string | null) => Promise<void>;
 
 export function ItemTab({
@@ -189,7 +220,10 @@ export function ItemTab({
   header,
   sessions,
   sessionHandlers,
+  paused,
+  lastOutput,
   onStartWork,
+  onResume,
   onTicketAction,
 }: {
   item: DocumentRef;
@@ -198,7 +232,12 @@ export function ItemTab({
   /** Every session the app started; the tab shows those on its ticket or map. */
   sessions: SessionInfo[];
   sessionHandlers: SessionHandlers;
+  /** The paused sessions no live session stands in for, by ticket key. */
+  paused: ReadonlyMap<string, PausedSession>;
+  /** A ticket's paused session's last output line, while Dryland holds it. */
+  lastOutput: (ticketKey: string) => string | null;
   onStartWork: StartWorkHandler;
+  onResume: ResumeHandler;
   onTicketAction: TicketActionHandler;
 }) {
   const content = useItem(item, project);
@@ -217,7 +256,9 @@ export function ItemTab({
         nextUp={nextUp}
         treeTicket={treeTicket}
         stale={project.tree.ok && project.tree.staleClaims.includes(ticketKey(content.ticket))}
-        paused={(project.tree.ok && project.tree.pausedClaims[ticketKey(content.ticket)]) || null}
+        paused={paused.get(ticketKey(content.ticket)) ?? null}
+        lastOutput={lastOutput(ticketKey(content.ticket))}
+        onResume={onResume}
         sessions={sessions.filter((s) => s.ticket !== null && ticketKey(s.ticket) === ticketKey(content.ticket))}
         sessionHandlers={sessionHandlers}
         onStartWork={onStartWork}

@@ -55,12 +55,13 @@ export const existingTerminal = (id: string): TerminalEntry | undefined => entri
 
 /** The newest non-empty line terminal `id` shows, `null` without a view or in its first screens of blank lines. */
 export function lastLine(id: string): string | null {
+  // The line Dryland writes when a session is stopped is not the session's output.
   const buffer = entries.get(id)?.term.buffer.active;
   if (buffer === undefined) return null;
   // Below the newest output sit only the screen's blank rows, so a screenful or two of lines is enough to look at.
   for (let y = buffer.length - 1; y >= Math.max(0, buffer.length - 200); y--) {
     const text = buffer.getLine(y)?.translateToString(true).trim();
-    if (text) return text;
+    if (text && text !== "[session stopped]") return text;
   }
   return null;
 }

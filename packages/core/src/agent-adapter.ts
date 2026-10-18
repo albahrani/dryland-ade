@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { exists } from "./env-fs.ts";
 import type { LiveEventKind } from "./live-reporting.ts";
 import type { LiveSessionSnapshot } from "./next-step.ts";
 
@@ -51,6 +53,11 @@ export interface AgentAdapter {
    * `null` when the CLI cannot resume.
    */
   resumeFlag: string | null;
+  /**
+   * Where the CLI keeps the history of session `sessionId` run in `cwd`, under `home`; `null` when it is not known
+   * where, so a resume cannot be checked first.
+   */
+  historyFile: ((home: string, cwd: string, sessionId: string) => string) | null;
   /** How status hooks reach the CLI; acted on by the session status tickets. */
   hookInjection: { kind: "settings-flag"; flag: string } | { kind: "user-config" } | { kind: "none" };
   /**
@@ -91,6 +98,9 @@ export const CLAUDE_CODE: AgentAdapter = {
   // Verified against 2.1.301: hooks see the id given at launch in CLAUDE_CODE_SESSION_ID (ticket 74).
   sessionIdFlag: "--session-id",
   resumeFlag: "--resume",
+  // Claude Code files a session's transcript under `~/.claude/projects/<cwd, every non-alphanumeric as "-">/<id>.jsonl`.
+  historyFile: (home, cwd, sessionId) =>
+    join(home, ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"), `${sessionId}.jsonl`),
   hookInjection: { kind: "settings-flag", flag: "--settings" },
   // SessionStart (fires at launch) and SubagentStop (fires after Stop) are left out: neither changes the state.
   // PermissionRequest also fires for AskUserQuestion and ExitPlanMode, in default, plan and auto mode, so their
@@ -134,6 +144,17 @@ export function sessionIdArgs(adapter: AgentAdapter, sessionId: string): string[
 export function resumeArgs(adapter: AgentAdapter, sessionId: string | null): string[] | null {
   if (adapter.resumeFlag === null) return null;
   return sessionId === null ? [adapter.resumeFlag] : [adapter.resumeFlag, sessionId];
+}
+
+/** Whether the CLI still holds session `sessionId` of `cwd`: false when it cannot be told, so a resume is not tried. */
+export async function sessionExists(
+  adapter: AgentAdapter,
+  home: string | null,
+  cwd: string,
+  sessionId: string,
+): Promise<boolean> {
+  if (adapter.historyFile === null || home === null) return false;
+  return exists(adapter.historyFile(home, cwd, sessionId));
 }
 
 /** A Claude Code `hooks` settings entry: command hooks for the events a matcher selects. */

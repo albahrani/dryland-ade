@@ -14,6 +14,7 @@ const api: DrylandApi = {
   listAgents: () => ipcRenderer.invoke("agents:list"),
   listSkills: (agentId) => ipcRenderer.invoke("skills:list", agentId),
   startWork: (target, agentId, skill) => ipcRenderer.invoke("work:start", target, agentId, skill),
+  resumeSession: (ticket, mode) => ipcRenderer.invoke("work:resume", ticket, mode),
   runTicketAction: (action, commit) => ipcRenderer.invoke("tracker:run", action, commit),
   dontAskAgain: (type) => ipcRenderer.invoke("confirmations:dont-ask", type),
   writeTerminal: (id, data) => ipcRenderer.send("terminal:write", id, data),

@@ -1,5 +1,6 @@
-import type { SessionState, TicketStatus } from "@dryland/core";
+import type { PausedWas, SessionState, TicketStatus } from "@dryland/core";
 import { SESSION_META } from "../../shared/session-meta.ts";
+import { pausedBadge } from "../../shared/paused-session.ts";
 import { STATUS_META } from "../../shared/status-meta.ts";
 
 /** A session's agent icon with its state as a badge (working arc, waiting bubble, idle dash, ended square). */
@@ -10,6 +11,18 @@ export function SessionBadge({ agent, state }: { agent: string; state: SessionSt
     <span className={`session-badge ${state}`} title={text} role="img" aria-label={text}>
       <span className="agent-icon">{agent.charAt(0)}</span>
       <span className="badge">{glyph}</span>
+    </span>
+  );
+}
+
+/** An agent icon with a pause badge in the colour of the paused session's label: gold when waiting, red when interrupted. */
+export function PausedBadge({ agent, was }: { agent: string; was: PausedWas }) {
+  const { label, tone } = pausedBadge(was);
+  const text = `${agent}: ${label}`;
+  return (
+    <span className={`session-badge paused ${tone}`} title={text} role="img" aria-label={text}>
+      <span className="agent-icon">{agent.charAt(0)}</span>
+      <span className="badge">⏸</span>
     </span>
   );
 }

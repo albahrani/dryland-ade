@@ -1,5 +1,6 @@
 import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
 import type { NextUp } from "./next-up.ts";
+import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
 import type { StopConfirmation } from "./stop-session.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
@@ -14,8 +15,8 @@ export type TreeLoad =
       nextUp: NextUp;
       /** The `map/id` of every claim no live Dryland session holds: claimed, possibly stale. */
       staleClaims: string[];
-      /** The label (such as "Paused: interrupted") of every claim whose session is paused, by `map/id`: resumable, never stale. */
-      pausedClaims: Record<string, string>;
+      /** The paused session of every claim one holds, by `map/id`: resumable, never stale. */
+      pausedClaims: Record<string, PausedSession>;
     }
   | { ok: false; message: string; nextAction: string };
 
@@ -94,6 +95,9 @@ export interface SessionInfo {
 export type StartWorkResult =
   { ok: true; session: SessionInfo; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
+/** How a paused session continues: the CLI resumes it by id, or lets the user pick a session. */
+export type ResumeMode = "resume" | "pick";
+
 /** How a tracker write went: `dryland`'s warnings, or its error and the next action it names. */
 export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
@@ -125,6 +129,11 @@ export interface DrylandApi {
    * next step, `/wayfinder <map>` for a map, `/wayfinder ` for a new map. With `skill`, that skill's command instead.
    */
   startWork(target: WorkTarget, agentId: string, skill: string | null): Promise<StartWorkResult>;
+  /**
+   * Continues a ticket's paused session in a new terminal ('resume'), or opens the CLI's own picker in the ticket's
+   * worktree ('pick'), which is also what a session the CLI no longer has falls back to, with a warning saying so.
+   */
+  resumeSession(ticket: TicketRef, mode: ResumeMode): Promise<StartWorkResult>;
   /** Runs a ticket action through `dryland` in the open project; asking for confirmation is the caller's part. */
   runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */

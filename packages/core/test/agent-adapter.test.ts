@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import {
   commandForTicket,
   findExecutable,
   type NextStep,
+  sessionExists,
   skillCommand,
 } from "../src/index.ts";
 
@@ -109,5 +110,24 @@ describe("commandForTicket", () => {
   it("is null when no next step points at the ticket, so nothing is pre-typed", () => {
     const steps = [step("/implement other/02", { kind: "ticket", map: "other", id: "02" })];
     expect(commandForTicket(steps, { map: "shop", id: "02" })).toBeNull();
+  });
+});
+
+describe("sessionExists", () => {
+  const worktree = join("T:", "Development", "shop", ".worktrees", "shop-02");
+
+  it("finds a Claude Code session by its history file in the worktree's history directory", async () => {
+    const home = mkdtempSync(join(tmpdir(), "home-"));
+    const dir = join(home, ".claude", "projects", "T--Development-shop--worktrees-shop-02");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "abc.jsonl"), "{}\n");
+
+    expect(await sessionExists(CLAUDE_CODE, home, worktree, "abc")).toBe(true);
+    expect(await sessionExists(CLAUDE_CODE, home, worktree, "other")).toBe(false);
+  });
+
+  it("is false without a home directory or for a CLI with no history file to check", async () => {
+    expect(await sessionExists(CLAUDE_CODE, null, worktree, "abc")).toBe(false);
+    expect(await sessionExists({ ...CLAUDE_CODE, historyFile: null }, "/home", worktree, "abc")).toBe(false);
   });
 });
