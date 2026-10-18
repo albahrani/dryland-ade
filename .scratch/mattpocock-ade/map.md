@@ -136,6 +136,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Restore session tabs on start and Resume all](issues/77-restore-session-tabs-on-start-and-resume-all.md): Session tabs come back after a restart and resume when first shown; Resume all, on a map or everywhere, and a start-up setting resume paused sessions hidden.
 
+- [Paused pane and paused sessions on maps](issues/79-paused-pane-and-paused-sessions-on-maps.md): Paused pane in the Sessions view, waiting/paused counts on map rows and the map tab strip, and the paused count in the status bar.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
