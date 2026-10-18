@@ -138,6 +138,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Paused pane and paused sessions on maps](issues/79-paused-pane-and-paused-sessions-on-maps.md): Paused pane in the Sessions view, waiting/paused counts on map rows and the map tab strip, and the paused count in the status bar.
 
+- [Reconcile the session index](issues/78-reconcile-the-session-index.md): The session index is reconciled on start and focus: found Claude Code sessions added, resolved or released items and sessions with no history file removed.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
