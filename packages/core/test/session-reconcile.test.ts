@@ -32,6 +32,8 @@ describe("claudeProjectSlug", () => {
   });
 
   it("does the same to POSIX paths", () => {
+    // Observed in WSL with Claude Code 2.1.140, recorded in the research.
+    expect(claudeProjectSlug("/tmp/slug.check_dir/shop-01")).toBe("-tmp-slug-check-dir-shop-01");
     expect(claudeProjectSlug("/home/dev/shop.worktrees/shop-01-cart")).toBe("-home-dev-shop-worktrees-shop-01-cart");
     expect(claudeProjectSlug("/Users/dev/Projects/shop_app")).toBe("-Users-dev-Projects-shop-app");
   });
