@@ -52,6 +52,7 @@ function Counts({ waiting, total, waitingWord }: { waiting: number; total: numbe
       {waiting > 0 && (
         <span className="count waiting" title={`${waiting} ${waitingWord}`} aria-label={`${waiting} ${waitingWord}`}>
           {waiting}
+          {waitingWord === "waiting" ? "" : ` ${waitingWord}`}
         </span>
       )}
       <span className="count" title={`${total} in all`} aria-label={`${total} in all`}>

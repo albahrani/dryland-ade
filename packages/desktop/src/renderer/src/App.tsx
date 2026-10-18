@@ -489,7 +489,6 @@ export function App() {
   const selected = selectedSession(activeTab, allSessions, sessionStates);
   const liveWaiting = allSessions.filter((session) => sessionState(session) === "waiting").length;
   const tree = project?.tree.ok ? project.tree.tree : null;
-  const pausedClaims = project?.tree.ok ? project.tree.pausedClaims : {};
   const pausedList = pausedItems(Object.fromEntries([...pausedMap]));
   const mapCounts = (map: string) =>
     mapSessionCounts(map, allSessions, sessionStates, Object.fromEntries([...pausedMap]), tabs.open);
