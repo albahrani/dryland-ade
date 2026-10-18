@@ -14,7 +14,8 @@ import { NextUpStar } from "./NextUp.tsx";
 import type { TicketSession } from "../../shared/session-meta.ts";
 import { type ItemRef, tabKey, ticketKey } from "../../shared/tabs.ts";
 import type { PausedSession } from "../../shared/paused-session.ts";
-import { PausedBadge, SessionBadge, StatusIcon } from "./status.tsx";
+import { MapCounts, PausedBadge, SessionBadge, StatusIcon } from "./status.tsx";
+import type { MapSessionCounts } from "../../shared/sessions-view.ts";
 
 /** The ticket kinds a map lists after its fog, in workflow order. */
 const KINDS = [
@@ -109,6 +110,7 @@ function Branch({
   toggle,
   onOpen,
   marker,
+  counts,
   children,
 }: {
   id: string;
@@ -119,6 +121,8 @@ function Branch({
   onOpen?: () => void;
   /** The Next-up marker on the branch's own item, a map. */
   marker?: NextUpMarker;
+  /** The map's waiting and paused sessions. */
+  counts?: MapSessionCounts;
   children: React.ReactNode;
 }) {
   const closed = collapsed.has(id);
@@ -129,6 +133,7 @@ function Branch({
         <button className="branch-label" aria-expanded={!closed} onClick={() => toggle(id)}>
           {closed ? "▸" : "▾"} {label}
         </button>
+        {counts !== undefined && <MapCounts counts={counts} />}
         {onOpen !== undefined && (
           <button className="branch-open" aria-label={`Open map ${label}`} title="Open map" onClick={onOpen}>
             ↗
@@ -211,6 +216,7 @@ export function TicketsView({
   sessions,
   paused,
   nextUp,
+  mapCounts,
   staleClaims,
   onOpen,
   onRelease,
@@ -225,6 +231,8 @@ export function TicketsView({
   /** The paused session of each ticket no live session works on, by `map/id`. */
   paused: ReadonlyMap<string, PausedSession>;
   nextUp: NextUp;
+  /** A map's waiting and paused session counts. */
+  mapCounts: (map: string) => MapSessionCounts;
   /** The `map/id` of every claim no live Dryland session holds. */
   staleClaims: readonly string[];
   onOpen: (ref: ItemRef) => void;
@@ -311,6 +319,7 @@ export function TicketsView({
             toggle={toggle}
             onOpen={() => onOpen({ kind: "map", name: map.name })}
             marker={mapMarker(nextUp, map.name)}
+            counts={mapCounts(map.name)}
           >
             <ul>
               {map.fog.length > 0 && (

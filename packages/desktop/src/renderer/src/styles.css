@@ -972,3 +972,69 @@ ul {
   margin: 0 0 8px;
   color: var(--muted, #9d9d9d);
 }
+
+/* The Paused pane's header holds Resume all beside the toggle. */
+.pane-header {
+  gap: 4px;
+}
+
+.pane-toggle {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+  font: inherit;
+  text-transform: inherit;
+}
+
+.pane-action {
+  opacity: 1;
+  text-transform: none;
+}
+
+.paused-pill.waiting {
+  color: var(--next-up);
+}
+
+.paused-pill.interrupted {
+  color: #f14c4c;
+}
+
+.session-row.paused-row .row-action {
+  opacity: 0;
+}
+
+.session-row.paused-row:hover .row-action,
+.session-row.paused-row .row-action:focus-visible {
+  opacity: 1;
+}
+
+.map-counts {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+}
+
+.count.paused {
+  color: var(--fg-dim);
+}
+
+.map-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--fg-dim);
+}
+
+.map-strip .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--fg);
+}

@@ -11,7 +11,8 @@ import { NextUpExplanation, NextUpStar } from "./NextUp.tsx";
 import { type DocumentRef, ticketKey } from "../../shared/tabs.ts";
 import { ProgressBar } from "./ProgressBar.tsx";
 import { StartWork } from "./StartWork.tsx";
-import { StatusIcon } from "./status.tsx";
+import { PausedBadge, StatusIcon } from "./status.tsx";
+import type { MapSessionCounts } from "../../shared/sessions-view.ts";
 import { TicketActions, type TicketActionHandler } from "./TicketActions.tsx";
 import type { WorkTarget } from "../../shared/work-target.ts";
 
@@ -210,6 +211,46 @@ function TicketContent({
   );
 }
 
+/**
+ * The strip above a map's tab: how many of its sessions are open, hidden (and waiting) and paused, a chip for each
+ * paused item that opens it, and Resume all for the map.
+ */
+function MapStrip({
+  counts,
+  paused,
+  title,
+  onOpen,
+  onResumeAll,
+}: {
+  counts: MapSessionCounts;
+  /** The map's paused sessions by ticket key. */
+  paused: [string, PausedSession][];
+  title: (ticket: TicketRef) => string;
+  onOpen: (ticket: TicketRef) => void;
+  onResumeAll: () => void;
+}) {
+  if (counts.open + counts.hidden + counts.paused === 0) return null;
+  return (
+    <section className="map-strip" aria-label="Map sessions">
+      <span>{counts.open} open</span>
+      <span>
+        {counts.hidden} hidden{counts.hiddenWaiting > 0 && ` (${counts.hiddenWaiting} waiting)`}
+      </span>
+      <span>{counts.paused} paused</span>
+      {paused.map(([key, session]) => {
+        const slash = key.lastIndexOf("/");
+        const ticket = { map: key.slice(0, slash), id: key.slice(slash + 1) };
+        return (
+          <button key={key} className="chip" onClick={() => onOpen(ticket)}>
+            <PausedBadge agent={session.agent} was={session.was} /> {title(ticket)}
+          </button>
+        );
+      })}
+      {counts.paused > 0 && <button onClick={onResumeAll}>Resume all on this map</button>}
+    </section>
+  );
+}
+
 export type ResumeHandler = (ticket: TicketRef, mode: ResumeMode) => Promise<void>;
 
 /** Resumes the paused sessions of one map, hidden. */
@@ -228,6 +269,8 @@ export function ItemTab({
   onStartWork,
   onResume,
   onResumeAll,
+  mapCounts,
+  onOpenTicket,
   onTicketAction,
 }: {
   item: DocumentRef;
@@ -243,6 +286,10 @@ export function ItemTab({
   onStartWork: StartWorkHandler;
   onResume: ResumeHandler;
   onResumeAll: ResumeAllHandler;
+  /** A map's session counts. */
+  mapCounts: (map: string) => MapSessionCounts;
+  /** Opens a ticket's tab, such as a paused one from the map's strip. */
+  onOpenTicket: (ticket: TicketRef) => void;
   onTicketAction: TicketActionHandler;
 }) {
   const content = useItem(item, project);
@@ -279,7 +326,8 @@ export function ItemTab({
   const detail =
     content.kind === "map" ? content.map : { name: map?.name ?? "", title: map?.title ?? "", markdown: "" };
   const marker = mapMarker(nextUp, detail.name);
-  const pausedOnMap = [...paused.keys()].filter((key) => key.startsWith(`${detail.name}/`)).length;
+  const counts = mapCounts(detail.name);
+  const pausedOnMap = [...paused].filter(([key]) => key.startsWith(`${detail.name}/`));
   return (
     <article>
       <StartWork
@@ -287,12 +335,17 @@ export function ItemTab({
         label={(agent) => `Continue map with ${agent}`}
         onStart={(agentId, skill) => onStartWork({ kind: "map", map: detail.name }, agentId, skill)}
       />
-      {pausedOnMap > 0 && (
-        <p className="resume-all">
-          <button onClick={() => void onResumeAll(detail.name)}>Resume all on this map</button> {pausedOnMap} paused{" "}
-          {pausedOnMap === 1 ? "session" : "sessions"}, resumed hidden.
-        </p>
-      )}
+      <MapStrip
+        counts={counts}
+        paused={pausedOnMap}
+        title={(ticket) =>
+          tree?.maps
+            .flatMap((m) => [...m.planning, ...m.implementation, ...m.done])
+            .find((t) => t.map === ticket.map && t.id === ticket.id)?.title ?? ticketKey(ticket)
+        }
+        onOpen={onOpenTicket}
+        onResumeAll={() => void onResumeAll(detail.name)}
+      />
       {/* The map's own session and those on its tickets. */}
       <LiveSessions sessions={sessions.filter((s) => s.map === detail.name)} handlers={sessionHandlers} />
       <Details

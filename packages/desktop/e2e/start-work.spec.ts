@@ -444,14 +444,15 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   await openPane.getByRole("button", { name: /Open/ }).click();
 
   // Dragging the sash resizes the panes, and the size is remembered too.
-  const sash = window.getByRole("separator", { name: "Resize Hidden and Open" });
+  const sash = window.getByRole("separator", { name: "Resize Hidden and Paused" });
+  const before = Number(await sash.getAttribute("aria-valuenow"));
   const box = (await sash.boundingBox())!;
   await window.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await window.mouse.down();
   await window.mouse.move(box.x + box.width / 2, box.y - 100, { steps: 5 });
   await window.mouse.up();
   const share = await sash.getAttribute("aria-valuenow");
-  expect(Number(share)).toBeLessThan(50);
+  expect(Number(share)).toBeLessThan(before);
   await window.reload();
   await window.getByRole("button", { name: "Sessions", exact: true }).click();
   await expect(sash).toHaveAttribute("aria-valuenow", share!);
@@ -559,7 +560,7 @@ test("brings session tabs back after a restart, resuming a session only when its
   await expect(tab).toBeVisible();
   await expect(second.window.getByRole("tab", { name: "shop", exact: true })).toHaveAttribute("aria-selected", "true");
   await second.window.waitForTimeout(1000);
-  await expect(second.window.getByLabel("Session counts")).toHaveText("0 open · 0 hidden");
+  await expect(second.window.getByLabel("Session counts")).toHaveText("0 open · 0 hidden · 1 paused");
 
   await tab.click();
   await expect(second.window.locator(".xterm-rows:visible")).toContainText(`resume=${id}`);
@@ -584,6 +585,7 @@ test("Resume all resumes paused sessions hidden, on a map or everywhere, and a s
   await expect(second.window.getByRole("tab")).toHaveCount(0);
   await second.window.getByRole("button", { name: "Maps" }).click();
   await second.window.getByRole("button", { name: /^Shop/ }).click();
+  await expect(second.window.getByRole("region", { name: "Map sessions" })).toContainText("1 paused");
   await second.window.getByRole("button", { name: "Resume all on this map" }).click();
   await expect(second.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");
   await expect(second.window.getByRole("button", { name: "Resume all on this map" })).toHaveCount(0);
@@ -592,10 +594,15 @@ test("Resume all resumes paused sessions hidden, on a map or everywhere, and a s
 
   // From the Sessions menu: the same, for every map.
   const third = await relaunch(env, userData);
-  await expect(third.window.getByLabel("Session counts")).toHaveText("0 open · 0 hidden");
+  await expect(third.window.getByLabel("Session counts")).toHaveText("0 open · 0 hidden · 1 paused");
+  // The Sessions view lists it in the Paused pane; the menu resumes it, and the pane empties.
+  await third.window.getByRole("button", { name: "Sessions", exact: true }).click();
+  const pausedPane = third.window.getByRole("region", { name: "Paused sessions" });
+  await expect(pausedPane.getByRole("button", { name: /Shop/ })).toBeVisible();
   await clickMenu(third.app, "Sessions", "Resume All Paused Sessions");
   await expect(third.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");
   await expect(third.window.getByRole("tab", { name: /Claude Code/ })).toHaveCount(0);
+  await expect(pausedPane).toContainText("No paused sessions.");
 
   // With the setting on, the next start does it by itself.
   await clickMenu(third.app, "Sessions", "Resume Sessions on Start");

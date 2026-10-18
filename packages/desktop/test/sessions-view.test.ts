@@ -1,9 +1,16 @@
-import type { SessionState, TicketsTree, TreeTicket } from "@dryland/core";
+import type { PausedWas, SessionState, TicketsTree, TreeTicket } from "@dryland/core";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SESSIONS_LAYOUT,
+  dragSash,
   groupCount,
+  groupPaused,
   groupSessions,
+  mapCountsLabel,
+  mapSessionCounts,
+  pausedItems,
+  pausedPill,
+  pausedTotals,
   parseSessionsLayout,
   selectedSession,
   sessionCounts,
@@ -13,6 +20,7 @@ import {
   trackStateSince,
   UNLINKED,
 } from "../src/shared/sessions-view.ts";
+import type { PausedSession } from "../src/shared/paused-session.ts";
 
 const session = (id: string, on: string | null, startedAt = "2026-10-16T10:00:00.000Z", agent = "Claude Code") => {
   const [map = null, number] = on === null ? [] : on.split("/");
@@ -86,6 +94,7 @@ describe("the status bar", () => {
     const hidden = [session("a", "shop/02"), session("b", "shop/03")];
     expect(sessionCounts(hidden, [session("c", null)], { a: "waiting" })).toBe("1 open · 2 hidden (1 waiting)");
     expect(sessionCounts([], [], {})).toBe("0 open · 0 hidden");
+    expect(sessionCounts(hidden, [], {}, 3)).toBe("0 open · 2 hidden · 3 paused");
   });
 
   it("shows the focused session tab's session, or the live session of the ticket or map in view", () => {
@@ -120,11 +129,119 @@ describe("a session's age in its state", () => {
 describe("the saved Sessions layout", () => {
   it("keeps what is readable and defaults the rest", () => {
     expect(parseSessionsLayout(null)).toEqual(DEFAULT_SESSIONS_LAYOUT);
-    expect(parseSessionsLayout({ grouping: "agent", collapsed: { open: true }, hiddenShare: 2 })).toEqual({
+    expect(
+      parseSessionsLayout({
+        grouping: "agent",
+        collapsed: { open: true },
+        shares: { hidden: 1, paused: 2, open: 3 },
+      }),
+    ).toEqual({
       grouping: "agent",
-      collapsed: { hidden: false, open: true },
-      hiddenShare: 0.9,
+      collapsed: { hidden: false, paused: false, open: true },
+      shares: { hidden: 1, paused: 2, open: 3 },
     });
-    expect(parseSessionsLayout({ grouping: "state", hiddenShare: "x" })).toEqual(DEFAULT_SESSIONS_LAYOUT);
+    expect(parseSessionsLayout({ grouping: "state", shares: { hidden: 1 } })).toEqual(DEFAULT_SESSIONS_LAYOUT);
+  });
+
+  it("migrates the single sash of the two-pane layout, keeping Hidden's share of Hidden and Open", () => {
+    const { shares } = parseSessionsLayout({ grouping: "agent", collapsed: { hidden: true }, hiddenShare: 0.3 });
+    expect(shares.hidden / (shares.hidden + shares.open)).toBeCloseTo(0.3);
+    expect(shares.paused).toBeGreaterThan(0);
+    expect(parseSessionsLayout({ hiddenShare: 2 }).shares.hidden).toBeGreaterThan(
+      parseSessionsLayout({ hiddenShare: 0.5 }).shares.hidden,
+    );
+  });
+});
+
+describe("dragging a sash", () => {
+  const shares = { hidden: 0.3, paused: 0.3, open: 0.4 };
+  const none = { hidden: false, paused: false, open: false };
+
+  it("moves the boundary between a pane and the next expanded one and leaves the rest", () => {
+    const moved = dragSash(shares, none, "hidden", 0.5);
+    expect(moved.hidden).toBeCloseTo(0.5);
+    expect(moved.paused).toBeCloseTo(0.1);
+    expect(moved.open).toBe(0.4);
+
+    const lower = dragSash(shares, none, "paused", 0.5);
+    expect(lower.hidden).toBe(0.3);
+    expect(lower.paused).toBeCloseTo(0.2);
+    expect(lower.open).toBeCloseTo(0.5);
+  });
+
+  it("skips a collapsed pane and keeps both neighbours off the edges", () => {
+    const skipped = dragSash(shares, { ...none, paused: true }, "hidden", 0.5);
+    expect(skipped.hidden / (skipped.hidden + skipped.open)).toBeCloseTo(0.5);
+    expect(skipped.paused).toBe(0.3);
+
+    const pinned = dragSash(shares, none, "hidden", 5);
+    expect(pinned.hidden).toBeCloseTo(0.5);
+    expect(pinned.paused).toBeCloseTo(0.1);
+    expect(dragSash(shares, none, "open", 0.5)).toBe(shares);
+  });
+});
+
+describe("the paused sessions in the Sessions view", () => {
+  const paused = (agent: string, was: PausedWas, lastSeen: string): PausedSession => ({
+    sessionId: "c",
+    agentId: "a",
+    agent,
+    resumeCommand: null,
+    was,
+    lastSeen,
+    branch: null,
+  });
+  const claims = {
+    "shop/02": paused("Claude Code", null, "2026-10-18T09:00:00Z"),
+    "shop/03": paused("Claude Code", "waiting", "2026-10-18T08:00:00Z"),
+    "blog/01": paused("Copilot CLI", "interrupted", "2026-10-18T10:00:00Z"),
+    "blog/02": paused("Copilot CLI", null, "2026-10-18T07:00:00Z"),
+  };
+
+  it("lists each as a session-like item on its ticket and map", () => {
+    const [first] = pausedItems(claims);
+    expect(first).toMatchObject({
+      id: "shop/02",
+      ticket: { map: "shop", id: "02" },
+      map: "shop",
+      agent: { name: "Claude Code" },
+    });
+    expect(pausedItems(claims)).toHaveLength(4);
+  });
+
+  it("groups them like Hidden, was-waiting first, with the was-waiting count", () => {
+    const groups = groupPaused(pausedItems(claims), "map");
+
+    expect(groups.map((g) => g.key)).toEqual(["shop", "blog"]);
+    expect(groups[0]?.sessions.map((s) => s.id)).toEqual(["shop/03", "shop/02"]);
+    expect(groups[0]?.waiting).toBe(1);
+    expect(groupCount(groups[0]!)).toBe("(1/2)");
+    expect(groups[1]?.breakdown).toBe("1 interrupted, 1 paused");
+    expect(groupPaused(pausedItems(claims), "agent").map((g) => g.key)).toEqual(["Claude Code", "Copilot CLI"]);
+  });
+
+  it("labels a row's pill by what the session was doing", () => {
+    expect(["waiting", "interrupted", null].map((was) => pausedPill(was as PausedWas))).toEqual([
+      "was waiting",
+      "interrupted",
+      "paused",
+    ]);
+  });
+
+  it("counts was-waiting before the total for the header badge", () => {
+    expect(pausedTotals(pausedItems(claims))).toEqual({ waiting: 1, total: 4 });
+  });
+});
+
+describe("a map's session counts", () => {
+  const live = [session("a", "shop/02"), session("b", "shop/03"), session("c", "blog/01")];
+  const states: Record<string, SessionState> = { a: "waiting", b: "running", c: "waiting" };
+  const claims = { "shop/04": { was: "waiting" }, "shop/05": { was: null }, "blog/02": { was: "interrupted" } };
+
+  it("are its waiting live sessions and its paused ones, with the breakdown for a tooltip", () => {
+    const counts = mapSessionCounts("shop", live, states, claims as never, [{ kind: "terminal", id: "t-b" }]);
+    expect(counts).toEqual({ open: 1, hidden: 1, hiddenWaiting: 1, waiting: 1, paused: 2, pausedWaiting: 1 });
+    expect(mapCountsLabel(counts)).toBe("1 waiting for you, 2 paused (1 was waiting)");
+    expect(mapCountsLabel({ open: 0, hidden: 0, hiddenWaiting: 0, waiting: 0, paused: 0, pausedWaiting: 0 })).toBe("");
   });
 });

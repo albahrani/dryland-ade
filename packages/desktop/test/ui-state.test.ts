@@ -82,15 +82,19 @@ describe("ui state store", () => {
 
   it("remembers each project's Sessions layout and repairs unreadable ones", () => {
     const file = stateFile();
-    const saved = { grouping: "agent" as const, collapsed: { hidden: true, open: false }, hiddenShare: 0.3 };
+    const saved = {
+      grouping: "agent" as const,
+      collapsed: { hidden: true, paused: false, open: false },
+      shares: { hidden: 0.3, paused: 0.2, open: 0.5 },
+    };
     createUiStateStore(file).update({ sessionsLayout: { "/repos/shop": saved } });
     expect(createUiStateStore(file).read().sessionsLayout).toEqual({ "/repos/shop": saved });
 
     writeFileSync(file, JSON.stringify({ sessionsLayout: { "/repos/shop": saved, "/repos/bad": 7 } }));
     expect(createUiStateStore(file).read().sessionsLayout["/repos/bad"]).toEqual({
       grouping: "map",
-      collapsed: { hidden: false, open: false },
-      hiddenShare: 0.5,
+      collapsed: { hidden: false, paused: false, open: false },
+      shares: { hidden: 0.35, paused: 0.25, open: 0.4 },
     });
   });
 

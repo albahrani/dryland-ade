@@ -1,6 +1,7 @@
 import type { PausedWas, SessionState, TicketStatus } from "@dryland/core";
 import { SESSION_META } from "../../shared/session-meta.ts";
 import { pausedBadge } from "../../shared/paused-session.ts";
+import { type MapSessionCounts, mapCountsLabel } from "../../shared/sessions-view.ts";
 import { STATUS_META } from "../../shared/status-meta.ts";
 
 /** A session's agent icon with its state as a badge (working arc, waiting bubble, idle dash, ended square). */
@@ -33,6 +34,18 @@ export function StatusIcon({ status }: { status: TicketStatus }) {
   return (
     <span className="status" style={{ color: colour }} title={label} role="img" aria-label={label}>
       {shape}
+    </span>
+  );
+}
+
+/** A map's waiting and paused counts, compact, with the breakdown in the tooltip; nothing when it has neither. */
+export function MapCounts({ counts }: { counts: MapSessionCounts }) {
+  const label = mapCountsLabel(counts);
+  if (label === "") return null;
+  return (
+    <span className="map-counts" title={label} role="img" aria-label={label}>
+      {counts.waiting > 0 && <span className="count waiting">{counts.waiting}</span>}
+      {counts.paused > 0 && <span className="count paused">⏸{counts.paused}</span>}
     </span>
   );
 }

@@ -9,10 +9,13 @@ import type {
   SessionInfo,
 } from "../../shared/api.ts";
 import {
+  mapSessionCounts,
   mapTitle,
+  pausedItems,
   selectedSession,
   sessionCounts,
   sessionItemTitle,
+  type MapSessionCounts,
   type SessionsLayout,
   splitSessions,
   type StateSince,
@@ -78,6 +81,7 @@ function Sidebar({
   tabs,
   ticketSessions,
   paused,
+  mapCounts,
   onOpen,
   onRelease,
   onStartWork,
@@ -90,6 +94,7 @@ function Sidebar({
   tabs: TabsState;
   ticketSessions: ReadonlyMap<string, TicketSession>;
   paused: ReadonlyMap<string, PausedSession>;
+  mapCounts: (map: string) => MapSessionCounts;
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
   onStartWork: StartWorkHandler;
@@ -116,6 +121,7 @@ function Sidebar({
         sessions={ticketSessions}
         paused={paused}
         nextUp={nextUp}
+        mapCounts={mapCounts}
         staleClaims={staleClaims}
         onOpen={onOpen}
         onRelease={onRelease}
@@ -130,6 +136,7 @@ function Sidebar({
         tree={tree}
         activeMap={active?.kind === "map" ? active.name : null}
         nextUp={nextUp}
+        mapCounts={mapCounts}
         onOpen={onOpen}
         onContinue={(map, agentId, skill) => onStartWork({ kind: "map", map }, agentId, skill)}
         onNewMap={() => onDialog("new-map")}
@@ -354,9 +361,14 @@ export function App() {
     const session = await launchResume(ticket, mode);
     if (session !== null) showTerminal(session.terminalId, sessionTitle(session));
   };
-  const resumeAllOnMap: ResumeAllHandler = async (map) => {
+  const resumeAllPaused = async (map: string | null) => {
     const { warnings } = await window.dryland.resumeAll(map);
     setNotice(warnings.length === 0 ? null : warnings.join(" "));
+  };
+  const resumeAllOnMap: ResumeAllHandler = (map) => resumeAllPaused(map);
+  /** Resumes one paused session, hidden: it moves from the Paused pane to the Hidden one. */
+  const resumeHidden = async (ticket: TicketRef) => {
+    await launchResume(ticket, "resume");
   };
   /** Turns a restored session tab into what it stands for: the running session, the resumed one, or its ticket. */
   restoreSession.current = (ref) => {
@@ -477,6 +489,10 @@ export function App() {
   const selected = selectedSession(activeTab, allSessions, sessionStates);
   const liveWaiting = allSessions.filter((session) => sessionState(session) === "waiting").length;
   const tree = project?.tree.ok ? project.tree.tree : null;
+  const pausedClaims = project?.tree.ok ? project.tree.pausedClaims : {};
+  const pausedList = pausedItems(Object.fromEntries([...pausedMap]));
+  const mapCounts = (map: string) =>
+    mapSessionCounts(map, allSessions, sessionStates, Object.fromEntries([...pausedMap]), tabs.open);
   const setSessionsLayout = (layout: SessionsLayout, save: boolean) => {
     setState({ ...state, sessionsLayout: layout });
     if (save) void window.dryland.saveSessionsLayout(layout);
@@ -526,6 +542,7 @@ export function App() {
           tabs={tabs}
           ticketSessions={ticketSessionMap}
           paused={pausedMap}
+          mapCounts={mapCounts}
           onOpen={(ref) => setTabs(openTab(tabs, ref))}
           onRelease={(ticket) =>
             void requestAction({ kind: "release", ticket: { map: ticket.map, id: ticket.id } }, "general-button")
@@ -536,6 +553,7 @@ export function App() {
           sessionsView={
             <SessionsView
               hidden={hiddenSessions}
+              paused={pausedList}
               open={openSessions}
               states={sessionStates}
               since={stateSince}
@@ -548,6 +566,11 @@ export function App() {
                 lastLine: (session) => lastLine(session.terminalId),
               }}
               handlers={sessionHandlers}
+              pausedHandlers={{
+                open: (ticket) => setTabs(openTab(tabs, { kind: "ticket", ...ticket })),
+                resume: (ticket) => void resumeHidden(ticket),
+                resumeAll: () => void resumeAllPaused(null),
+              }}
               onLayout={setSessionsLayout}
             />
           }
@@ -619,6 +642,8 @@ export function App() {
             onStartWork={startWork}
             onResume={resumeSession}
             onResumeAll={resumeAllOnMap}
+            mapCounts={mapCounts}
+            onOpenTicket={(ticket) => setTabs(openTab(tabs, { kind: "ticket", ...ticket }))}
             onTicketAction={(action) => requestAction(action, "ticket")}
             header={{
               open: !collapsedHeaders.has(tabKey(activeDocument)),
@@ -692,7 +717,9 @@ export function App() {
             {selected.agent.name}: {SESSION_META[sessionState(selected)].label} · {selected.worktree.branch}
           </span>
         )}
-        <span aria-label="Session counts">{sessionCounts(hiddenSessions, openSessions, sessionStates)}</span>
+        <span aria-label="Session counts">
+          {sessionCounts(hiddenSessions, openSessions, sessionStates, pausedList.length)}
+        </span>
       </footer>
     </div>
   );

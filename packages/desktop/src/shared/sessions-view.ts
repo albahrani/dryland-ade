@@ -1,5 +1,6 @@
-import type { SessionState, TicketRef, TicketsTree } from "@dryland/core";
+import type { PausedWas, SessionState, TicketRef, TicketsTree } from "@dryland/core";
 import { SESSION_META } from "./session-meta.ts";
+import type { PausedSession } from "./paused-session.ts";
 import { type ItemRef, ticketKey } from "./tabs.ts";
 
 /** How the Hidden pane groups its tree: by map (Unlinked last), by agent, or not at all. Never by state. */
@@ -7,40 +8,76 @@ export const SESSION_GROUPINGS = ["map", "agent", "none"] as const;
 export type SessionGrouping = (typeof SESSION_GROUPINGS)[number];
 
 /** The Sessions view's panes, top to bottom. */
-export const SESSIONS_PANES = ["hidden", "open"] as const;
+export const SESSIONS_PANES = ["hidden", "paused", "open"] as const;
 export type SessionsPane = (typeof SESSIONS_PANES)[number];
 
-/** What the Sessions view remembers per project: its grouping, which panes are collapsed, and where the sash is. */
+/** What the Sessions view remembers per project: its grouping, which panes are collapsed, and how tall each is. */
 export interface SessionsLayout {
   grouping: SessionGrouping;
   collapsed: Record<SessionsPane, boolean>;
-  /** The share of the panes' height Hidden takes while both are expanded, between 0.1 and 0.9. */
-  hiddenShare: number;
+  /** Each pane's weight in the panes' height while expanded; only their ratios matter. */
+  shares: Record<SessionsPane, number>;
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   grouping: "map",
-  collapsed: { hidden: false, open: false },
-  hiddenShare: 0.5,
+  collapsed: { hidden: false, paused: false, open: false },
+  shares: { hidden: 0.35, paused: 0.25, open: 0.4 },
 };
 
-/** Keeps the sash off the panes' edges, so neither pane can be dragged to nothing but its header. */
-export const clampShare = (share: number): number => Math.min(0.9, Math.max(0.1, share));
+/** The least share of the expanded panes' height a pane keeps when a sash is dragged. */
+const MIN_SHARE = 0.1;
 
-/** Reads a saved layout defensively: each field on its own, anything unreadable falls back to its default. */
+/** Keeps a share off the edges, so no pane can be dragged to nothing but its header. */
+export const clampShare = (share: number): number => Math.min(0.9, Math.max(MIN_SHARE, share));
+
+/**
+ * Moves the sash below `pane` to `fraction` (0 at the top of the panes, 1 at the bottom). Only `pane` and the next
+ * expanded pane change. Returns `shares` itself when no expanded pane lies below.
+ */
+export function dragSash(
+  shares: SessionsLayout["shares"],
+  collapsed: SessionsLayout["collapsed"],
+  pane: SessionsPane,
+  fraction: number,
+): SessionsLayout["shares"] {
+  const expanded = SESSIONS_PANES.filter((p) => !collapsed[p]);
+  const index = expanded.indexOf(pane);
+  const below = expanded[index + 1];
+  if (index < 0 || below === undefined) return shares;
+  const total = expanded.reduce((sum, p) => sum + shares[p], 0);
+  const before = expanded.slice(0, index).reduce((sum, p) => sum + shares[p] / total, 0);
+  const pair = (shares[pane] + shares[below]) / total;
+  const own = Math.max(MIN_SHARE, Math.min(pair - MIN_SHARE, fraction - before));
+  return { ...shares, [pane]: own * total, [below]: (pair - own) * total };
+}
+
+const isShare = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
+
+/**
+ * Reads a saved layout defensively: each field on its own, anything unreadable falls back to its default. A layout
+ * saved with the two-pane view's single `hiddenShare` keeps its split between Hidden and Open.
+ */
 export function parseSessionsLayout(raw: unknown): SessionsLayout {
   const r = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const collapsed =
     r.collapsed !== null && typeof r.collapsed === "object" ? (r.collapsed as Record<string, unknown>) : {};
+  const saved = r.shares !== null && typeof r.shares === "object" ? (r.shares as Record<string, unknown>) : {};
+  const defaults = DEFAULT_SESSIONS_LAYOUT.shares;
+  let shares = defaults;
+  if (isShare(saved.hidden) && isShare(saved.paused) && isShare(saved.open)) {
+    shares = { hidden: saved.hidden, paused: saved.paused, open: saved.open };
+  } else if (typeof r.hiddenShare === "number" && Number.isFinite(r.hiddenShare)) {
+    const hidden = clampShare(r.hiddenShare);
+    const rest = 1 - defaults.paused;
+    shares = { hidden: hidden * rest, paused: defaults.paused, open: (1 - hidden) * rest };
+  }
   return {
     grouping: SESSION_GROUPINGS.includes(r.grouping as SessionGrouping)
       ? (r.grouping as SessionGrouping)
       : DEFAULT_SESSIONS_LAYOUT.grouping,
-    collapsed: { hidden: collapsed.hidden === true, open: collapsed.open === true },
-    hiddenShare:
-      typeof r.hiddenShare === "number" && Number.isFinite(r.hiddenShare)
-        ? clampShare(r.hiddenShare)
-        : DEFAULT_SESSIONS_LAYOUT.hiddenShare,
+    collapsed: { hidden: collapsed.hidden === true, paused: collapsed.paused === true, open: collapsed.open === true },
+    shares,
   };
 }
 
@@ -154,10 +191,132 @@ export function groupSessions<S extends ViewSession>(
   );
 }
 
-/** The status bar's counts: "N open · M hidden (k waiting)", the waiting part only when a hidden session waits. */
-export function sessionCounts(hidden: readonly { id: string }[], open: readonly unknown[], states: States): string {
+/**
+ * The status bar's counts: "N open · M hidden (k waiting) · P paused", the waiting part only when a hidden session
+ * waits and the paused part only when a session is paused.
+ */
+export function sessionCounts(
+  hidden: readonly { id: string }[],
+  open: readonly unknown[],
+  states: States,
+  paused = 0,
+): string {
   const waiting = hidden.filter((s) => stateOf(states, s) === "waiting").length;
-  return `${open.length} open · ${hidden.length} hidden${waiting === 0 ? "" : ` (${waiting} waiting)`}`;
+  const counts = `${open.length} open · ${hidden.length} hidden${waiting === 0 ? "" : ` (${waiting} waiting)`}`;
+  return paused === 0 ? counts : `${counts} · ${paused} paused`;
+}
+
+/** A paused session as the Paused pane lists it: shaped like a session, so it groups like one. */
+export interface PausedItem extends ViewSession {
+  /** The ticket's `map/id`. */
+  id: string;
+  ticket: TicketRef;
+  paused: PausedSession;
+}
+
+/** The paused sessions as rows, one per ticket, in the order given. */
+export function pausedItems(paused: Readonly<Record<string, PausedSession>>): PausedItem[] {
+  return Object.entries(paused).flatMap(([key, session]) => {
+    const slash = key.lastIndexOf("/");
+    if (slash <= 0) return [];
+    const ticket = { map: key.slice(0, slash), id: key.slice(slash + 1) };
+    return [
+      {
+        id: key,
+        terminalId: "",
+        agent: { name: session.agent },
+        ticket,
+        map: ticket.map,
+        startedAt: session.lastSeen,
+        paused: session,
+      },
+    ];
+  });
+}
+
+const PAUSED_PILLS: Record<NonNullable<PausedWas>, string> = { waiting: "was waiting", interrupted: "interrupted" };
+
+/** A paused row's pill: what the session was doing when it stopped. */
+export const pausedPill = (was: PausedWas): string => (was === null ? "paused" : PAUSED_PILLS[was]);
+
+/** A paused item's stand-in state: it ranks and counts as waiting only when it was. */
+const pausedStates = (items: readonly PausedItem[]): Record<string, SessionState> =>
+  Object.fromEntries(items.map((item) => [item.id, item.paused.was === "waiting" ? "waiting" : "idle"]));
+
+/** "1 was waiting, 2 interrupted, 1 paused", most urgent first. */
+function pausedBreakdown(items: readonly PausedItem[]): string {
+  return (["waiting", "interrupted", null] as const)
+    .map((was) => [items.filter((item) => item.paused.was === was).length, was] as const)
+    .filter(([count]) => count > 0)
+    .map(([count, was]) => `${count} ${pausedPill(was)}`)
+    .join(", ");
+}
+
+/**
+ * The Paused tree's groups, built as Hidden's are: was-waiting sessions first within a group and groups holding one
+ * first, so a group's `waiting` is its was-waiting count.
+ */
+export function groupPaused(items: readonly PausedItem[], grouping: SessionGrouping): SessionGroup<PausedItem>[] {
+  return groupSessions(items, pausedStates(items), grouping).map((group) => ({
+    ...group,
+    breakdown: pausedBreakdown(group.sessions),
+  }));
+}
+
+/** The Paused pane's header counts: those that were waiting, then all. */
+export const pausedTotals = (items: readonly PausedItem[]): { waiting: number; total: number } => ({
+  waiting: items.filter((item) => item.paused.was === "waiting").length,
+  total: items.length,
+});
+
+/** What a map holds in sessions, for its row and its tab's header strip. */
+export interface MapSessionCounts {
+  /** Live sessions on the map with a tab. */
+  open: number;
+  /** Live sessions on the map with no tab. */
+  hidden: number;
+  /** Of the hidden ones, those waiting for the user. */
+  hiddenWaiting: number;
+  /** Live sessions on the map, open or hidden, waiting for the user. */
+  waiting: number;
+  paused: number;
+  /** Of the paused ones, those that were waiting. */
+  pausedWaiting: number;
+}
+
+/** The counts of the sessions on `map` (its own and its tickets'), live and paused. */
+export function mapSessionCounts<S extends ViewSession>(
+  map: string,
+  sessions: readonly S[],
+  states: States,
+  paused: Readonly<Record<string, Pick<PausedSession, "was">>>,
+  tabs: readonly ItemRef[],
+): MapSessionCounts {
+  const { hidden, open } = splitSessions(
+    sessions.filter((s) => s.map === map),
+    states,
+    tabs,
+  );
+  const live = [...hidden, ...open].filter((s) => stateOf(states, s) !== "ended");
+  const onMap = Object.entries(paused).filter(([key]) => key.startsWith(`${map}/`));
+  return {
+    open: open.filter((s) => stateOf(states, s) !== "ended").length,
+    hidden: hidden.length,
+    hiddenWaiting: hidden.filter((s) => stateOf(states, s) === "waiting").length,
+    waiting: live.filter((s) => stateOf(states, s) === "waiting").length,
+    paused: onMap.length,
+    pausedWaiting: onMap.filter(([, p]) => p.was === "waiting").length,
+  };
+}
+
+/** The tooltip of a map's counts: "1 waiting for you, 2 paused (1 was waiting)"; empty when it holds neither. */
+export function mapCountsLabel({ waiting, paused, pausedWaiting }: MapSessionCounts): string {
+  return [
+    waiting > 0 ? `${waiting} waiting for you` : "",
+    paused > 0 ? `${paused} paused${pausedWaiting > 0 ? ` (${pausedWaiting} was waiting)` : ""}` : "",
+  ]
+    .filter((part) => part !== "")
+    .join(", ");
 }
 
 /**
