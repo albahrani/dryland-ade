@@ -21,10 +21,11 @@ export interface SkillMirror {
 export type SkillDeviation =
   | { kind: "skill-differs"; skill: string; detail: string }
   | { kind: "core-skill-missing"; skill: string; detail: string }
+  | { kind: "no-skills"; detail: string }
   | { kind: "tracker"; detail: string };
 
 /**
- * - `not-set-up`: no skills and no tracker doc; `/setup-matt-pocock-skills` has not run.
+ * - `not-set-up`: no skills, or no tracker doc; `/setup-matt-pocock-skills` has not run.
  * - `default`: every installed skill is a known one, unchanged.
  * - `default-with-extras`: as `default`, plus skills the mirror does not know.
  * - `modified`: a known skill differs, a core skill is missing, or the tracker is not one Dryland reads.
@@ -61,11 +62,13 @@ async function markdownFiles(dir: string, prefix = ""): Promise<string[]> {
  */
 export async function fingerprintSkill(dir: string): Promise<string> {
   const hash = createHash("sha256");
-  for (const file of await markdownFiles(dir)) {
-    const text = (await readFile(join(dir, file), "utf8")).replace(/\r\n/g, "\n");
-    hash.update(`${file}\0${sha256(text)}\n`);
-  }
+  for (const file of await markdownFiles(dir)) hash.update(`${file}\0${await lineEndingFreeHash(join(dir, file))}\n`);
   return hash.digest("hex");
+}
+
+/** The hash of the file at `path`, whatever its line endings. */
+async function lineEndingFreeHash(path: string): Promise<string> {
+  return sha256((await readFile(path, "utf8")).replace(/\r\n/g, "\n"));
 }
 
 /** The installed skills by name, each with the directory it was found in (`.claude/skills` before `.agents/skills`). */
@@ -83,12 +86,12 @@ async function installedSkillDirs(mainCheckout: string): Promise<Map<string, str
   return found;
 }
 
-async function docsFingerprint(mainCheckout: string): Promise<string[]> {
+/** One `path:hash` line per `docs/agents` file, so that editing one changes the fingerprint. */
+async function docHashes(mainCheckout: string): Promise<string[]> {
   const dir = join(mainCheckout, "docs", "agents");
   const lines: string[] = [];
   for (const file of await markdownFiles(dir)) {
-    const text = (await readFile(join(dir, file), "utf8")).replace(/\r\n/g, "\n");
-    lines.push(`docs/agents/${file}:${sha256(text)}`);
+    lines.push(`docs/agents/${file}:${await lineEndingFreeHash(join(dir, file))}`);
   }
   return lines;
 }
@@ -126,18 +129,20 @@ export async function readSkillSetup(
       deviations.push({ kind: "skill-differs", skill: name, detail: `Skill ${name} differs from the default.` });
     }
   }
-  for (const line of await docsFingerprint(mainCheckout)) fingerprint.update(`${line}\n`);
+  for (const line of await docHashes(mainCheckout)) fingerprint.update(`${line}\n`);
 
-  const notSetUp = installed.size === 0 && !trackerPresent;
-  if (!notSetUp) {
+  // `/setup-matt-pocock-skills` writes both the skills and the tracker doc, so a repo missing either is not set up.
+  const notSetUp = installed.size === 0 || !trackerPresent;
+  if (installed.size === 0) deviations.push({ kind: "no-skills", detail: "No skills are installed." });
+  else {
     for (const skill of mirror.core) {
       if (!installed.has(skill)) {
         deviations.push({ kind: "core-skill-missing", skill, detail: `Core skill ${skill} is not installed.` });
       }
     }
-    const tracker = await trackerDeviation(mainCheckout);
-    if (tracker !== null) deviations.push(tracker);
   }
+  const tracker = await trackerDeviation(mainCheckout);
+  if (tracker !== null) deviations.push(tracker);
 
   const state: SkillSetupState = notSetUp
     ? "not-set-up"

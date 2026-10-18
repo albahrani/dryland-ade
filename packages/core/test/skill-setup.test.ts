@@ -116,14 +116,23 @@ describe("readSkillSetup", () => {
     expect(report.deviations).toEqual([expect.objectContaining({ kind: "tracker" })]);
   });
 
-  it("calls a repo with skills but no tracker doc modified", async () => {
+  it("calls a repo with skills but no tracker doc not set up", async () => {
     const { root, mirror } = await setup({ ...tdd, ...triage });
-    expect((await readSkillSetup(root, mirror)).deviations).toEqual([expect.objectContaining({ kind: "tracker" })]);
+    const report = await readSkillSetup(root, mirror);
+    expect(report.state).toBe("not-set-up");
+    expect(report.deviations).toEqual([expect.objectContaining({ kind: "tracker" })]);
+  });
+
+  it("calls a repo with a tracker doc but no skills not set up", async () => {
+    const { root, mirror } = await setup({ "docs/agents/issue-tracker.md": LOCAL_TRACKER });
+    const report = await readSkillSetup(root, mirror);
+    expect(report.state).toBe("not-set-up");
+    expect(report.deviations).toEqual([expect.objectContaining({ kind: "no-skills" })]);
   });
 
   it("calls a repo with neither skills nor a tracker doc not set up", async () => {
     const { root, mirror } = await setup({ "README.md": "hi\n" });
-    expect(await readSkillSetup(root, mirror)).toMatchObject({ state: "not-set-up", deviations: [] });
+    expect(await readSkillSetup(root, mirror)).toMatchObject({ state: "not-set-up" });
   });
 
   it("gives the same fingerprint for the same setup and another once a skill or doc changes", async () => {

@@ -12,13 +12,14 @@ export interface SkillSetupSummary {
   command: string | null;
 }
 
+/** Words for the panel that shows `report`: its title, how loudly to show it, and one line per deviation or extra. */
 export function summarizeSkillSetup(report: SkillSetupReport): SkillSetupSummary {
   switch (report.state) {
     case "not-set-up":
       return {
         label: "Skills are not set up in this repo",
         tone: "banner",
-        lines: ["No skills and no docs/agents/issue-tracker.md found."],
+        lines: report.deviations.map((deviation) => deviation.detail),
         command: "/setup-matt-pocock-skills",
       };
     case "default":
