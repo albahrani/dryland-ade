@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import { readTrackerKind } from "./tracker.ts";
 
 /** How long a writer waits for the lock before giving up. */
 const LOCK_TIMEOUT_MS = 30_000;
@@ -223,6 +224,14 @@ export async function writeTracker<T>(
   produce: (mainCheckout: string) => Promise<TrackerWrite<T>>,
 ): Promise<TrackerWriteResult<T>> {
   const mainCheckout = await findMainCheckout(runner, cwd);
+  // A repo whose tracker doc is missing or unreadable keeps writing locally; only a named remote tracker is refused.
+  const kind = await readTrackerKind(mainCheckout).catch(() => "local-markdown" as const);
+  if (kind !== "local-markdown") {
+    throw new DrylandError(
+      `Writing tickets is not supported on the ${kind} tracker by this version of dryland yet.`,
+      "Change the ticket on the tracker itself for now; `dryland` writes only to a local-markdown tracker.",
+    );
+  }
   const git = (args: string[]) => runner.run("git", args, { cwd: mainCheckout });
   const warnings: string[] = [];
 

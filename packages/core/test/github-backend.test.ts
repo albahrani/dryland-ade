@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  claimTicket,
   DrylandError,
   listTickets,
   mapFrontier,
@@ -233,6 +234,18 @@ describe("GitHub backend failures", () => {
 
     expect(calls.length).toBeGreaterThan(0);
     expect(calls.join("\n")).not.toMatch(/token|auth login|GH_TOKEN|GITHUB_TOKEN/i);
+  });
+
+  it("refuses a write on the GitHub tracker, saying writes are not supported yet", async () => {
+    const calls: string[] = [];
+    const error = await claimTicket(ghRunner(RECORDED, calls), repo(), "1/2", {
+      holder: "me",
+      autoCommit: false,
+    }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DrylandError);
+    expect(error).toMatchObject({ message: expect.stringContaining("not supported on the github tracker") });
+    expect(calls).toEqual([]);
   });
 
   it("still refuses GitLab, and reads local markdown without gh", async () => {
