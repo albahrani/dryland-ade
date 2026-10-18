@@ -1,7 +1,7 @@
 # GitHub backend: read
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 22
 
 Spec: [spec](../spec.md), user stories 8, 17, 70. "Tracker write path", "Normalized ticket model". ADRs 0001, 0008.
@@ -16,10 +16,14 @@ Mapping: the claim is the assignee; blocking uses GitHub's native dependencies; 
 
 ## Acceptance criteria
 
-- [ ] With recorded fixtures, `ticket list`, `ticket show`, `map show` and `map frontier` return normalized tickets with state, claimant, blockers, parent map and triage role
-- [ ] An assigned issue is reported as claimed with the assignee as claimant
-- [ ] Blockers come from native dependencies; when they cannot be determined they are reported as unknown, not as empty
-- [ ] Missing `gh` and logged-out `gh` each produce a non-zero exit and a message stating the next action
-- [ ] No code path reads, asks for or stores a token
-- [ ] The rule engine fixtures pass unchanged with tickets coming from this backend
-- [ ] Tests run without network access
+- [x] With recorded fixtures, `ticket list`, `ticket show`, `map show` and `map frontier` return normalized tickets with state, claimant, blockers, parent map and triage role
+- [x] An assigned issue is reported as claimed with the assignee as claimant
+- [x] Blockers come from native dependencies; when they cannot be determined they are reported as unknown, not as empty
+- [x] Missing `gh` and logged-out `gh` each produce a non-zero exit and a message stating the next action
+- [x] No code path reads, asks for or stores a token
+- [x] The rule engine fixtures pass unchanged with tickets coming from this backend
+- [x] Tests run without network access
+
+## Answer
+
+Implemented in a2297e0. New core/github-backend.ts reads maps and tickets through gh via the process runner; tickets.ts routes the github tracker kind to it, so ticket list/show and map show/frontier work unchanged. Mapping: a map is an issue labelled `map` (named by its issue number) whose body is the map index and whose sub-issues are its tickets; ticket ids are issue numbers; type is a `type:<type>` label; closed is resolved, an assignee is claimed (first assignee is the claimant); blockers come from the dependencies/blocked_by API and are "unknown" when that call fails; triage role is a label via the triage vocabulary; answer is the body's ## Answer section; comments come from the comments API. Missing gh and logged-out gh each fail with a next action; no token is read, asked for or stored. Tested on recorded gh JSON (core/test/github-backend.test.ts), including that nextSteps gives the same steps for GitHub and local tickets. Known limits: a failed comments fetch shows no comments; maps are capped at 1000; specsWithoutTickets returns none for GitHub; no doctor change; GitLab still unsupported; write commands remain local-markdown only.
