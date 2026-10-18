@@ -238,7 +238,6 @@ export function App() {
   useEffect(() => {
     if (shownSession !== undefined && treeReady) restoreSession.current(shownSession);
     // Once per tab shown, once the project has loaded: the tab is replaced by what it restores.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shownSession === undefined ? null : tabKey(shownSession), treeReady]);
 
   useEffect(() => {
