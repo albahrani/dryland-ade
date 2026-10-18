@@ -134,6 +134,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Resume a paused session](issues/76-resume-a-paused-session.md): A ticket with a paused session shows a paused box whose Resume relaunches the CLI by session id in the ticket's worktree, with fallbacks to the picker and a fresh start.
 
+- [Restore session tabs on start and Resume all](issues/77-restore-session-tabs-on-start-and-resume-all.md): Session tabs come back after a restart and resume when first shown; Resume all, on a map or everywhere, and a start-up setting resume paused sessions hidden.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
