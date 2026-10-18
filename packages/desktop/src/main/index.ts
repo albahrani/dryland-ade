@@ -186,7 +186,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
   try {
     const mainCheckout = await findMainCheckout(nodeProcessRunner, path);
     // One pass over the tracker files feeds both the tree and the rule engine, so markers and rows never disagree.
-    const { tree, snapshot } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions());
+    const { tree, snapshot, skillSetup } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions());
     const steps = nextSteps(snapshot);
     const ranked = nextUpMarkers(steps, Infinity);
     const nextUp = { markers: ranked.slice(0, NEXT_UP_COUNT), ranked };
@@ -222,7 +222,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
         ];
       }),
     );
-    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims }, mainCheckout };
+    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims, skillSetup }, mainCheckout };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
     return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: null };

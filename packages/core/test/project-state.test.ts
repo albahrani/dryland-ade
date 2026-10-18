@@ -42,6 +42,17 @@ describe("readProjectState", () => {
     ]);
   });
 
+  it("reports a repo without skills or tracker doc as not set up, with /setup-matt-pocock-skills as the next step", async () => {
+    const root = checkout({ "README.md": "hi\n" });
+
+    const { skillSetup, snapshot } = await readProjectState(nodeProcessRunner, root);
+
+    expect(skillSetup.state).toBe("not-set-up");
+    expect(nextSteps(snapshot).map((s) => [s.ruleId, s.command])).toEqual([
+      ["no-setup-config", "/setup-matt-pocock-skills"],
+    ]);
+  });
+
   it("feeds the live sessions it is given into the snapshot, and leaves them unknown when it is given none", async () => {
     const root = checkout({
       "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",

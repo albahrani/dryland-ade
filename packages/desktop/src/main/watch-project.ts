@@ -1,11 +1,14 @@
 import { type FSWatcher, watch } from "node:fs";
 import { join } from "node:path";
+import { SKILL_ROOTS } from "@dryland/core";
 
-/** Where tracker files live, relative to the main checkout. */
-const WATCHED = [".scratch", join("docs", "agents")];
+/** Where tracker files and skills live, relative to the main checkout. */
+const WATCHED = [".scratch", join("docs", "agents"), ...SKILL_ROOTS];
+/** Their parents, watched shallowly so that a directory created later is armed. */
+const PARENTS = ["docs", ".claude", ".agents"];
 
 /**
- * Calls `onChange` once after a burst of changes under the tracker directories of `mainCheckout`.
+ * Calls `onChange` once after a burst of changes under the tracker and skill directories of `mainCheckout`.
  * A directory that does not exist yet is picked up when it appears. Returns a stop function.
  */
 export function watchProject(mainCheckout: string, onChange: () => void, debounceMs = 100): () => void {
@@ -17,10 +20,21 @@ export function watchProject(mainCheckout: string, onChange: () => void, debounc
   const watchers: FSWatcher[] = [];
   const armed = new Set<string>();
   const arm = () => {
-    for (const directory of WATCHED) {
+    const targets = [
+      ...WATCHED.map((directory) => ({ directory, recursive: true, listener: fire })),
+      ...PARENTS.map((directory) => ({
+        directory,
+        recursive: false,
+        listener: () => {
+          arm();
+          fire();
+        },
+      })),
+    ];
+    for (const { directory, recursive, listener } of targets) {
       if (armed.has(directory)) continue;
       try {
-        const watcher = watch(join(mainCheckout, directory), { recursive: true }, fire);
+        const watcher = watch(join(mainCheckout, directory), { recursive }, listener);
         watcher.on("error", () => undefined); // a vanished directory must not crash the app
         watchers.push(watcher);
         armed.add(directory);

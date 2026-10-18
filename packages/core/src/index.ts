@@ -16,6 +16,8 @@ export * from "./project-state.ts";
 export * from "./repo-snapshot.ts";
 export * from "./session-index.ts";
 export * from "./session-reconcile.ts";
+export * from "./skill-mirror.ts";
+export * from "./skill-setup.ts";
 export * from "./skills.ts";
 export * from "./ticket-edit.ts";
 export * from "./ticket.ts";

@@ -23,6 +23,7 @@ import {
 } from "../../shared/sessions-view.ts";
 import { SESSION_META } from "../../shared/session-meta.ts";
 import { SessionsView } from "./SessionsView.tsx";
+import { SkillSetupPanel } from "./SkillSetupPanel.tsx";
 import { sessionTitle } from "../../shared/work-target.ts";
 import {
   activeItem,
@@ -534,6 +535,7 @@ export function App() {
       </nav>
       <aside className="sidebar">
         {!legendDismissed && <Legend onDismiss={dismissLegend} />}
+        {project?.tree.ok && <SkillSetupPanel report={project.tree.skillSetup} />}
         <Sidebar
           view={activity}
           project={project}

@@ -1,4 +1,12 @@
-import type { LiveEvent, MapDetail, SessionState, TicketDetail, TicketRef, TicketsTree } from "@dryland/core";
+import type {
+  LiveEvent,
+  MapDetail,
+  SessionState,
+  SkillSetupReport,
+  TicketDetail,
+  TicketRef,
+  TicketsTree,
+} from "@dryland/core";
 import type { NextUp } from "./next-up.ts";
 import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
@@ -17,6 +25,8 @@ export type TreeLoad =
       staleClaims: string[];
       /** The paused session of every claim one holds, by `map/id`: resumable, never stale. */
       pausedClaims: Record<string, PausedSession>;
+      /** How the repo's skills and `docs/agents` files compare to the default setup. */
+      skillSetup: SkillSetupReport;
     }
   | { ok: false; message: string; nextAction: string };
 
