@@ -268,6 +268,18 @@ describe("GitHub backend writes", () => {
     expect(value.decisions).toEqual(["Use Stripe", "[Cart](issues/3): Use sessions"]);
   });
 
+  it("keeps a CRLF map body's line endings when indexing", async () => {
+    const calls: string[] = [];
+    const world = baseWorld();
+    const crlf = MAP_BODY.replace(/\n/g, "\r\n");
+    world.issues[1] = issue(1, { title: "Shop", body: crlf, labels: [{ name: "map" }] });
+
+    await indexMap(fakeGh(world, calls), repo(), "1", { title: "Cart", link: "issues/3", gist: "Use sessions" });
+
+    const expected = crlf.replace("- Use Stripe\r\n", "- Use Stripe\r\n- [Cart](issues/3): Use sessions\r\n");
+    expect(writes(calls)).toEqual([`api -X PATCH ${API}/issues/1 -f body=${expected}`]);
+  });
+
   it("reports a failed gh call with the next action and claims no success", async () => {
     const calls: string[] = [];
     const world = { ...baseWorld(), failing: [`api ${API}/issues/2/comments -f body=Hello`] };

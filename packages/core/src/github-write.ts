@@ -368,10 +368,8 @@ export async function indexGithubMap(
   entry: MapIndexEntry,
 ): Promise<{ value: MapModel; warnings: string[] }> {
   const issue = await mapIssue(runner, cwd, name);
-  const body = appendDecision(
-    (issue.body ?? "").replace(/\r\n/g, "\n"),
-    `- [${entry.title}](${entry.link}): ${entry.gist}`,
-  );
+  // The body keeps its own line endings: only the Decisions-so-far part may change.
+  const body = appendDecision(issue.body ?? "", `- [${entry.title}](${entry.link}): ${entry.gist}`);
   await ghRun(runner, cwd, ["api", "-X", "PATCH", issuePath(name), ...text("body", body)]);
   return { value: { ...parseMap(name, body), title: issue.title }, warnings: [] };
 }
