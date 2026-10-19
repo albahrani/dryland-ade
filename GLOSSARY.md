@@ -67,6 +67,14 @@ _Avoid_: Suspended, interrupted, closed session
 A live session whose tab is closed: its process keeps running and its output is kept, and it shows again from its ticket, map or the Sessions view.
 _Avoid_: Background session, minimized session, closed session
 
+**Scratch session**:
+A session started with no ticket, from File ▸ New Scratch Session, in a new scratch worktree under the `scratch` map. It is linked to that worktree, not to a ticket.
+_Avoid_: Free session, ad-hoc session
+
+**Hand-started session**:
+A session the user starts by typing the Agent CLI's command in a plain terminal tab. The ADE's launcher puts it on the status hooks, and links it to a ticket by the worktree it runs in, or shows it as unlinked when that is no Dryland worktree. It ends with its tab.
+_Avoid_: Manual session, external session
+
 **Session index**:
 The ADE's machine-local record of which sessions belong to which ticket, map or scratch worktree, kept beside the repository's git data and never committed; a cache rebuilt where possible from the Agent CLIs.
 _Avoid_: Session store, session database, session log
