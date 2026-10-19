@@ -29,7 +29,7 @@ Built the Explorer in the right side area (commit 80cbaf9). It shows the worktre
 
 Left open after the code review of 80cbaf9..2243c14 (later commits `3f35901` and `2243c14` fixed the rest of what it found):
 
-- **Source Control overlap:** the Changes list, its M/A/D/U badges and the 2-second poll behind it sit in the Explorer. Check them against ticket 50 so the two do not build the same list twice.
+- **Source Control overlap:** checked against ticket 50; the conclusion is in its "Notes from ticket 49" section (keep the tree badges, drop the Changes panel once Source Control lists changes, share the watch and poll).
 - **Tabs after a restart:** file and diff tabs are not saved. They could be, once a restored tab checks that its worktree still exists.
 - **Linking:** a ticket's worktree is found by its branch name only. One linked by a commit trailer shows the main checkout.
 - **Base fallback:** when the merge-base lookup fails, the diff falls back to HEAD without saying so.
