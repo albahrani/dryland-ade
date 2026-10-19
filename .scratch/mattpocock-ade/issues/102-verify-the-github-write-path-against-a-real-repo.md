@@ -1,6 +1,7 @@
 # Verify the GitHub write path against a real repo
 
 Type: task
+Status: ready-for-human
 
 ## Question
 
