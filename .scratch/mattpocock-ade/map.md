@@ -160,6 +160,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Multiple projects](issues/42-multiple-projects.md): Several projects open at once with a project widget, an All Projects dialog and per-project tabs; sessions keep running across switches.
 
+- [Copilot CLI adapter](issues/43-copilot-cli-adapter.md): Copilot CLI is a first-class Agent CLI: user-level env-gated hook file, trusted folders edited under its lock, doctor install/remove.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.

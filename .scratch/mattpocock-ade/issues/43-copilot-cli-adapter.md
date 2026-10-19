@@ -1,7 +1,7 @@
 # Copilot CLI adapter
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 27, 36
 
 Spec: [spec](../spec.md), user stories 57, 86, 87. "Agent adapters" (user-level agent-config exception, status mapping table). ADRs 0005, 0006. Recorded file shapes and event order: `research/hook-status-mapping.md` (tickets 17 and 19).
@@ -25,12 +25,16 @@ The dev machine has no Copilot CLI. Build from the recorded shapes and event ord
 
 ## Acceptance criteria
 
-- [ ] `dryland doctor` can install, report the status of, and remove the hook file and the trust entries
-- [ ] Tested against a temp home directory: after install then remove, the config file is byte-identical to before and unrelated keys were never touched
-- [ ] An unparseable config file is skipped with a warning, never rewritten
-- [ ] The config lock file is honoured, and a config rewritten by Copilot between read and write is handled without losing either side's changes
-- [ ] The installed hook does nothing when `DRYLAND_PANE_KEY` is not set
+- [x] `dryland doctor` can install, report the status of, and remove the hook file and the trust entries
+- [x] Tested against a temp home directory: after install then remove, the config file is byte-identical to before and unrelated keys were never touched
+- [x] An unparseable config file is skipped with a warning, never rewritten
+- [x] The config lock file is honoured, and a config rewritten by Copilot between read and write is handled without losing either side's changes
+- [x] The installed hook does nothing when `DRYLAND_PANE_KEY` is not set
 - [ ] The first user-config write from the app asks for confirmation, with its own "do not ask again"
-- [ ] Creating a worktree for a Copilot session adds it to `trustedFolders`; pruning the worktree removes the entry
-- [ ] Contract tests with a fake-CLI stub fire each recorded Copilot hook event and assert the session state, including "launched" before any `sessionStart`
-- [ ] The launch types the skill command in Copilot's syntax without submitting
+- [x] Creating a worktree for a Copilot session adds it to `trustedFolders`; pruning the worktree removes the entry
+- [x] Contract tests with a fake-CLI stub fire each recorded Copilot hook event and assert the session state, including "launched" before any `sessionStart`
+- [x] The launch types the skill command in Copilot's syntax without submitting
+
+## Answer
+
+Built in commit 55a299b. COPILOT_CLI adapter (session id via --session-id, resume via --resume=<id> through a new resumeIdJoined field, session-exists check on ~/.copilot/session-state/<id>). core/copilot-config.ts owns the user-level files: a Dryland hook file in <copilot>/hooks/dryland.json whose per-event commands are gated on DRYLAND_PANE_KEY (bash and powershell), and trustedFolders edits done as text under config.json.trusted-folders.lock, so install then remove is byte-identical when the key exists, unparseable files are skipped with a warning, and a rewrite between read and write is re-read and merged. Hooks call the new internal 'dryland agent-hook <adapter> <event>', which reads the payload on stdin and maps event plus notification_type through the adapter's statusEvents (hookStateOf); sessionStart is unmapped, so launched comes from the spawn. dryland doctor gained a hooks check and --install-hooks/--remove-hooks; worktree prune untrusts the pruned path; the app's startWork installs the hook file and trusts the new worktree. Known limits: the UI confirmation dialog (user-config type, own do-not-ask-again) is implemented but not covered by a Playwright test, so that criterion stays unticked; no Settings-tab install/remove yet (ticket 56); absent trustedFolders key is left as an empty list after remove; the lock file name and the hook payload's sessionId key come from the recorded research, not a real Copilot, so the real-CLI re-check stays in the v1.0.0 smoke checklist.
