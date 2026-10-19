@@ -170,6 +170,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Release on GitHub keeps another user's claim](issues/101-release-on-github-should-not-clear-another-user-s.md): GitHub release removes only the caller's assignment and refuses another holder; resolve keeps the assignee.
 
+- [Remote trackers in the app](issues/48-remote-trackers-in-the-app.md): Remote trackers poll on a timer and focus, and a menu-bar tracker widget shows the tracker, lens mode and the off-default-branch warning.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
