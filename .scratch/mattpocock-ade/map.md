@@ -146,6 +146,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Explorer with file and diff tabs](issues/49-explorer-with-file-and-diff-tabs.md): Right-side Explorer follows the selected ticket or session worktree and opens read-only highlighted file tabs and diff tabs, watching only open directories.
 
+- [Source Control](issues/50-source-control.md): Source Control pane per worktree: staged and changed files, commit box, commit graph vs the default branch, unlinked branches.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
