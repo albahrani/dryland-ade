@@ -10,7 +10,9 @@ export function TerminalTab({ id, active }: { id: string; active: boolean }) {
     const element = container.current;
     if (element === null) return;
     const { term, fit } = getOrCreateTerminal(id);
-    term.open(element);
+    // A terminal opens once; its view moves back in when the tab is shown again after another project was shown.
+    if (term.element === undefined) term.open(element);
+    else element.appendChild(term.element);
     // A hidden tab has no size to fit to; it refits when it is shown again.
     const refit = () => {
       if (element.offsetWidth > 0 && element.offsetHeight > 0) fit.fit();

@@ -30,10 +30,18 @@ import {
   type MenuCommand,
   type ProjectView,
   type ResumedAllResult,
+  type SessionInfo,
   type StartWorkResult,
   type TicketActionResult,
   type TreeLoad,
 } from "../shared/api.ts";
+import {
+  addProject,
+  closeProject as closedProjects,
+  liveSessionCount,
+  type ProjectSummary,
+  projectSessions,
+} from "../shared/projects.ts";
 import { DEFAULT_SESSIONS_LAYOUT, parseSessionsLayout } from "../shared/sessions-view.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState, ticketKey } from "../shared/tabs.ts";
 import {
@@ -93,6 +101,7 @@ const terminals = createTerminalManager({
   },
   onExit: (id, exitCode) => {
     sendToWindow("terminal:exit", id, exitCode);
+    shellProjects.delete(id);
     terminalEnded(id);
   },
 });
@@ -132,6 +141,9 @@ const sendSessionStates = () => sendToWindow("sessions:states", status.states())
 const unseen = createUnseenOutput();
 const sendUnseen = () => sendToWindow("sessions:unseen", unseen.ids());
 
+/** The project each plain terminal was opened in, by terminal id. */
+const shellProjects = new Map<string, string>();
+
 /** The session running in terminal `id`, if one does. */
 const sessionIn = (id: string) => work.sessions().find((s) => s.terminalId === id);
 
@@ -151,9 +163,9 @@ const sendSettings = () => sendToWindow("settings:changed", settings());
 
 /** The sessions this app started, as the next-step rules read them: a waiting one ranks first, and one that is gone
  * leaves its claim possibly stale. */
-function liveSessions(): SessionSnapshot[] {
+function liveSessions(path: string): SessionSnapshot[] {
   const states = status.states();
-  return work.sessions().map(({ id, ticket }) => ({ id, ticket, state: states[id] ?? "launched" }));
+  return projectSessions(work.sessions(), path).map(({ id, ticket }) => ({ id, ticket, state: states[id] ?? "launched" }));
 }
 
 /**
@@ -205,7 +217,12 @@ function onLiveEvent(event: LiveEvent): void {
  */
 async function adoptHandStarted(event: LiveEvent): Promise<void> {
   if (project === null || event.pane === undefined) return;
-  const session = await work.adoptManual(project.path, event);
+  // The current project first; the shell may as well run in another open project.
+  let session: SessionInfo | null = null;
+  for (const path of [project.path, ...store.read().openProjects.filter((p) => p !== project?.path)]) {
+    session = await work.adoptManual(path, event);
+    if (session !== null) break;
+  }
   if (session === null) return;
   status.launched(session.id);
   sendToWindow("sessions:started", [session]);
@@ -225,7 +242,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
   try {
     const mainCheckout = await findMainCheckout(nodeProcessRunner, path);
     // One pass over the tracker files feeds both the tree and the rule engine, so markers and rows never disagree.
-    const { tree, snapshot, skillSetup } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions());
+    const { tree, snapshot, skillSetup } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions(path));
     const steps = nextSteps(snapshot);
     const ranked = nextUpMarkers(steps, Infinity);
     const nextUp = { markers: ranked.slice(0, NEXT_UP_COUNT), ranked };
@@ -279,6 +296,7 @@ async function currentState(): Promise<AppState> {
   const view = (await projectView())?.view ?? null;
   return {
     project: view,
+    openProjects: store.read().openProjects.map((path) => ({ path, name: basename(path) })),
     legendDismissed,
     liveEventsPanel,
     tabs: (view && tabs[view.path]) || EMPTY_TABS,
@@ -313,7 +331,9 @@ async function openProject(path: string): Promise<void> {
   explorerWatcher.stop();
   project = { path };
   const loaded = await projectView();
-  if (loaded?.view.tree.ok) store.update({ lastProject: path });
+  if (loaded?.view.tree.ok) {
+    store.update({ lastProject: path, openProjects: addProject(store.read().openProjects, path) });
+  }
   if (loaded?.mainCheckout) stopWatching = watchProject(loaded.mainCheckout, () => void refresh());
   // The project's auto-commit override shows in the menu and decides its writes.
   buildMenu();
@@ -357,14 +377,54 @@ async function pickProject(): Promise<void> {
   const result = await dialog.showOpenDialog(window, { title: "Open project", properties: ["openDirectory"] });
   const [path] = result.filePaths;
   if (result.canceled || path === undefined) return;
-  // Terminals belong to the project they were opened in.
-  if (path !== project?.path) {
-    // The manager reports no exit for terminals it closes, so their sessions are ended here.
-    const closing = terminals.liveIds();
-    terminals.closeAll();
-    closing.forEach(terminalEnded);
-  }
+  // Sessions and terminals of the project shown so far keep running: switching never interrupts an agent.
   await openProject(path);
+}
+
+/** Ends every session and terminal of project `path`; the manager reports no exit for terminals it closes. */
+function stopProject(path: string): void {
+  const sessions = projectSessions(work.sessions(), path);
+  const shells = [...shellProjects].flatMap(([id, owner]) => (owner === path ? [id] : []));
+  for (const { terminalId } of sessions) terminals.close(terminalId);
+  for (const id of shells) {
+    terminals.close(id);
+    shellProjects.delete(id);
+  }
+  sessions.forEach(({ terminalId }) => terminalEnded(terminalId));
+}
+
+/** Closes project `path`: its sessions and terminals end, and the next open project, if any, is shown. */
+async function closeOpenProject(path: string): Promise<void> {
+  const saved = store.read();
+  if (!saved.openProjects.includes(path)) return;
+  stopProject(path);
+  const { open, current } = closedProjects(saved.openProjects, path, project?.path ?? null);
+  store.update({ openProjects: open });
+  if (project?.path !== path) return;
+  if (current !== null) return openProject(current);
+  stopWatching?.();
+  stopWatching = null;
+  explorerWatcher.stop();
+  project = null;
+  store.update({ lastProject: null });
+  buildMenu();
+  sendSettings();
+}
+
+/** What the All Projects dialog shows of each open project. */
+async function projectSummaries(): Promise<ProjectSummary[]> {
+  const running = new Set(terminals.liveIds());
+  const sessions = work.sessions().filter((s) => running.has(s.terminalId));
+  const states = status.states();
+  return Promise.all(
+    store.read().openProjects.map(async (path): Promise<ProjectSummary> => {
+      const { tree } = await loadTree(path);
+      const base = { path, name: basename(path), liveSessions: liveSessionCount(sessions, states, path) };
+      return tree.ok
+        ? { ...base, tracker: "Local markdown", nextUp: tree.nextUp.markers[0] ?? null, error: null }
+        : { ...base, tracker: null, nextUp: null, error: `${tree.message} ${tree.nextAction}` };
+    }),
+  );
 }
 
 function createWindow(): void {
@@ -462,6 +522,15 @@ ipcMain.handle("project:open", async () => {
   await pickProject();
   return currentState();
 });
+ipcMain.handle("project:switch", async (_event, path: unknown) => {
+  if (typeof path === "string" && store.read().openProjects.includes(path)) await openProject(path);
+  return currentState();
+});
+ipcMain.handle("project:close", async (_event, path: unknown) => {
+  if (typeof path === "string") await closeOpenProject(path);
+  return currentState();
+});
+ipcMain.handle("projects:summaries", () => projectSummaries());
 ipcMain.handle("tabs:save", (_event, tabs: TabsState) => {
   if (project === null) return;
   const saved = store.read().tabs;
@@ -534,7 +603,9 @@ ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();
   if (loaded === null) return null;
-  return work.openShell(loaded.mainCheckout ?? loaded.view.path);
+  const id = work.openShell(loaded.mainCheckout ?? loaded.view.path);
+  shellProjects.set(id, loaded.view.path);
+  return id;
 });
 ipcMain.handle("agents:list", () => work.listAgents());
 ipcMain.handle("skills:list", async (_event, agentId: unknown): Promise<string[]> => {
@@ -659,6 +730,8 @@ void app.whenReady().then(async () => {
   buildMenu();
   createWindow();
   const { lastProject } = store.read();
+  // The window shows the project last shown; the other open projects load when the user switches to them.
+  if (lastProject !== null) store.update({ openProjects: addProject(store.read().openProjects, lastProject) });
   if (lastProject !== null) {
     await openProject(lastProject);
     await reconcileSessions();

@@ -5,6 +5,7 @@ import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.t
 import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
 import { isRetentionDays } from "../shared/settings-change.ts";
 import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
+import { parseProjects } from "../shared/projects.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
 import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
 
@@ -12,6 +13,8 @@ import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-
 export interface UiState {
   /** The project (repo path) open when the app last ran. */
   lastProject: string | null;
+  /** The projects open in the app, in the order they were opened; `lastProject` is the one shown. */
+  openProjects: string[];
   legendDismissed: boolean;
   /** The editor tabs open in each project, by project path. */
   tabs: Record<string, TabsState>;
@@ -34,6 +37,7 @@ export interface UiState {
 
 const DEFAULTS: UiState = {
   lastProject: null,
+  openProjects: [],
   legendDismissed: false,
   tabs: {},
   sessionsLayout: {},
@@ -84,6 +88,7 @@ function parse(text: string): UiState {
   if (raw === null || typeof raw !== "object") return { ...DEFAULTS };
   return {
     lastProject: typeof raw.lastProject === "string" ? raw.lastProject : DEFAULTS.lastProject,
+    openProjects: parseProjects(raw.openProjects),
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
     tabs: parseAllTabs(raw.tabs),
     sessionsLayout: parseAllLayouts(raw.sessionsLayout),

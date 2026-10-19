@@ -22,6 +22,8 @@ import {
   trackStateSince,
 } from "../../shared/sessions-view.ts";
 import { SESSION_META } from "../../shared/session-meta.ts";
+import { AllProjectsDialog, ProjectWidget } from "./ProjectsUi.tsx";
+import { projectSessions } from "../../shared/projects.ts";
 import { SessionsView } from "./SessionsView.tsx";
 import { SkillSetupPanel } from "./SkillSetupPanel.tsx";
 import { sessionTitle } from "../../shared/work-target.ts";
@@ -228,7 +230,9 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
-  const [dialog, setDialog] = useState<MenuCommand | null>(null);
+  const [dialog, setDialog] = useState<MenuCommand | "all-projects" | null>(null);
+  // The tabs each project had when the user left it, terminals included, so coming back finds them as they were.
+  const projectTabs = useRef(new Map<string, TabsState>());
   // A session waiting for the user to confirm it should stop.
   const [stopping, setStopping] = useState<SessionInfo | null>(null);
   // When each session entered its state, as this window saw it; for the Sessions view's ages.
@@ -320,12 +324,15 @@ export function App() {
 
   if (state === null) return null;
   const { project, legendDismissed, tabs, liveEventsPanel, sessionStates, unseenSessions, settings } = state;
+  // Sessions of other projects keep running and reporting; the views show the current project's.
+  const everySession = [...sessions.values()];
+  const projectOnly = projectSessions(everySession, project?.path ?? null);
   const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
   const isUnseen = (session: SessionInfo) => unseenSessions.includes(session.id);
-  const ticketSessionMap = ticketSessions([...sessions.values()], sessionStates);
+  const ticketSessionMap = ticketSessions(projectOnly, sessionStates);
   const pausedMap = pausedSessions(
     project?.tree.ok ? project.tree.pausedClaims : {},
-    [...sessions.values()],
+    projectOnly,
     sessionStates,
   );
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
@@ -346,14 +353,26 @@ export function App() {
     }
     setTabs(closeTab(tabs, tabKey(ref)));
   };
-  const openProject = async () => {
-    const next = await window.dryland.openProject();
-    // Switching projects kills the main process's terminals; drop the views of those the new state has no tab for.
-    const kept = new Set(next.tabs.open.flatMap((tab) => (tab.kind === "terminal" ? [tab.id] : [])));
-    for (const id of terminalTitles.keys()) if (!kept.has(id)) disposeTerminal(id);
-    setTerminalTitles((current) => new Map([...current].filter(([id]) => kept.has(id))));
-    setSessions((current) => new Map([...current].filter(([id]) => kept.has(id))));
-    setState(next);
+  /** Shows the state of another project, with the tabs it had when the user left it. */
+  const showProjectState = (next: AppState) => {
+    if (project !== null) projectTabs.current.set(project.path, tabs);
+    const remembered = next.project === null ? undefined : projectTabs.current.get(next.project.path);
+    setState({ ...next, tabs: remembered ?? next.tabs });
+  };
+  const openProject = async () => showProjectState(await window.dryland.openProject());
+  const switchProject = async (path: string) => {
+    if (path !== project?.path) showProjectState(await window.dryland.switchProject(path));
+  };
+  const closeProject = async (path: string) => {
+    projectTabs.current.delete(path);
+    const next = await window.dryland.closeProject(path);
+    // Its sessions and terminals ended; drop their views.
+    for (const session of everySession) {
+      if (session.project !== path) continue;
+      disposeTerminal(session.terminalId);
+    }
+    setSessions((current) => new Map([...current].filter(([, session]) => session.project !== path)));
+    setState({ ...next, tabs: next.project === null ? next.tabs : (projectTabs.current.get(next.project.path) ?? next.tabs) });
   };
   /**
    * Shows terminal `id` in a new, focused tab, or in place of the tab `replacing`; registered first, so its first
@@ -417,7 +436,7 @@ export function App() {
         (current) =>
           current && { ...current, tabs: replaceTab(current.tabs, key, { kind: "ticket", map: ref.map, id: ref.id }) },
       );
-    const live = [...sessions.values()]
+    const live = projectSessions([...sessions.values()], state?.project?.path ?? null)
       .filter((s) => s.ticket !== null && ticketKey(s.ticket) === ticketKey(ref) && sessionState(s) !== "ended")
       .at(-1);
     if (live !== undefined) {
@@ -439,7 +458,7 @@ export function App() {
   };
   /** The last line the newest stopped session on a ticket printed, while this run still holds its terminal. */
   const pausedLastLine = (key: string): string | null => {
-    const stopped = [...sessions.values()].filter((s) => s.ticket !== null && ticketKey(s.ticket) === key);
+    const stopped = projectOnly.filter((s) => s.ticket !== null && ticketKey(s.ticket) === key);
     const newest = stopped[stopped.length - 1];
     return newest === undefined ? null : lastLine(newest.terminalId);
   };
@@ -525,7 +544,7 @@ export function App() {
       : explorerHint(activeTab, sessions);
   const activeDocument = activeTab?.kind === "ticket" || activeTab?.kind === "map" ? activeTab : undefined;
   const activeSession = activeTab?.kind === "terminal" ? sessions.get(activeTab.id) : undefined;
-  const allSessions = [...sessions.values()];
+  const allSessions = projectOnly;
   const { hidden: hiddenSessions, open: openSessions } = splitSessions(allSessions, sessionStates, tabs.open);
   const selected = selectedSession(activeTab, allSessions, sessionStates);
   const liveWaiting = allSessions.filter((session) => sessionState(session) === "waiting").length;
@@ -550,9 +569,13 @@ export function App() {
   return (
     <div className="shell">
       <header className="menubar">
-        <button className="project-widget" onClick={() => void openProject()}>
-          {project === null ? "Open project..." : project.name}
-        </button>
+        <ProjectWidget
+          current={project === null ? null : { path: project.path, name: project.name }}
+          open={state.openProjects}
+          onSwitch={(path) => void switchProject(path)}
+          onOpen={() => void openProject()}
+          onAll={() => setDialog("all-projects")}
+        />
         <button className="project-widget" disabled={project === null} onClick={() => void newTerminal()}>
           New terminal
         </button>
@@ -678,7 +701,7 @@ export function App() {
             key={tabKey(activeDocument)}
             item={activeDocument}
             project={project}
-            sessions={[...sessions.values()]}
+            sessions={projectOnly}
             sessionHandlers={sessionHandlers}
             paused={pausedMap}
             lastOutput={pausedLastLine}
@@ -782,6 +805,19 @@ export function App() {
           }}
           onLiveEventsPanel={setLiveEventsPanel}
           onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "all-projects" && (
+        <AllProjectsDialog
+          current={project?.path ?? null}
+          sessions={everySession.filter((session) => sessionState(session) !== "ended")}
+          revision={`${state.openProjects.map((p) => p.path).join("|")}#${everySession.map((s) => sessionState(s)).join(",")}`}
+          onOpen={(path) => {
+            setDialog(null);
+            void switchProject(path);
+          }}
+          onClose={() => setDialog(null)}
+          onCloseProject={(path) => void closeProject(path)}
         />
       )}
       {quitRequest !== null && <QuitDialog request={quitRequest} onClose={() => setQuitRequest(null)} />}

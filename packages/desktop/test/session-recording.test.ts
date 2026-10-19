@@ -36,6 +36,7 @@ function sessionIn(repo: string, overrides: Partial<SessionInfo> = {}): SessionI
     terminalId: "t1",
     agent: { id: "claude-code", name: "Claude Code" },
     agentSessionId: "launched-id",
+    project: repo,
     ticket: { map: "shop", id: "02" },
     map: "shop",
     worktree: { branch: "shop/02-grill", path: repo },

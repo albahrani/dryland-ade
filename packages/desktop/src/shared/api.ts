@@ -8,6 +8,7 @@ import type {
   TicketsTree,
 } from "@dryland/core";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
+import type { ProjectSummary } from "./projects.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "./quit.ts";
 import type { NextUp } from "./next-up.ts";
 import type { CommitGraph, CommitResult, SourceControlStatus, UnlinkedBranch } from "./source-control.ts";
@@ -65,6 +66,8 @@ export interface AppSettings {
 
 export interface AppState {
   project: ProjectView | null;
+  /** The projects open in the app, in the order they were opened; `project` is the one shown. */
+  openProjects: { path: string; name: string }[];
   legendDismissed: boolean;
   liveEventsPanel: LiveEventsPanelMode;
   /** The sessions this app started, in the order they started. */
@@ -102,6 +105,8 @@ export interface SessionInfo {
   agent: { id: string; name: string };
   /** The Agent CLI's own id of the session, given at launch; `null` for a CLI that cannot be told one. */
   agentSessionId: string | null;
+  /** The project it belongs to: the path the user opened, as `startWork` was given it. */
+  project: string;
   /** The ticket it works on; `null` for a map's own session or a new map's. */
   ticket: TicketRef | null;
   /** The map it works on: the ticket's, the map continued, or `null` for a map not yet charted. */
@@ -142,6 +147,12 @@ export interface DrylandApi {
   getState(): Promise<AppState>;
   /** Shows the folder picker; resolves with the state after it, unchanged if the user cancels. */
   openProject(): Promise<AppState>;
+  /** Shows another open project, leaving its sessions and the current project's running. */
+  switchProject(path: string): Promise<AppState>;
+  /** Closes an open project and ends its sessions and terminals; shows the next open project. */
+  closeProject(path: string): Promise<AppState>;
+  /** Each open project's tracker, live session count and next-up item. */
+  projectSummaries(): Promise<ProjectSummary[]>;
   dismissLegend(): Promise<void>;
   /** Remembers how much of the live-events panel shows. */
   setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;

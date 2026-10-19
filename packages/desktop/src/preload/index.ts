@@ -6,6 +6,9 @@ import type { AppSettings, DrylandApi, MenuCommand, ProjectView, SessionInfo } f
 const api: DrylandApi = {
   getState: () => ipcRenderer.invoke("state:get"),
   openProject: () => ipcRenderer.invoke("project:open"),
+  switchProject: (path) => ipcRenderer.invoke("project:switch", path),
+  closeProject: (path) => ipcRenderer.invoke("project:close", path),
+  projectSummaries: () => ipcRenderer.invoke("projects:summaries"),
   dismissLegend: () => ipcRenderer.invoke("legend:dismiss"),
   setLiveEventsPanel: (mode) => ipcRenderer.invoke("live-events:mode", mode),
   saveTabs: (tabs) => ipcRenderer.invoke("tabs:save", tabs),

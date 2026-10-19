@@ -8,6 +8,7 @@ const session = (id: string): SessionInfo => ({
   terminalId: `t-${id}`,
   agent: { id: "claude-code", name: "Claude Code" },
   agentSessionId: id,
+  project: "/p",
   ticket: { map: "shop", id },
   map: "shop",
   worktree: { branch: "b", path: "/w" },

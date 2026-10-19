@@ -14,9 +14,19 @@ const SETTINGS_DEFAULTS = {
   stopConfirmation: "busy-or-unseen",
   resumeOnStart: false,
   sessionRetentionDays: 30,
+  openProjects: [] as string[],
 };
 
 describe("ui state store", () => {
+  it("remembers the open projects across restarts, dropping what is not a path", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ openProjects: ["/repos/shop", "/repos/blog"] });
+    expect(createUiStateStore(file).read().openProjects).toEqual(["/repos/shop", "/repos/blog"]);
+
+    writeFileSync(file, JSON.stringify({ openProjects: ["/repos/shop", 4, "/repos/shop"] }));
+    expect(createUiStateStore(file).read().openProjects).toEqual(["/repos/shop"]);
+  });
+
   it("starts with no project and the legend showing", () => {
     expect(createUiStateStore(stateFile()).read()).toEqual({
       lastProject: null,

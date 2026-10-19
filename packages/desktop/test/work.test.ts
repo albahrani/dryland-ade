@@ -299,7 +299,12 @@ describe("continuing a map and starting a new one", () => {
 
     const { session } = await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code");
 
-    expect(session).toMatchObject({ ticket: null, map: "shop", worktree: { branch: "shop/scratch-wayfinder" } });
+    expect(session).toMatchObject({
+      ticket: null,
+      map: "shop",
+      project: repo,
+      worktree: { branch: "shop/scratch-wayfinder" },
+    });
     expect(provider.spawned[0]?.options.cwd).toBe(session.worktree.path);
     provider.spawned[0]?.emit("❯ ");
     await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/wayfinder shop"));
@@ -567,6 +572,7 @@ describe("sessions started by hand in a terminal", () => {
       id: "by-hand-1",
       terminalId: shell,
       manual: true,
+      project: repo,
       agent: { id: "claude-code" },
       ticket: { map: "shop", id: "02" },
       map: "shop",
