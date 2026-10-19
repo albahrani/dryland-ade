@@ -41,3 +41,19 @@ Ticket 49 (Explorer) already built part of what this ticket describes. Settle it
 ## Answer
 
 Built the Source Control pane (commits 4c81ed4, 51cdefa): packages/desktop/src/main/source-control.ts reads and writes git through the process runner (status staged vs changed against HEAD, stage, unstage, commit, graph vs the default branch, unlinked worktrees), shown by SourceControl.tsx under the Explorer. The Explorer's Changes panel is gone (badges stay), and resolveRoot now selects a trailer-linked branch as its ticket's worktree. Updates ride the Explorer's git-dir watch plus a 2s poll. Decisions: file clicks open the existing diff tab (against the worktree base, not HEAD); unmerged files list once as changed; a 'Show' button on an unlinked branch re-points both panes until the tab changes. Known limits: the graph is a flat list (branch commits, then a few base commits), unlinked lists worktrees only (not worktree-less branches), renames show as delete plus add, and the Explorer and Source Control each run their own 2s poll.
+
+## Follow-ups
+
+Left open after the code review of 2cbc828..4c81ed4 (`51cdefa` fixed unmerged files and the link-kind typing):
+
+- **Graph:** a flat list (the branch's commits, then a few base commits), with no merges or lanes. It caps the branch at 50 commits.
+- **Trailer link under its ticket:** a branch linked only by commit trailer is selected as its ticket's worktree and noted "Linked by commit trailer". Nothing lists it under the ticket in the Tickets view.
+- **Unlinked branches:** only worktrees are listed. A branch with no worktree is never shown.
+- **"Show" button:** an unlinked branch can be pointed at both panes until the tab changes (`pinned` in `App.tsx`). The ticket did not ask for it and it works like a branch picker; drop it or settle it with a decision.
+- **Two pollers:** Source Control and the Explorer each poll git every 2 seconds for the same worktree. The ticket asked to lift one shared refresh signal out of `Explorer.tsx`.
+- **Renames:** `--no-renames` shows a rename as a delete and an add, and a staged rename splits across both lists.
+- **Diff base:** a file's diff tab compares against the worktree's base, not HEAD, so a staged-only change does not open as "what this commit would contain".
+- **Duplicated git code:** `STATUS` and the `--no-optional-locks` wrapper repeat between `explorer.ts` and `source-control.ts`; the worktree-entry shape is spelled inline in both. `createSourceControl` is rebuilt on every IPC call, as `createExplorer` is.
+- **Component shape:** `SourceControl.tsx` mixes root resolution, polling, loading, commit-box state and rendering; a hook could take the data half.
+- **Test gaps:** no test for renames, and the unlinked and graph panes have no e2e beyond the commit path.
+- **Flaky test found on the way:** `start-work.spec.ts` "shows the session's state" raced a 60 ms "ended" badge on the ticket (1 of 20 failures before this ticket, 11 of 20 after). Fixed in `6ee5f6e` to check the settled state.
