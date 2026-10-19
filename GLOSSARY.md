@@ -40,7 +40,7 @@ The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
 
 **Claim**:
-A mark on a ticket that someone is working on it, naming its holder (the branch the work happens on) and when it was made. Taken by `ticket claim`, undone by `ticket release`.
+A mark on a ticket that someone is working on it, naming its holder (the branch the work happens on; on a GitHub tracker the assignee's `gh` login) and, on local markdown, when it was made. Taken by `ticket claim`, undone by `ticket release`.
 _Avoid_: Lock, assignment
 
 **Stale claim**:
