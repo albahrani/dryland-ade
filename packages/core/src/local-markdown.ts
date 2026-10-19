@@ -50,8 +50,8 @@ function claimAnnotation(claim: ClaimRecord): string {
 
 /**
  * Rewrites one header field of a ticket: `replace` gets the field's current value (`""` when absent) and
- * returns the lines to put there, none to remove it. A field that is absent goes after the last header
- * field, or under the title. With `dropAnnotations` the Dryland annotation lines of the header go too.
+ * returns the lines to put there, none to remove it. A field that is absent goes after the header fields
+ * that come before it (`Type:`, `Status:`, `Blocked by:`), or under the title. With `dropAnnotations` the Dryland annotation lines of the header go too.
  * Everything else in the file, including line endings, is left as it was.
  */
 function rewriteHeaderField(
@@ -67,21 +67,36 @@ function rewriteHeaderField(
   const titleIndex = lines.findIndex((line) => line.startsWith("# "));
 
   let fieldIndex = -1;
-  let lastFieldIndex = titleIndex;
   const annotationIndexes = new Set<number>();
+  // The header block is the run of lines from the first field to the next blank line. A field further
+  // down is still found and rewritten, but a missing one is only ever added inside the block.
+  let blockStarted = false;
+  let blockEnded = false;
+  let typeEnd = titleIndex;
+  let statusEnd = -1;
   for (let i = titleIndex + 1; i < lines.length; i++) {
     const line = text(lines[i] ?? "");
-    if (line.trim() === "") continue;
+    if (line.trim() === "") {
+      if (blockStarted) blockEnded = true;
+      continue;
+    }
     if (CLAIM_ANNOTATION_LINE.test(line)) {
       annotationIndexes.add(i);
-      lastFieldIndex = i;
+      blockStarted = true;
+      if (!blockEnded) statusEnd = i;
       continue;
     }
     const match = FIELD_LINE.exec(line);
     if (match?.[1] === undefined) break;
-    if (match[1].toLowerCase() === field && fieldIndex === -1) fieldIndex = i;
-    lastFieldIndex = i;
+    const key = match[1].toLowerCase();
+    if (key === field && fieldIndex === -1) fieldIndex = i;
+    blockStarted = true;
+    if (blockEnded) continue;
+    if (key === "type") typeEnd = i;
+    else if (key === "status" || key === "blocked by") statusEnd = i;
   }
+  // `Type:`, then `Status:` with its annotation, then `Blocked by:`.
+  const afterIndex = field === "status" ? typeEnd : statusEnd === -1 ? typeEnd : statusEnd;
 
   const current = fieldIndex === -1 ? "" : (FIELD_LINE.exec(text(lines[fieldIndex] ?? ""))?.[2] ?? "").trim();
   const replacement = replace(current);
@@ -91,7 +106,7 @@ function rewriteHeaderField(
     return texts.map((t, i) => `${t}${i === texts.length - 1 ? own : own || fileEol}`);
   };
 
-  const insertAfter = fieldIndex === -1 ? lastFieldIndex : -1;
+  const insertAfter = fieldIndex === -1 ? afterIndex : -1;
   const out: string[] = [];
   lines.forEach((line, i) => {
     const dropped = options.dropAnnotations && annotationIndexes.has(i);
