@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SessionInfo } from "../../shared/api.ts";
-import type { ProjectSummary } from "../../shared/projects.ts";
+import type { OpenProject, ProjectSummary } from "../../shared/projects.ts";
 import { sessionTitle } from "../../shared/work-target.ts";
-
-interface OpenProject {
-  path: string;
-  name: string;
-}
 
 /** The menu bar's project widget: the current project, and a menu to switch between the open ones. */
 export function ProjectWidget({
@@ -136,7 +131,7 @@ export function AllProjectsDialog({
         {closing !== null && (
           <div className="notice" role="alertdialog" aria-label="Close project">
             <p>
-              Close {closing.split(/[\\/]/).at(-1)}?
+              Close {summaries?.find((summary) => summary.path === closing)?.name ?? closing}?
               {closingSessions.length > 0
                 ? " Its running sessions stop; their claims are kept, so they can be resumed:"
                 : " No session is running in it."}

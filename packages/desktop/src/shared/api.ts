@@ -8,7 +8,7 @@ import type {
   TicketsTree,
 } from "@dryland/core";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
-import type { ProjectSummary } from "./projects.ts";
+import type { OpenProject, ProjectSummary } from "./projects.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "./quit.ts";
 import type { NextUp } from "./next-up.ts";
 import type { CommitGraph, CommitResult, SourceControlStatus, UnlinkedBranch } from "./source-control.ts";
@@ -67,7 +67,7 @@ export interface AppSettings {
 export interface AppState {
   project: ProjectView | null;
   /** The projects open in the app, in the order they were opened; `project` is the one shown. */
-  openProjects: { path: string; name: string }[];
+  openProjects: OpenProject[];
   legendDismissed: boolean;
   liveEventsPanel: LiveEventsPanelMode;
   /** The sessions this app started, in the order they started. */

@@ -1,5 +1,11 @@
 import type { NextUpMarker, SessionState } from "@dryland/core";
 
+/** An open project as the project widget lists it: the path the user opened, and its folder name. */
+export interface OpenProject {
+  path: string;
+  name: string;
+}
+
 /** One open project as the All Projects dialog lists it. */
 export interface ProjectSummary {
   path: string;

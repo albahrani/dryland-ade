@@ -11,6 +11,10 @@ _Avoid_: IDE, editor
 **Dryland ADE**:
 The product's official name; "Dryland" is its short form. An unofficial, community-made companion for Matt Pocock's skills.
 
+**Project**:
+A repo opened in the ADE, shown by the folder name. Several can be open at once; one is shown at a time, each keeping its own tabs. Sessions of the other open projects keep running, and closing a project ends its sessions, which then read as paused sessions.
+_Avoid_: Workspace, repo (for the open one)
+
 **Skill workflow**:
 The intended sequence of Matt Pocock skills and the artifacts they produce and consume (maps, tickets, specs, glossary, ADRs).
 _Avoid_: Pipeline, process
