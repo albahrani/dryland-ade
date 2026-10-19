@@ -150,6 +150,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Header fields stay in the header block](issues/82-header-fields-inserted-below-the-spec-line.md): A missing Status or Blocked by is added under Type, never below the Spec paragraph.
 
+- [Status below a blank line anchors a new Blocked by](issues/84-status-below-a-blank-line-anchors-a-new-blocked-by.md): A Status anywhere, with its annotation, anchors a new Blocked by; an orphan annotation anchors nothing.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
