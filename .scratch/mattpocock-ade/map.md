@@ -148,6 +148,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Source Control](issues/50-source-control.md): Source Control pane per worktree: staged and changed files, commit box, commit graph vs the default branch, unlinked branches.
 
+- [Header fields stay in the header block](issues/82-header-fields-inserted-below-the-spec-line.md): A missing Status or Blocked by is added under Type, never below the Spec paragraph.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
