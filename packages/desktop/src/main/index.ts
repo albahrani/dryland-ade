@@ -731,7 +731,6 @@ void app.whenReady().then(async () => {
   createWindow();
   const { lastProject } = store.read();
   // The window shows the project last shown; the other open projects load when the user switches to them.
-  if (lastProject !== null) store.update({ openProjects: addProject(store.read().openProjects, lastProject) });
   if (lastProject !== null) {
     await openProject(lastProject);
     await reconcileSessions();
