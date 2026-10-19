@@ -154,13 +154,22 @@ describe("GitHub backend writes", () => {
     expect(writes(calls)).toContain(`api -X DELETE ${API}/issues/2/assignees -f assignees[]=me`);
   });
 
-  it("releases by clearing the assignees", async () => {
+  it("releases by clearing the user's own assignment", async () => {
     const calls: string[] = [];
+    const world = baseWorld();
+    world.issues[4] = issue(4, { assignees: [{ login: "me" }] });
 
-    const { ticket } = await releaseTicket(fakeGh(baseWorld(), calls), repo(), "1/4");
+    const { ticket } = await releaseTicket(fakeGh(world, calls), repo(), "1/4");
 
     expect(ticket).toMatchObject({ state: "open", claimant: null });
-    expect(writes(calls)).toEqual([`api -X DELETE ${API}/issues/4/assignees -f assignees[]=ada`]);
+    expect(writes(calls)).toEqual([`api -X DELETE ${API}/issues/4/assignees -f assignees[]=me`]);
+  });
+
+  it("refuses to release another user's claim, naming the holder, and changes nothing", async () => {
+    const calls: string[] = [];
+
+    await expect(releaseTicket(fakeGh(baseWorld(), calls), repo(), "1/4")).rejects.toThrow(/claimed by ada, not by you/);
+    expect(writes(calls)).toEqual([]);
   });
 
   it("resolves by writing the answer into the body and closing in one call", async () => {

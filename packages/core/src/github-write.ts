@@ -189,7 +189,7 @@ export async function claimGithubTicket(
   return { ticket: { ...ticket, state: "claimed", claimant: login }, warnings: [], alreadyHeld: false };
 }
 
-/** Clears every assignee of a claimed issue. */
+/** Clears the user's own assignment of a claimed issue; another user's claim is left alone. */
 export async function releaseGithubTicket(
   runner: ProcessRunner,
   cwd: string,
@@ -202,9 +202,14 @@ export async function releaseGithubTicket(
       `Run \`dryland ticket show ${nameOf(ticket)}\` to see its state.`,
     );
   }
-  const issue = await fetchIssue(runner, cwd, ticket.id);
-  const assignees = (issue.assignees ?? []).flatMap((a) => text("assignees[]", a.login));
-  await ghRun(runner, cwd, ["api", "-X", "DELETE", `${issuePath(ticket.id)}/assignees`, ...assignees]);
+  const login = await me(runner, cwd);
+  if (ticket.claimant !== login) {
+    throw new DrylandError(
+      `Ticket ${nameOf(ticket)} is claimed by ${ticket.claimant}, not by you (${login}), so it is not released.`,
+      `Ask ${ticket.claimant} to release it, or unassign them on GitHub if the claim is stale.`,
+    );
+  }
+  await ghRun(runner, cwd, ["api", "-X", "DELETE", `${issuePath(ticket.id)}/assignees`, ...text("assignees[]", login)]);
   return { ticket: { ...ticket, state: "open", claimant: null }, warnings: [] };
 }
 
