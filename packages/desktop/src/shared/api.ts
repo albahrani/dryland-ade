@@ -13,6 +13,7 @@ import type { NextUp } from "./next-up.ts";
 import type { CommitGraph, CommitResult, SourceControlStatus, UnlinkedBranch } from "./source-control.ts";
 import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
+import type { SettingsChange } from "./settings-change.ts";
 import type { StopConfirmation } from "./stop-session.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 import type { ConfirmationType, DontAsk, TicketAction } from "./tracker-actions.ts";
@@ -50,6 +51,10 @@ export const isLiveEventsPanelMode = (value: unknown): value is LiveEventsPanelM
 export interface AppSettings {
   /** Whether tracker writes in the open project are committed: its override, else the global setting. */
   autoCommit: boolean;
+  /** The global auto-commit setting, which the open project's override, if any, wins over. */
+  globalAutoCommit: boolean;
+  /** The open project's auto-commit override; `null` when it has none or no project is open. */
+  projectAutoCommit: boolean | null;
   dontAsk: DontAsk;
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
@@ -128,7 +133,7 @@ export interface ResumedAllResult {
 export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
 /** What the application menu asks of the window: the dialogs that live in the renderer. */
-export type MenuCommand = "new-ticket" | "new-map" | "new-scratch";
+export type MenuCommand = "new-ticket" | "new-map" | "new-scratch" | "settings";
 
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {
@@ -193,6 +198,8 @@ export interface DrylandApi {
   runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */
   dontAskAgain(type: ConfirmationType): Promise<void>;
+  /** Applies a change made in the Settings dialog; the new settings reach `onSettingsChanged`. */
+  changeSetting(change: SettingsChange): Promise<void>;
   writeTerminal(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
   /** Kills the terminal's process; a session's terminal is left running, hidden, until its session is stopped. */

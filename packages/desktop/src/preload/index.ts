@@ -31,6 +31,7 @@ const api: DrylandApi = {
   resumeAll: (map) => ipcRenderer.invoke("work:resume-all", map),
   runTicketAction: (action, commit) => ipcRenderer.invoke("tracker:run", action, commit),
   dontAskAgain: (type) => ipcRenderer.invoke("confirmations:dont-ask", type),
+  changeSetting: (change) => ipcRenderer.invoke("settings:change", change),
   writeTerminal: (id, data) => ipcRenderer.send("terminal:write", id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send("terminal:resize", id, cols, rows),
   closeTerminal: (id) => ipcRenderer.send("terminal:close", id),

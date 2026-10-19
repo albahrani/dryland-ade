@@ -50,6 +50,7 @@ import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandl
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
 import { NewMapDialog, NewScratchDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
+import { SettingsDialog } from "./SettingsDialog.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
@@ -767,6 +768,20 @@ export function App() {
             setDialog(null);
             await startWork({ kind: "scratch" }, agentId, skill);
           }}
+        />
+      )}
+      {dialog === "settings" && (
+        <SettingsDialog
+          settings={settings}
+          projectName={project?.name ?? null}
+          liveEventsPanel={liveEventsPanel}
+          legendDismissed={legendDismissed}
+          onChange={(change) => {
+            if (change.kind === "reset-legend") setState({ ...state, legendDismissed: false });
+            void window.dryland.changeSetting(change);
+          }}
+          onLiveEventsPanel={setLiveEventsPanel}
+          onClose={() => setDialog(null)}
         />
       )}
       {quitRequest !== null && <QuitDialog request={quitRequest} onClose={() => setQuitRequest(null)} />}

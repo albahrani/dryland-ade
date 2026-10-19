@@ -20,7 +20,7 @@ import {
   reconcileSessionIndex,
   startLiveListener,
 } from "@dryland/core";
-import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions, powerMonitor } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor } from "electron";
 import {
   type AppSettings,
   type AppState,
@@ -36,7 +36,6 @@ import {
 import { DEFAULT_SESSIONS_LAYOUT, parseSessionsLayout } from "../shared/sessions-view.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState, ticketKey } from "../shared/tabs.ts";
 import {
-  ASK_ALWAYS,
   autoCommitFor,
   isConfirmationType,
   isTicketAction,
@@ -66,7 +65,7 @@ import { createSessionRecorder } from "./session-recording.ts";
 import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { createUnseenOutput } from "./unseen-output.ts";
-import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../shared/stop-session.ts";
+import { isSettingsChange, settingsPatch } from "../shared/settings-change.ts";
 import { createExplorer } from "./explorer.ts";
 import { createExplorerWatcher } from "./explorer-watch.ts";
 import { createSourceControl } from "./source-control.ts";
@@ -138,6 +137,8 @@ function settings(): AppSettings {
   const saved = store.read();
   return {
     autoCommit: project === null ? saved.autoCommit : autoCommitFor(saved, project.path),
+    globalAutoCommit: saved.autoCommit,
+    projectAutoCommit: project === null ? null : (saved.projectAutoCommit[project.path] ?? null),
     dontAsk: saved.dontAsk,
     stopConfirmation: saved.stopConfirmation,
     resumeOnStart: saved.resumeOnStart,
@@ -391,82 +392,15 @@ function createWindow(): void {
   else void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 }
 
-/** Applies a settings change made from the menu: stored, shown in the menu, and sent to the window. */
+/** Stores a settings change and sends the new settings to the window. */
 function changeSettings(patch: Partial<UiState>): void {
   store.update(patch);
-  buildMenu();
   sendSettings();
-}
-
-/** Auto-commit, globally and for the open project, and the reset of the write confirmations, until Settings has them. */
-function trackerMenu(): MenuItemConstructorOptions[] {
-  const saved = store.read();
-  const path = project?.path;
-  const override = path === undefined ? undefined : saved.projectAutoCommit[path];
-  const setOverride = (value: boolean | undefined) => {
-    if (path === undefined) return;
-    const overrides = { ...store.read().projectAutoCommit };
-    if (value === undefined) delete overrides[path];
-    else overrides[path] = value;
-    changeSettings({ projectAutoCommit: overrides });
-  };
-  return [
-    {
-      label: "Auto-commit Tracker Writes",
-      type: "checkbox",
-      checked: saved.autoCommit,
-      click: () => changeSettings({ autoCommit: !store.read().autoCommit }),
-    },
-    {
-      label: "Auto-commit in This Project",
-      enabled: path !== undefined,
-      submenu: [
-        {
-          label: "Use the Global Setting",
-          type: "radio",
-          checked: override === undefined,
-          click: () => setOverride(undefined),
-        },
-        { label: "On", type: "radio", checked: override === true, click: () => setOverride(true) },
-        { label: "Off", type: "radio", checked: override === false, click: () => setOverride(false) },
-      ],
-    },
-    { type: "separator" },
-    { label: "Reset Write Confirmations", click: () => changeSettings({ dontAsk: ASK_ALWAYS }) },
-  ];
 }
 
 /** Shows what went wrong with sessions resumed from the menu or at start; nothing when all went well. */
 function notifyWarnings(warnings: string[]): void {
   if (warnings.length > 0) sendToWindow("notice", warnings.join(" "));
-}
-
-/** Resume all and when stopping a session asks first, until Settings has them. */
-function sessionsMenu(): MenuItemConstructorOptions[] {
-  const { stopConfirmation: current, resumeOnStart } = store.read();
-  return [
-    {
-      label: "Resume All Paused Sessions",
-      enabled: project !== null,
-      click: () => void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings)),
-    },
-    {
-      label: "Resume Sessions on Start",
-      type: "checkbox",
-      checked: resumeOnStart,
-      click: () => changeSettings({ resumeOnStart: !store.read().resumeOnStart }),
-    },
-    { type: "separator" },
-    {
-      label: "Ask Before Stopping a Session",
-      submenu: STOP_CONFIRMATIONS.map((rule) => ({
-        label: STOP_CONFIRMATION_LABELS[rule],
-        type: "radio" as const,
-        checked: current === rule,
-        click: () => changeSettings({ stopConfirmation: rule }),
-      })),
-    },
-  ];
 }
 
 /** A menu item that opens one of the window's dialogs. */
@@ -497,11 +431,21 @@ function buildMenu(): void {
           },
           { label: "Open Project...", accelerator: "CmdOrCtrl+O", click: () => void pickProject().then(refresh) },
           { type: "separator" },
+          { label: "Settings...", accelerator: "CmdOrCtrl+,", click: menuCommand("settings") },
+          { type: "separator" },
           { role: "quit" },
         ],
       },
-      { label: "Tracker", submenu: trackerMenu() },
-      { label: "Sessions", submenu: sessionsMenu() },
+      {
+        label: "Sessions",
+        submenu: [
+          {
+            label: "Resume All Paused Sessions",
+            enabled: project !== null,
+            click: () => void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings)),
+          },
+        ],
+      },
       { label: "View", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] },
     ]),
   );
@@ -647,6 +591,10 @@ ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): 
 ipcMain.handle("confirmations:dont-ask", (_event, type: unknown) => {
   if (!isConfirmationType(type)) return;
   changeSettings({ dontAsk: { ...store.read().dontAsk, [type]: true } });
+});
+ipcMain.handle("settings:change", (_event, change: unknown) => {
+  if (!isSettingsChange(change)) return;
+  changeSettings(settingsPatch(store.read(), change, project?.path ?? null));
 });
 ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));

@@ -667,7 +667,10 @@ test("Resume all resumes paused sessions hidden, on a map or everywhere, and a s
   await expect(pausedPane).toContainText("No paused sessions.");
 
   // With the setting on, the next start does it by itself.
-  await clickMenu(third.app, "Sessions", "Resume Sessions on Start");
+  await clickMenu(third.app, "File", "Settings...");
+  const settings = third.window.getByRole("dialog", { name: "Settings" });
+  await settings.getByLabel("Resume sessions on start").click();
+  await settings.getByRole("button", { name: "Close" }).click();
   await third.app.close();
   const fourth = await relaunch(env, userData);
   await expect(fourth.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");

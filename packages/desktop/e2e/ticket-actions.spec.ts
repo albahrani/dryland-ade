@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { _electron as electron, type ElectronApplication, expect, type Page, test } from "@playwright/test";
+import { _electron as electron, type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
 
 const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
 const CART = ".scratch/shop/issues/02-cart.md";
@@ -70,17 +70,16 @@ async function openProject(): Promise<{ app: ElectronApplication; window: Page; 
   return { app, window, repo };
 }
 
-/** Clicks a Tracker menu item, as the user would from the menu bar. */
-async function clickTrackerMenu(app: ElectronApplication, ...path: string[]): Promise<void> {
-  await app.evaluate(({ Menu }, labels) => {
-    let items = Menu.getApplicationMenu()?.items.find((item) => item.label === "Tracker")?.submenu?.items ?? [];
-    for (const [i, label] of labels.entries()) {
-      const item = items.find((candidate) => candidate.label === label);
-      if (item === undefined) throw new Error(`No menu item ${label}`);
-      if (i === labels.length - 1) item.click();
-      else items = item.submenu?.items ?? [];
-    }
-  }, path);
+/** Opens Settings from the File menu, as the user would, on the given tab. */
+async function openSettings(app: ElectronApplication, window: Page, tab: string): Promise<Locator> {
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
+    file?.submenu?.items.find((item) => item.label === "Settings...")?.click();
+  });
+  const dialog = window.getByRole("dialog", { name: "Settings" });
+  await expect(dialog.getByRole("tab")).toHaveCount(6);
+  await dialog.getByRole("tab", { name: tab }).click();
+  return dialog;
 }
 
 test("claims, unblocks and resolves from a ticket at once, each shown in the live-events panel", async () => {
@@ -145,7 +144,10 @@ test("releases a possibly stale claim from the Tickets view only after a confirm
   await expect(dialog).toHaveCount(0);
 
   // Resetting brings the confirmation back.
-  await clickTrackerMenu(app, "Reset Write Confirmations");
+  const settings = await openSettings(app, window, "Write confirmations");
+  await expect(settings).toContainText("tracker metadata writes from a button");
+  await settings.getByRole("button", { name: "Reset tracker metadata writes from a button" }).click();
+  await settings.getByRole("button", { name: "Close" }).click();
   claimOutside(repo, "shop/02", "gone-session");
   await release.click();
   await expect(dialog).toBeVisible();
@@ -155,7 +157,10 @@ test("releases a possibly stale claim from the Tickets view only after a confirm
 test("with auto-commit off for the project, writes change the files without committing", async () => {
   const { app, window, repo } = await openProject();
   const head = git(repo, "rev-parse", "HEAD");
-  await clickTrackerMenu(app, "Auto-commit in This Project", "Off");
+  const settings = await openSettings(app, window, "Tracker");
+  await settings.getByLabel("Auto-commit tracker writes in this project").click();
+  await expect(settings.getByRole("status")).toContainText("Overridden for this project: off");
+  await settings.getByRole("button", { name: "Close" }).click();
 
   await window.getByRole("button", { name: "Build the cart" }).click();
   await window.getByRole("region", { name: "Ticket actions" }).getByRole("button", { name: "Claim" }).click();
@@ -169,6 +174,33 @@ test("with auto-commit off for the project, writes change the files without comm
   await expect(window.getByRole("dialog", { name: "Confirm write" })).toContainText(
     "dryland ticket release shop/02 --no-commit",
   );
+  await app.close();
+});
+
+test("Settings shows a project override over the global auto-commit, clears it, and says which tabs are still to come", async () => {
+  const { app, window, repo } = await openProject();
+  const head = git(repo, "rev-parse", "HEAD");
+  const settings = await openSettings(app, window, "Tracker");
+
+  // Global off, then a project override on: the override wins and says so.
+  await settings.getByLabel("Auto-commit tracker writes", { exact: true }).click();
+  await expect(settings.getByText("Following the global setting.")).toBeVisible();
+  await settings.getByLabel("Auto-commit tracker writes in this project").click();
+  await expect(settings.getByRole("status")).toContainText("Overridden for this project: on");
+  await settings.getByRole("button", { name: "Close" }).click();
+  await window.getByRole("button", { name: "Build the cart" }).click();
+  await window.getByRole("region", { name: "Ticket actions" }).getByRole("button", { name: "Claim" }).click();
+  await expect(window.getByRole("log", { name: "Live events" })).toContainText("ticket claim shop/02");
+  expect(git(repo, "rev-parse", "HEAD")).not.toBe(head);
+
+  // Clearing the override falls back to the global setting, which is off.
+  await openSettings(app, window, "Tracker");
+  await settings.getByRole("button", { name: "Clear override" }).click();
+  await expect(settings.getByText("Following the global setting.")).toBeVisible();
+  await expect(settings.getByLabel("Auto-commit tracker writes in this project")).not.toBeChecked();
+
+  await settings.getByRole("tab", { name: "Updates" }).click();
+  await expect(settings).toContainText("arrives with ticket 58");
   await app.close();
 });
 

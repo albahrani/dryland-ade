@@ -632,6 +632,42 @@ ul {
   font-size: 14px;
 }
 
+.modal.settings {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.settings h3 {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.settings-tabs button[aria-selected="true"] {
+  border-color: var(--accent, currentColor);
+  font-weight: 600;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 180px;
+}
+
+.settings .confirmations {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .modal .command {
   padding: 6px 8px;
   background: var(--bg);
