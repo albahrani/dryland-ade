@@ -164,6 +164,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Best-effort adapters and auto-submit](issues/44-best-effort-adapters-and-auto-submit.md): Codex and Gemini as best-effort adapters with output-guessed approximate status, and opt-in auto-submit with a per-project override.
 
+- [GitHub backend: writes](issues/46-github-backend-writes.md): Every mutating ticket and map command works on a GitHub tracker through gh, with no local commit.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
