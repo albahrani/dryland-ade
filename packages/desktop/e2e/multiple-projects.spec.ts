@@ -115,7 +115,6 @@ async function launchApp(env: Record<string, string>, userData: string) {
   return app;
 }
 
-
 /** Makes the next "Open project..." pick `path`. */
 const pickNext = (app: Awaited<ReturnType<typeof launchApp>>, path: string) =>
   app.evaluate(({ dialog }, path) => {

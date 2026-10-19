@@ -114,8 +114,8 @@ export function AllProjectsDialog({
                   <p className="notice">{summary.error}</p>
                 ) : (
                   <div className="dim">
-                    {summary.liveSessions === 1 ? "1 live session" : `${summary.liveSessions} live sessions`} · Next
-                    up: {nextUpLabel(summary)}
+                    {summary.liveSessions === 1 ? "1 live session" : `${summary.liveSessions} live sessions`} · Next up:{" "}
+                    {nextUpLabel(summary)}
                   </div>
                 )}
                 <div className="modal-actions">

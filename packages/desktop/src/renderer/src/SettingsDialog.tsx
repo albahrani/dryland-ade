@@ -81,7 +81,10 @@ export function SettingsDialog({
                 <select
                   value={settings.stopConfirmation}
                   onChange={(event) =>
-                    onChange({ kind: "stop-confirmation", value: event.target.value as typeof settings.stopConfirmation })
+                    onChange({
+                      kind: "stop-confirmation",
+                      value: event.target.value as typeof settings.stopConfirmation,
+                    })
                   }
                 >
                   {STOP_CONFIRMATIONS.map((rule) => (
@@ -161,9 +164,7 @@ export function SettingsDialog({
           )}
           {tab === "Write confirmations" && (
             <>
-              <p className="dim">
-                Confirmations you chose not to be asked about again. They apply to every project.
-              </p>
+              <p className="dim">Confirmations you chose not to be asked about again. They apply to every project.</p>
               <ul className="confirmations">
                 {CONFIRMATION_TYPES.map((type) => (
                   <li key={type}>

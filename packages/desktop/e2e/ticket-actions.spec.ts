@@ -2,7 +2,14 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { _electron as electron, type ElectronApplication, expect, type Locator, type Page, test } from "@playwright/test";
+import {
+  _electron as electron,
+  type ElectronApplication,
+  expect,
+  type Locator,
+  type Page,
+  test,
+} from "@playwright/test";
 
 const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
 const CART = ".scratch/shop/issues/02-cart.md";

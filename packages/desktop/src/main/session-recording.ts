@@ -32,7 +32,12 @@ export interface SessionRecorder {
 }
 
 /** Keeps the session index current from hook events, writing in the order the events came. */
-export function createSessionRecorder({ runner, sessions, warn, retentionDays }: SessionRecorderOptions): SessionRecorder {
+export function createSessionRecorder({
+  runner,
+  sessions,
+  warn,
+  retentionDays,
+}: SessionRecorderOptions): SessionRecorder {
   /** The CLI session id each session last reported, by Dryland session id. */
   const latest = new Map<string, string>();
   let pending = Promise.resolve();
