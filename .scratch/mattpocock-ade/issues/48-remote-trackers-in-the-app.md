@@ -1,7 +1,8 @@
 # Remote trackers in the app
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-19T20:48:46.638Z","was":"ready-for-agent"}} -->
 Blocked by: 30, 45
 
 Spec: [spec](../spec.md), user stories 8 to 10, 24, 62. "Tracker write path", "UI".
