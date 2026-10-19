@@ -86,6 +86,35 @@ describe("where a missing header field is added", () => {
     expect(after).toMatchObject({ id: "04", type: "task", blockers: ["01"] });
   });
 
+  it("puts Blocked by after a Status that sits in a later paragraph", async () => {
+    const ticket = "# Cart\n\nType: task\n\nStatus: needs-info\n\n## Question\n\nGo.\n";
+    const repo = repoWith(ticket);
+
+    await repo.run(["ticket", "block", "shop/01", "--add", "2"]);
+
+    expect(repo.read(CART)).toBe(ticket.replace("Status: needs-info\n", "Status: needs-info\nBlocked by: 02\n"));
+  });
+
+  it("puts Blocked by after the annotation of a Status in a later paragraph", async () => {
+    const note = '<!-- dryland: {"claim":{"holder":"me","at":"2026-01-01T00:00:00Z","was":"ready-for-agent"}} -->';
+    const ticket = `# Cart\n\nType: task\n\nStatus: claimed\n${note}\n\n## Question\n\nGo.\n`;
+    const repo = repoWith(ticket);
+
+    await repo.run(["ticket", "block", "shop/01", "--add", "2"]);
+
+    expect(repo.read(CART)).toBe(ticket.replace(`${note}\n`, `${note}\nBlocked by: 02\n`));
+  });
+
+  it("ignores an orphan annotation with no Status when it places Blocked by", async () => {
+    const note = '<!-- dryland: {"claim":{"holder":"me","at":"2026-01-01T00:00:00Z","was":"ready-for-agent"}} -->';
+    const ticket = `# Cart\n\nType: task\n${note}\n\n## Question\n\nGo.\n`;
+    const repo = repoWith(ticket);
+
+    await repo.run(["ticket", "block", "shop/01", "--add", "2"]);
+
+    expect(repo.read(CART)).toBe(ticket.replace("Type: task\n", "Type: task\nBlocked by: 02\n"));
+  });
+
   it("still rewrites a Blocked by line in place when a later paragraph holds it", async () => {
     const ticket = "# Cart\n\nType: task\nStatus: ready-for-agent\n\nBlocked by: 03\n\n## Question\n\nGo.\n";
     const repo = repoWith(ticket);

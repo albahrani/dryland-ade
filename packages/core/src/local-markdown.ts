@@ -51,7 +51,8 @@ function claimAnnotation(claim: ClaimRecord): string {
 /**
  * Rewrites one header field of a ticket: `replace` gets the field's current value (`""` when absent) and
  * returns the lines to put there, none to remove it. A field that is absent goes after the header fields
- * that come before it (`Type:`, `Status:`, `Blocked by:`), or under the title. With `dropAnnotations` the Dryland annotation lines of the
+ * that come before it (`Type:`, `Status:`, `Blocked by:`), or under the title; a `Status:` below a blank
+ * line still anchors a new `Blocked by:`, an annotation with no `Status:` above it does not. With `dropAnnotations` the Dryland annotation lines of the
  * header go too. Everything else in the file, including line endings, is left as it was.
  */
 function rewriteHeaderField(
@@ -73,17 +74,21 @@ function rewriteHeaderField(
   let blockStarted = false;
   let blockEnded = false;
   let typeEnd = titleIndex;
+  // The end of the first `Status:` line and the annotation lines directly under it, wherever it sits. An
+  // annotation with no `Status:` above it anchors nothing.
   let statusGroupEnd = -1;
+  let statusGroupOpen = false;
   for (let i = titleIndex + 1; i < lines.length; i++) {
     const line = text(lines[i] ?? "");
     if (line.trim() === "") {
       if (blockStarted) blockEnded = true;
+      statusGroupOpen = false;
       continue;
     }
     if (CLAIM_ANNOTATION_LINE.test(line)) {
       annotationIndexes.add(i);
       blockStarted = true;
-      if (!blockEnded) statusGroupEnd = i;
+      if (statusGroupOpen) statusGroupEnd = i;
       continue;
     }
     const match = FIELD_LINE.exec(line);
@@ -91,12 +96,12 @@ function rewriteHeaderField(
     const key = match[1].toLowerCase();
     if (key === field && fieldIndex === -1) fieldIndex = i;
     blockStarted = true;
-    if (blockEnded) continue;
-    if (key === "type") typeEnd = i;
-    else if (key === "status" || key === "blocked by") statusGroupEnd = i;
+    statusGroupOpen = key === "status" && statusGroupEnd === -1;
+    if (statusGroupOpen) statusGroupEnd = i;
+    else if (key === "type" && !blockEnded) typeEnd = i;
   }
   // `Type:`, then `Status:` with its annotation, then `Blocked by:`.
-  const afterIndex = field === "status" ? typeEnd : statusGroupEnd === -1 ? typeEnd : statusGroupEnd;
+  const afterIndex = field === "status" || statusGroupEnd === -1 ? typeEnd : statusGroupEnd;
 
   const current = fieldIndex === -1 ? "" : (FIELD_LINE.exec(text(lines[fieldIndex] ?? ""))?.[2] ?? "").trim();
   const replacement = replace(current);
