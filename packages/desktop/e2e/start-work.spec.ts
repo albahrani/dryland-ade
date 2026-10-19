@@ -356,19 +356,35 @@ test("asks natively when the window does not answer the quit request", async () 
   const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
   await expect(window.locator(".xterm-rows:visible")).toContainText("/implement shop/02");
-  await app.evaluate(({ BrowserWindow, dialog }) => {
-    (globalThis as { asked?: number }).asked = 0;
-    dialog.showMessageBox = async () => {
-      (globalThis as { asked?: number }).asked = ((globalThis as { asked?: number }).asked ?? 0) + 1;
+  // The box cannot be read once the app is gone, so the stub writes what it was asked to a file.
+  const asked = join(mkdtempSync(join(tmpdir(), "dryland-e2e-asked-")), "asked.txt");
+  await app.evaluate(({ BrowserWindow, dialog }, file) => {
+    dialog.showMessageBox = async (...args: unknown[]) => {
+      const options = args.at(-1) as { message: string };
+      process.getBuiltinModule("node:fs").appendFileSync(file, options.message + "\n");
       return { response: 0, checkboxChecked: false };
     };
     BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
-  });
+  }, asked);
   const closed = app.waitForEvent("close", { timeout: 15_000 });
   await app.evaluate(({ app }) => app.quit()).catch(() => {});
   await closed;
-  // The app is gone, so what the native box was asked is read from the process's exit alone: it quit only because
-  // the stubbed box answered Quit, as nothing else could answer for the crashed window.
+  expect(readFileSync(asked, "utf8")).toBe("1 session is still running. Quit Dryland and stop it?\n");
+});
+
+test("asks again after the window reloads while the quit dialog is open", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("/implement shop/02");
+  void app.evaluate(({ app }) => app.quit());
+  const dialog = window.getByRole("dialog", { name: "Quit Dryland" });
+  await expect(dialog).toBeVisible();
+  await window.reload();
+  await expect(dialog).toHaveCount(0);
+  void app.evaluate(({ app }) => app.quit());
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await app.close();
 });
 
 test("quitting with no running session asks nothing", async () => {

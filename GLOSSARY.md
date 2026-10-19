@@ -79,6 +79,14 @@ _Avoid_: Manual session, external session
 The ADE's machine-local record of which sessions belong to which ticket, map or scratch worktree, kept beside the repository's git data and never committed; a cache rebuilt where possible from the Agent CLIs.
 _Avoid_: Session store, session database, session log
 
+**Quit dialog**:
+The in-app question asked when the user quits while sessions run: it lists the sessions that would stop, then shows each shutdown step's progress and offers Quit now. It has no time limit, unlike an OS-forced shutdown. When the window does not answer within about 2 seconds, a native message box asks instead.
+_Avoid_: Quit confirmation, exit prompt
+
+**OS-forced shutdown**:
+A quit the operating system starts (shutdown, restart, log-off). It asks nothing and has a hard 2-second budget, after which the remaining steps are abandoned.
+_Avoid_: System quit, forced quit
+
 **Live event**:
 A message the ADE's command-line tool sends to the running ADE when a session changes state or a ticket changes; shown live and never stored.
 _Avoid_: Log entry, notification

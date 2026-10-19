@@ -377,6 +377,11 @@ function createWindow(): void {
   // Windows ends the app soon after; the PTYs are killed before the first await of the shutdown.
   window.on("session-end", () => void shutDown());
   window.on("closed", () => (window = null));
+  // A reload drops the quit dialog the window was showing; the next quit asks again.
+  window.webContents.on("did-start-loading", () => {
+    if (askedInWindow && abandonQuit === null) quit = "ask";
+    askedInWindow = false;
+  });
   // Git state behind the next steps changes outside the watched tracker files, e.g. a commit made in a terminal.
   window.on("focus", () => {
     void refresh();
@@ -745,6 +750,9 @@ async function shutDown(budgetMs: number | null = SHUTDOWN_BUDGET_MS): Promise<v
   app.quit();
 }
 
+/** Whether the window shows the quit question right now. */
+let askedInWindow = false;
+
 /** Stopped by the quit dialog's "Quit now": the remaining steps are dropped. */
 let abandonQuit: AbortController | null = null;
 
@@ -793,7 +801,7 @@ async function confirmQuit(): Promise<void> {
   if (window !== null && !window.isDestroyed()) {
     const { shown, stop } = windowShowsQuitDialog();
     sendToWindow("quit:request", { sessions: listing } satisfies QuitRequest);
-    if ((await whoAsks(shown)) === "in-app") return;
+    if ((await whoAsks(shown)) === "in-app") return void (askedInWindow = true);
     stop();
   }
   await askNatively(listing);
@@ -801,6 +809,7 @@ async function confirmQuit(): Promise<void> {
 
 ipcMain.handle("quit:answer", async (_event, answer: unknown) => {
   if (!isQuitAnswer(answer)) return;
+  if (answer !== "now") askedInWindow = false;
   if (answer === "cancel" && quit === "asking") quit = "ask";
   else if (answer === "confirm" && quit === "asking") await quitFromDialog();
   else if (answer === "now") abandonQuit?.abort();
