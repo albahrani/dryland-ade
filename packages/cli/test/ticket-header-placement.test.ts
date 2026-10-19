@@ -51,6 +51,24 @@ describe("where a missing header field is added", () => {
     expect(repo.read(CART)).toBe(SPEC_TICKET.replace("Type: task\n", "Type: task\nBlocked by: 02\n"));
   });
 
+  it("keeps CRLF when it adds Status under Type", async () => {
+    const crlf = SPEC_TICKET.replaceAll("\n", "\r\n");
+    const repo = repoWith(crlf);
+
+    await repo.run(["ticket", "triage", "shop/01", "--role", "ready-for-agent"]);
+
+    expect(repo.read(CART)).toBe(crlf.replace("Type: task\r\n", "Type: task\r\nStatus: ready-for-agent\r\n"));
+  });
+
+  it("still rewrites a Status line in place when a later paragraph holds it", async () => {
+    const ticket = "# Cart\n\nType: task\n\nStatus: needs-info\n\n## Question\n\nGo.\n";
+    const repo = repoWith(ticket);
+
+    await repo.run(["ticket", "triage", "shop/01", "--role", "ready-for-agent"]);
+
+    expect(repo.read(CART)).toBe(ticket.replace("needs-info", "ready-for-agent"));
+  });
+
   it("still rewrites a Blocked by line in place when a later paragraph holds it", async () => {
     const ticket = "# Cart\n\nType: task\nStatus: ready-for-agent\n\nBlocked by: 03\n\n## Question\n\nGo.\n";
     const repo = repoWith(ticket);

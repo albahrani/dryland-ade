@@ -51,8 +51,8 @@ function claimAnnotation(claim: ClaimRecord): string {
 /**
  * Rewrites one header field of a ticket: `replace` gets the field's current value (`""` when absent) and
  * returns the lines to put there, none to remove it. A field that is absent goes after the header fields
- * that come before it (`Type:`, `Status:`, `Blocked by:`), or under the title. With `dropAnnotations` the Dryland annotation lines of the header go too.
- * Everything else in the file, including line endings, is left as it was.
+ * that come before it (`Type:`, `Status:`, `Blocked by:`), or under the title. With `dropAnnotations` the Dryland annotation lines of the
+ * header go too. Everything else in the file, including line endings, is left as it was.
  */
 function rewriteHeaderField(
   markdown: string,
@@ -73,7 +73,7 @@ function rewriteHeaderField(
   let blockStarted = false;
   let blockEnded = false;
   let typeEnd = titleIndex;
-  let statusEnd = -1;
+  let statusGroupEnd = -1;
   for (let i = titleIndex + 1; i < lines.length; i++) {
     const line = text(lines[i] ?? "");
     if (line.trim() === "") {
@@ -83,7 +83,7 @@ function rewriteHeaderField(
     if (CLAIM_ANNOTATION_LINE.test(line)) {
       annotationIndexes.add(i);
       blockStarted = true;
-      if (!blockEnded) statusEnd = i;
+      if (!blockEnded) statusGroupEnd = i;
       continue;
     }
     const match = FIELD_LINE.exec(line);
@@ -93,10 +93,10 @@ function rewriteHeaderField(
     blockStarted = true;
     if (blockEnded) continue;
     if (key === "type") typeEnd = i;
-    else if (key === "status" || key === "blocked by") statusEnd = i;
+    else if (key === "status" || key === "blocked by") statusGroupEnd = i;
   }
   // `Type:`, then `Status:` with its annotation, then `Blocked by:`.
-  const afterIndex = field === "status" ? typeEnd : statusEnd === -1 ? typeEnd : statusEnd;
+  const afterIndex = field === "status" ? typeEnd : statusGroupEnd === -1 ? typeEnd : statusGroupEnd;
 
   const current = fieldIndex === -1 ? "" : (FIELD_LINE.exec(text(lines[fieldIndex] ?? ""))?.[2] ?? "").trim();
   const replacement = replace(current);
