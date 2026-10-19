@@ -10,6 +10,10 @@ export type SettingsChange =
   | { kind: "auto-commit"; value: boolean }
   /** The open project's auto-commit override; `null` clears it so the global setting applies again. */
   | { kind: "project-auto-commit"; value: boolean | null }
+  /** Whether a session's pre-typed command is submitted. */
+  | { kind: "auto-submit"; value: boolean }
+  /** The open project's auto-submit override; `null` clears it so the global setting applies again. */
+  | { kind: "project-auto-submit"; value: boolean | null }
   | { kind: "resume-on-start"; value: boolean }
   | { kind: "stop-confirmation"; value: StopConfirmation }
   /** Days a session stays in the session index after it was last seen. */
@@ -20,12 +24,14 @@ export type SettingsChange =
 /** The stored settings a change reads before it writes. */
 export interface SettingsSnapshot {
   projectAutoCommit: Record<string, boolean>;
+  projectAutoSubmit: Record<string, boolean>;
   dontAsk: DontAsk;
 }
 
 /** The stored fields a change sets. */
 export interface SettingsPatch extends Partial<SettingsSnapshot> {
   autoCommit?: boolean;
+  autoSubmit?: boolean;
   resumeOnStart?: boolean;
   stopConfirmation?: StopConfirmation;
   sessionRetentionDays?: number;
@@ -37,9 +43,11 @@ export function isSettingsChange(value: unknown): value is SettingsChange {
   if (!isRecord(value)) return false;
   switch (value.kind) {
     case "auto-commit":
+    case "auto-submit":
     case "resume-on-start":
       return typeof value.value === "boolean";
     case "project-auto-commit":
+    case "project-auto-submit":
       return typeof value.value === "boolean" || value.value === null;
     case "stop-confirmation":
       return isStopConfirmation(value.value);
@@ -59,6 +67,8 @@ export function settingsPatch(saved: SettingsSnapshot, change: SettingsChange, p
   switch (change.kind) {
     case "auto-commit":
       return { autoCommit: change.value };
+    case "auto-submit":
+      return { autoSubmit: change.value };
     case "resume-on-start":
       return { resumeOnStart: change.value };
     case "stop-confirmation":
@@ -69,6 +79,13 @@ export function settingsPatch(saved: SettingsSnapshot, change: SettingsChange, p
       return { legendDismissed: false };
     case "reset-confirmation":
       return { dontAsk: { ...saved.dontAsk, [change.type]: false } };
+    case "project-auto-submit": {
+      if (project === null) return {};
+      const overrides = { ...saved.projectAutoSubmit };
+      if (change.value === null) delete overrides[project];
+      else overrides[project] = change.value;
+      return { projectAutoSubmit: overrides };
+    }
     case "project-auto-commit": {
       if (project === null) return {};
       const overrides = { ...saved.projectAutoCommit };
@@ -77,4 +94,16 @@ export function settingsPatch(saved: SettingsSnapshot, change: SettingsChange, p
       return { projectAutoCommit: overrides };
     }
   }
+}
+
+export interface AutoSubmitSettings {
+  /** Whether a pre-typed command is submitted, unless a project says otherwise. */
+  autoSubmit: boolean;
+  /** Per-project overrides, by project path. */
+  projectAutoSubmit: Record<string, boolean>;
+}
+
+/** Whether the pre-typed command is submitted in `project`: its override if it has one, else the global setting. */
+export function autoSubmitFor(settings: AutoSubmitSettings, project: string): boolean {
+  return settings.projectAutoSubmit[project] ?? settings.autoSubmit;
 }

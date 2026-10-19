@@ -103,6 +103,32 @@ export function SettingsDialog({
                 Resume sessions on start
               </label>
               <label>
+                <input
+                  type="checkbox"
+                  checked={settings.globalAutoSubmit}
+                  onChange={(event) => onChange({ kind: "auto-submit", value: event.target.checked })}
+                />
+                Submit the pre-typed command (auto-submit)
+              </label>
+              {projectName !== null && (
+                <label>
+                  Auto-submit in {projectName}{" "}
+                  <select
+                    value={settings.projectAutoSubmit === null ? "global" : settings.projectAutoSubmit ? "on" : "off"}
+                    onChange={(event) =>
+                      onChange({
+                        kind: "project-auto-submit",
+                        value: event.target.value === "global" ? null : event.target.value === "on",
+                      })
+                    }
+                  >
+                    <option value="global">Follow the global setting</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
+              )}
+              <label>
                 Keep sessions for{" "}
                 <input
                   type="number"

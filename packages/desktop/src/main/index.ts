@@ -1,6 +1,7 @@
 import { basename, join } from "node:path";
 import {
   AGENT_ADAPTERS,
+  hasStatusHooks,
   DrylandError,
   findMainCheckout,
   type LiveEvent,
@@ -71,10 +72,11 @@ import { resolveShell } from "./shell.ts";
 import { pausedTickets } from "../shared/paused-session.ts";
 import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
+import { ACTIVITY_QUIET_MS, createActivityStatus } from "./activity-status.ts";
 import { createSessionStatus } from "./session-status.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { createUnseenOutput } from "./unseen-output.ts";
-import { isSettingsChange, settingsPatch } from "../shared/settings-change.ts";
+import { autoSubmitFor, isSettingsChange, settingsPatch } from "../shared/settings-change.ts";
 import { createExplorer } from "./explorer.ts";
 import { createExplorerWatcher } from "./explorer-watch.ts";
 import { createSourceControl } from "./source-control.ts";
@@ -97,6 +99,7 @@ const terminals = createTerminalManager({
   onData: (id, data) => {
     sendToWindow("terminal:data", id, data);
     const session = sessionIn(id);
+    if (session?.statusApproximate) activity.output(session.id);
     if (session !== undefined && unseen.output(session.id)) sendUnseen();
   },
   onExit: (id, exitCode) => {
@@ -115,6 +118,7 @@ const dryland = createDrylandCli({
   env: ptyEnv,
 });
 const autoCommit = (projectPath: string) => autoCommitFor(store.read(), projectPath);
+const autoSubmit = (projectPath: string) => autoSubmitFor(store.read(), projectPath);
 const work = createWorkStarter({
   terminals,
   runner: nodeProcessRunner,
@@ -123,6 +127,7 @@ const work = createWorkStarter({
   hooksDir: join(app.getPath("userData"), "hooks"),
   dryland,
   autoCommit,
+  autoSubmit,
 });
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
@@ -130,6 +135,15 @@ let stopWatching: (() => void) | null = null;
 let live: LiveListener | null = null;
 
 const status = createSessionStatus();
+// A CLI without hooks reports no state of its own: it is guessed from its output and shown as approximate.
+const activity = createActivityStatus({
+  quietMs: ACTIVITY_QUIET_MS,
+  report: (sessionId, state) => {
+    if (!status.observe(sessionId, state)) return;
+    sendSessionStates();
+    void refresh();
+  },
+});
 // The session index is a cache: a write that fails is logged, never shown as an error.
 const recorder = createSessionRecorder({
   runner: nodeProcessRunner,
@@ -153,6 +167,9 @@ function settings(): AppSettings {
     autoCommit: project === null ? saved.autoCommit : autoCommitFor(saved, project.path),
     globalAutoCommit: saved.autoCommit,
     projectAutoCommit: project === null ? null : (saved.projectAutoCommit[project.path] ?? null),
+    autoSubmit: project === null ? saved.autoSubmit : autoSubmitFor(saved, project.path),
+    globalAutoSubmit: saved.autoSubmit,
+    projectAutoSubmit: project === null ? null : (saved.projectAutoSubmit[project.path] ?? null),
     dontAsk: saved.dontAsk,
     stopConfirmation: saved.stopConfirmation,
     resumeOnStart: saved.resumeOnStart,
@@ -199,6 +216,7 @@ async function resumeAllPaused(map: string | null): Promise<ResumedAllResult> {
 function terminalEnded(id: string): void {
   const session = sessionIn(id);
   if (session === undefined) return;
+  activity.forget(session.id);
   status.exited(session.id);
   sendSessionStates();
   if (unseen.forget(session.id)) sendUnseen();
@@ -682,7 +700,10 @@ ipcMain.handle("settings:change", (_event, change: unknown) => {
   if (!isSettingsChange(change)) return;
   changeSettings(settingsPatch(store.read(), change, project?.path ?? null));
 });
-ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.write(id, data));
+ipcMain.on("terminal:write", (_event, id: string, data: string) => {
+  work.userTyped(id, data);
+  terminals.write(id, data);
+});
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 ipcMain.on("terminal:close", (_event, id: string) => {
   // Closing a session's tab hides the session: its CLI keeps running until the session is stopped.
@@ -723,7 +744,11 @@ void app.whenReady().then(async () => {
     launcherDir,
     { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") },
     // The shim adds only the status-hooks flag; a CLI with launch arguments of its own needs a richer one.
-    AGENT_ADAPTERS.filter((a) => a.launchArgs.length === 0).map(({ id, binary }) => ({ id, binary })),
+    // Only CLIs with status hooks get one: a shim for a hookless CLI would report nothing.
+    AGENT_ADAPTERS.filter((a) => a.launchArgs.length === 0 && hasStatusHooks(a)).map(({ id, binary }) => ({
+      id,
+      binary,
+    })),
   );
   ptyEnv[SESSION_RETENTION_ENV] = String(store.read().sessionRetentionDays);
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.

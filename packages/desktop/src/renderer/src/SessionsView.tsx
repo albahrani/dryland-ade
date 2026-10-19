@@ -1,7 +1,7 @@
 import type { SessionState, TicketRef } from "@dryland/core";
 import { type PointerEvent, type ReactNode, useRef, useState } from "react";
 import type { SessionInfo } from "../../shared/api.ts";
-import { SESSION_META } from "../../shared/session-meta.ts";
+import { stateLabel } from "../../shared/session-meta.ts";
 import {
   dragSash,
   groupCount,
@@ -172,12 +172,12 @@ function HiddenRow({
 }) {
   return (
     <li className={selected ? "session-row active" : "session-row"} aria-current={selected}>
-      <SessionBadge agent={session.agent.name} state={state} />
+      <SessionBadge agent={session.agent.name} state={state} approximate={session.statusApproximate} />
       <button className="session-title" title={title} onClick={() => handlers.show(session)}>
         {title}
       </button>
       <span className="meta">
-        {SESSION_META[state].label}
+        {stateLabel(state, session.statusApproximate)}
         {since !== undefined && ` · ${shortAge(since, now)}`}
       </span>
       {unseen && <UnseenMark />}
@@ -418,12 +418,12 @@ export function SessionsView({
                   className={session.id === selected ? "session-row two-line active" : "session-row two-line"}
                   aria-current={session.id === selected}
                 >
-                  <SessionBadge agent={session.agent.name} state={state} />
+                  <SessionBadge agent={session.agent.name} state={state} approximate={session.statusApproximate} />
                   <span className="session-lines">
                     <button className="session-title" title={title} onClick={() => handlers.show(session)}>
                       {title}
                     </button>
-                    <span className="meta last-line">{line ?? SESSION_META[state].label}</span>
+                    <span className="meta last-line">{line ?? stateLabel(state, session.statusApproximate)}</span>
                   </span>
                   {handlers.unseen(session) && <UnseenMark />}
                 </li>

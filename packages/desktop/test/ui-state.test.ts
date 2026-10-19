@@ -10,6 +10,8 @@ const stateFile = () => join(mkdtempSync(join(tmpdir(), "dryland-ui-")), "nested
 const SETTINGS_DEFAULTS = {
   autoCommit: true,
   projectAutoCommit: {},
+  autoSubmit: false,
+  projectAutoSubmit: {},
   dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
   stopConfirmation: "busy-or-unseen",
   resumeOnStart: false,
@@ -180,6 +182,22 @@ describe("ui state store", () => {
     expect(createUiStateStore(file).read()).toMatchObject({
       autoCommit: true,
       projectAutoCommit: { "/repos/shop": false },
+    });
+  });
+
+  it("remembers auto-submit globally and per project, off unless it was turned on", () => {
+    const file = stateFile();
+    expect(createUiStateStore(file).read()).toMatchObject({ autoSubmit: false, projectAutoSubmit: {} });
+    createUiStateStore(file).update({ autoSubmit: true, projectAutoSubmit: { "/repos/shop": false } });
+    expect(createUiStateStore(file).read()).toMatchObject({
+      autoSubmit: true,
+      projectAutoSubmit: { "/repos/shop": false },
+    });
+
+    writeFileSync(file, JSON.stringify({ autoSubmit: "yes", projectAutoSubmit: { "/repos/shop": true, "/a": 1 } }));
+    expect(createUiStateStore(file).read()).toMatchObject({
+      autoSubmit: false,
+      projectAutoSubmit: { "/repos/shop": true },
     });
   });
 });

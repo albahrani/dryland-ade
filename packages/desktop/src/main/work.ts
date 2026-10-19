@@ -10,6 +10,7 @@ import {
   envKey,
   findExecutable,
   findMainCheckout,
+  hasStatusHooks,
   launchArgs,
   installedSkills,
   nextSteps,
@@ -45,7 +46,7 @@ import {
   type WorkTarget,
 } from "../shared/work-target.ts";
 import type { DrylandCli } from "./dryland-cli.ts";
-import { createPretyper, PRETYPE_TIMING, type PretypeTiming } from "./pretype.ts";
+import { createPretyper, isKeystroke, PRETYPE_TIMING, type Pretyper, type PretypeTiming } from "./pretype.ts";
 import { sessionItem } from "./session-recording.ts";
 import type { TerminalManager } from "./terminals.ts";
 
@@ -62,6 +63,8 @@ export interface WorkStarterOptions {
   dryland: DrylandCli;
   /** Whether tracker writes in the project are committed. */
   autoCommit: (projectPath: string) => boolean;
+  /** Whether the pre-typed command is submitted in the project: the project override, else the global setting. */
+  autoSubmit: (projectPath: string) => boolean;
   pretype?: PretypeTiming;
 }
 
@@ -112,6 +115,12 @@ export interface WorkStarter {
    * new session; `null` when the event is not from such a CLI or its session is already taken.
    */
   adoptManual(projectPath: string, event: LiveEvent): Promise<SessionInfo | null>;
+  /**
+   * Tells the session in terminal `terminalId` that `data` came from the user's keyboard. A key stands the pre-typer
+   * down, typing and auto-submit both, so nothing the user did not see is ever submitted. A terminal's own replies
+   * to the CLI's queries, which travel the same way, are not keys.
+   */
+  userTyped(terminalId: string, data: string): void;
   /** The sessions started so far, as recorded at spawn. */
   sessions(): SessionInfo[];
 }
@@ -133,8 +142,20 @@ function refOf(ticket: string): TicketRef {
 }
 
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
-  const { terminals, runner, env, launcherDir, hooksDir, dryland, autoCommit, pretype = PRETYPE_TIMING } = options;
+  const {
+    terminals,
+    runner,
+    env,
+    launcherDir,
+    hooksDir,
+    dryland,
+    autoCommit,
+    autoSubmit,
+    pretype = PRETYPE_TIMING,
+  } = options;
   const started: SessionInfo[] = [];
+  /** The pre-typer of each terminal that has one, so the user's first key can stand it down. */
+  const pretypers = new Map<string, Pretyper>();
 
   function adapterFor(agentId: string): AgentAdapter {
     const adapter = AGENT_ADAPTERS.find((a) => a.id === agentId);
@@ -273,6 +294,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
               text: typed,
               write: (key) => terminals.write(terminalId, key),
               blocks: (output) => blocksInput(adapter, output),
+              submit: autoSubmit(projectPath),
               timing: pretype,
             });
       terminalId = terminals.open({
@@ -285,6 +307,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         env: (id) => sessionEnv(adapter, sessionId, id),
         onOutput: pretyper,
       });
+      if (pretyper !== undefined) pretypers.set(terminalId, pretyper);
       const session: SessionInfo = {
         id: sessionId,
         terminalId,
@@ -296,6 +319,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         worktree: { branch: worktree.branch, path: worktree.path },
         command: typed,
         startedAt: new Date().toISOString(),
+        ...(hasStatusHooks(adapter) ? {} : { statusApproximate: true as const }),
       };
       started.push(session);
       return { session, warnings };
@@ -403,6 +427,10 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       for (let i = started.length - 1; i >= 0; i--) if (started[i]?.terminalId === pane) started.splice(i, 1);
       started.push(session);
       return session;
+    },
+
+    userTyped(terminalId, data) {
+      if (isKeystroke(data)) pretypers.get(terminalId)?.cancel();
     },
 
     sessions: () => [...started],

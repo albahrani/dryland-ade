@@ -1,6 +1,6 @@
 import type { SessionState } from "@dryland/core";
 import type { SessionInfo } from "../../shared/api.ts";
-import { SESSION_META } from "../../shared/session-meta.ts";
+import { SESSION_META, stateLabel } from "../../shared/session-meta.ts";
 import { sessionTitle } from "../../shared/work-target.ts";
 import { SessionBadge } from "./status.tsx";
 
@@ -31,9 +31,9 @@ export function LiveSessions({ sessions, handlers }: { sessions: SessionInfo[]; 
         const state = handlers.state(session);
         return (
           <div key={session.id} className="live-session">
-            <SessionBadge agent={session.agent.name} state={state} />
+            <SessionBadge agent={session.agent.name} state={state} approximate={session.statusApproximate} />
             <span>{sessionTitle(session)}</span>
-            <span className="session-state">{SESSION_META[state].label}</span>
+            <span className="session-state">{stateLabel(state, session.statusApproximate)}</span>
             {handlers.unseen(session) && <UnseenMark />}
             <button onClick={() => handlers.show(session)}>Show session</button>
             <button onClick={() => handlers.stop(session)}>Stop session</button>

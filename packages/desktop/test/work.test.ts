@@ -13,19 +13,28 @@ import { fixtureRepo } from "./fixture-repo.ts";
 
 const windows = process.platform === "win32";
 
-/** A PATH directory holding a stub `claude`; the fake PTY never runs it. */
-function stubBin(): { dir: string; claude: string } {
+/** A PATH directory holding a stub `claude`, and any `others`; the fake PTY never runs them. */
+function stubBin(others: string[] = []): { dir: string; claude: string } {
   const dir = mkdtempSync(join(tmpdir(), "dryland-work-bin-"));
   const claude = join(dir, windows ? "claude.exe" : "claude");
-  writeFileSync(claude, "");
-  execFileSync(process.execPath, ["-e", `require("fs").chmodSync(${JSON.stringify(claude)}, 0o755)`]);
+  for (const name of ["claude", ...others]) {
+    const file = join(dir, windows ? `${name}.exe` : name);
+    writeFileSync(file, "");
+    execFileSync(process.execPath, ["-e", `require("fs").chmodSync(${JSON.stringify(file)}, 0o755)`]);
+  }
   return { dir, claude };
 }
 
 /** The real `dryland` bundle, built by the test suite's global setup; Node stands in for the app's Electron. */
 const CLI = fileURLToPath(new URL("../../cli/dist/dryland.mjs", import.meta.url));
 
-function setup(path = stubBin().dir, inherited: Record<string, string> = {}, autoCommit = true) {
+function setup(
+  path = stubBin().dir,
+  inherited: Record<string, string> = {},
+  autoCommit = true,
+  autoSubmit = false,
+  submitFor?: (project: string) => boolean,
+) {
   // The app hands terminals and the work starter the same environment, its own.
   const env = { PATH: path, HOME: "/home/test", ...inherited };
   // `dryland` runs with the test's own environment, which finds git; no app listens for it.
@@ -56,6 +65,7 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}, aut
     hooksDir,
     dryland,
     autoCommit: () => autoCommit,
+    autoSubmit: submitFor ?? (() => autoSubmit),
     pretype: { quietMs: 20, charDelayMs: 0 },
   });
   return { provider, starter, hooksDir, dryland };
@@ -225,6 +235,8 @@ describe("starting work on a ticket", () => {
     expect(await starter.listAgents()).toEqual([
       { id: "claude-code", name: "Claude Code", available: false, reason: "`claude` is not on PATH." },
       { id: "copilot-cli", name: "GitHub Copilot CLI", available: false, reason: "`copilot` is not on PATH." },
+      { id: "codex-cli", name: "Codex CLI", available: false, reason: "`codex` is not on PATH." },
+      { id: "gemini-cli", name: "Gemini CLI", available: false, reason: "`gemini` is not on PATH." },
     ]);
     await expect(starter.startWork(repo, onTicket("02"), "claude-code")).rejects.toThrow(DrylandError);
     expect(provider.spawned).toEqual([]);
@@ -289,6 +301,8 @@ describe("starting work on a ticket", () => {
     expect(await starter.listAgents()).toEqual([
       { id: "claude-code", name: "Claude Code", available: true, reason: null },
       { id: "copilot-cli", name: "GitHub Copilot CLI", available: false, reason: "`copilot` is not on PATH." },
+      { id: "codex-cli", name: "Codex CLI", available: false, reason: "`codex` is not on PATH." },
+      { id: "gemini-cli", name: "Gemini CLI", available: false, reason: "`gemini` is not on PATH." },
     ]);
   });
 });
@@ -678,5 +692,80 @@ describe("starting work with Copilot CLI", () => {
 
     expect(warnings.join(" ")).toContain("not valid JSON");
     expect(readFileSync(join(home, "config.json"), "utf8")).toBe("{ not json");
+  });
+});
+
+describe("best-effort Agent CLIs and auto-submit", () => {
+  const withCodex = () => setup(stubBin(["codex", "gemini"]).dir);
+
+  it("lists a best-effort CLI as available when its binary is installed", async () => {
+    const { starter } = withCodex();
+    const agents = await starter.listAgents();
+    expect(agents.filter((a) => a.available).map((a) => a.id)).toEqual(["claude-code", "codex-cli", "gemini-cli"]);
+  });
+
+  it("opens it with the command typed in its own syntax, launched with no hooks and no session id", async () => {
+    const { provider, starter, hooksDir } = withCodex();
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "codex-cli");
+    const pty = provider.spawned[0];
+
+    expect(pty?.options.args).toEqual([]);
+    expect(session.agentSessionId).toBeNull();
+    expect(session.statusApproximate).toBe(true);
+    expect(existsSync(join(hooksDir, "codex-cli.json"))).toBe(false);
+    pty?.emit("› Ask Codex");
+    await vi.waitFor(() => expect(typed(pty)).toBe("$implement shop/02"));
+    await pause(50);
+    expect(typed(pty)).not.toContain("\r");
+  });
+
+  it("marks a hooked CLI's status as exact", async () => {
+    const { session } = await withCodex().starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
+    expect(session.statusApproximate).toBeUndefined();
+  });
+
+  it("submits the command when auto-submit is on", async () => {
+    const { provider, starter } = setup(stubBin(["codex"]).dir, {}, true, true);
+    await starter.startWork(fixtureRepo(), onTicket("02"), "codex-cli");
+    const pty = provider.spawned[0];
+    pty?.emit("› ");
+    await vi.waitFor(() => expect(typed(pty)).toBe("$implement shop/02\r"));
+  });
+
+  it("asks the auto-submit setting for the project the session starts in", async () => {
+    const repo = fixtureRepo();
+    const asked: string[] = [];
+    const { provider, starter } = setup(undefined, {}, true, true, (project) => {
+      asked.push(project);
+      return false;
+    });
+    await starter.startWork(repo, onTicket("02"), "claude-code");
+    provider.spawned[0]?.emit("❯ ");
+    await pause(80);
+    expect(asked).toEqual([repo]);
+    expect(typed(provider.spawned[0])).toBe("/implement shop/02");
+  });
+
+  it("types nothing, and submits nothing, when the user typed before pre-typing started", async () => {
+    const { provider, starter } = setup(undefined, {}, true, true);
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
+    const pty = provider.spawned[0];
+
+    pty?.emit("❯ ");
+    starter.userTyped(session.terminalId, "x");
+    await pause(80);
+
+    expect(typed(pty)).toBe("");
+  });
+
+  it("does not take a terminal's own replies, such as a cursor report, for the user typing", async () => {
+    const { provider, starter } = setup();
+    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
+    const pty = provider.spawned[0];
+
+    pty?.emit("❯ ");
+    starter.userTyped(session.terminalId, "\x1b[1;1R");
+
+    await vi.waitFor(() => expect(typed(pty)).toBe("/implement shop/02"));
   });
 });

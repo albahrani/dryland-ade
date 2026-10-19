@@ -21,7 +21,7 @@ import {
   type StateSince,
   trackStateSince,
 } from "../../shared/sessions-view.ts";
-import { SESSION_META } from "../../shared/session-meta.ts";
+import { stateLabel } from "../../shared/session-meta.ts";
 import { AllProjectsDialog, ProjectWidget } from "./ProjectsUi.tsx";
 import { projectSessions } from "../../shared/projects.ts";
 import { SessionsView } from "./SessionsView.tsx";
@@ -876,7 +876,8 @@ export function App() {
         <span>{project === null ? "No project" : project.path}</span>
         {selected !== undefined && (
           <span aria-label="Selected session" title={selected.worktree.path}>
-            {selected.agent.name}: {SESSION_META[sessionState(selected)].label} · {selected.worktree.branch}
+            {selected.agent.name}: {stateLabel(sessionState(selected), selected.statusApproximate)} ·{" "}
+            {selected.worktree.branch}
           </span>
         )}
         <span aria-label="Session counts">

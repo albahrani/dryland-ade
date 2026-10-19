@@ -3,11 +3,15 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_ADAPTERS,
   blocksInput,
   CLAUDE_CODE,
   commandForTicket,
+  CODEX_CLI,
   COPILOT_CLI,
   findExecutable,
+  GEMINI_CLI,
+  hasStatusHooks,
   hookStateOf,
   type NextStep,
   resumeArgs,
@@ -181,5 +185,32 @@ describe("GitHub Copilot CLI adapter", () => {
       blocksInput(COPILOT_CLI, "Yes,\x1b[1Cand\x1b[1Cremember\x1b[1Cthis\x1b[1Cfolder\x1b[1Cfor\x1b[1Cfuture"),
     ).toBe(true);
     expect(blocksInput(COPILOT_CLI, "> Type @ to mention files")).toBe(false);
+  });
+});
+
+describe("best-effort adapters", () => {
+  const bestEffort = AGENT_ADAPTERS.filter((adapter) => adapter.tier === "best-effort");
+
+  it("offers at least two, each launched interactively and given a skill command in its own syntax", () => {
+    expect(bestEffort.map((adapter) => adapter.id)).toEqual(expect.arrayContaining(["codex-cli", "gemini-cli"]));
+    expect(skillCommand(CODEX_CLI, "/implement shop/02")).toBe("$implement shop/02");
+    expect(skillCommand(GEMINI_CLI, "/implement shop/02")).toBe("/implement shop/02");
+    for (const adapter of bestEffort) expect(adapter.launchArgs).not.toContain("-p");
+  });
+
+  it("has no hooks, so its status is approximate", () => {
+    for (const adapter of bestEffort) {
+      expect(adapter.hookInjection).toEqual({ kind: "none" });
+      expect(adapter.statusEvents).toEqual({});
+      expect(hasStatusHooks(adapter)).toBe(false);
+    }
+    expect(hasStatusHooks(CLAUDE_CODE)).toBe(true);
+    expect(hasStatusHooks(COPILOT_CLI)).toBe(true);
+  });
+
+  it("waits out a folder trust dialog before anything is typed", () => {
+    expect(blocksInput(CODEX_CLI, "Do you trust the contents of this directory?")).toBe(true);
+    expect(blocksInput(GEMINI_CLI, "Do you trust this folder?")).toBe(true);
+    expect(blocksInput(CODEX_CLI, "› Ask Codex to do anything")).toBe(false);
   });
 });

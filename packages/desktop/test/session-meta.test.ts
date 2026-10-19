@@ -1,6 +1,6 @@
 import type { SessionState } from "@dryland/core";
 import { describe, expect, it } from "vitest";
-import { ticketSessions } from "../src/shared/session-meta.ts";
+import { stateLabel, ticketSessions } from "../src/shared/session-meta.ts";
 
 const session = (id: string, ticket: string) => {
   const [map = "", number = ""] = ticket.split("/");
@@ -33,5 +33,22 @@ describe("the session a ticket shows", () => {
   it("is never a map's own session, which works on no ticket", () => {
     const mapSession = { id: "m", agent: { name: "Claude Code" }, ticket: null };
     expect([...ticketSessions([mapSession], { m: "waiting" }).keys()]).toEqual([]);
+  });
+
+  it("carries a hookless session's approximate marking to the ticket's badge", () => {
+    const guessed = { ...session("a", "shop/02"), statusApproximate: true as const };
+    expect(ticketSessions([guessed], { a: "running" }).get("shop/02")).toEqual({
+      agent: "Claude Code",
+      state: "running",
+      approximate: true,
+    });
+  });
+});
+
+describe("a state's label", () => {
+  it("says approximate for a state that was guessed, and nothing extra for one a hook reported", () => {
+    expect(stateLabel("running", true)).toBe("working (approximate)");
+    expect(stateLabel("running", false)).toBe("working");
+    expect(stateLabel("ended", true)).toBe("ended");
   });
 });

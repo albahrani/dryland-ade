@@ -165,8 +165,58 @@ export const COPILOT_CLI: AgentAdapter = {
   },
 };
 
+/** What a best-effort adapter shares: launch and pre-typing only, no hooks, no session id, no resume. */
+const NO_HOOKS = {
+  initialPrompt: "pre-type",
+  parentSessionEnv: [],
+  sessionEnv: null,
+  sessionIdFlag: null,
+  resumeFlag: null,
+  resumeIdJoined: false,
+  historyFile: null,
+  hookInjection: { kind: "none" },
+  statusEvents: {},
+} as const satisfies Partial<AgentAdapter>;
+
+/**
+ * OpenAI Codex CLI. Best-effort (ticket 44): launch and the `$skill` syntax are from Codex's documentation, not
+ * run on the dev machine, so both are re-checked in the v1.0.0 smoke checklist.
+ */
+export const CODEX_CLI: AgentAdapter = {
+  ...NO_HOOKS,
+  id: "codex-cli",
+  name: "Codex CLI",
+  tier: "best-effort",
+  binary: "codex",
+  launchArgs: [],
+  skillPrefix: "$",
+  skillDirs: [".agents/skills", ".codex/skills"],
+  blockingPrompts: [/doyoutrustthecontentsofthisdirectory/i],
+};
+
+/**
+ * Google Gemini CLI. Best-effort (ticket 44), from its documentation and not run on the dev machine; re-checked in
+ * the v1.0.0 smoke checklist.
+ */
+export const GEMINI_CLI: AgentAdapter = {
+  ...NO_HOOKS,
+  id: "gemini-cli",
+  name: "Gemini CLI",
+  tier: "best-effort",
+  binary: "gemini",
+  launchArgs: [],
+  skillPrefix: "/",
+  skillDirs: [".gemini/skills", ".agents/skills"],
+  blockingPrompts: [/doyoutrustthisfolder/i],
+};
+
 /** Every Agent CLI Dryland can start work with, in the order they are offered. */
-export const AGENT_ADAPTERS: readonly AgentAdapter[] = [CLAUDE_CODE, COPILOT_CLI];
+export const AGENT_ADAPTERS: readonly AgentAdapter[] = [CLAUDE_CODE, COPILOT_CLI, CODEX_CLI, GEMINI_CLI];
+
+/** Whether the CLI reports its status through hooks; without them the status is guessed from the terminal. */
+export function hasStatusHooks(adapter: AgentAdapter): boolean {
+  return adapter.hookInjection.kind !== "none";
+}
 
 /** A rule engine command, such as `/implement shop/02`, written the way the adapter's CLI invokes skills. */
 export function skillCommand(adapter: AgentAdapter, command: string): string {

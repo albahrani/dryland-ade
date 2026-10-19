@@ -56,6 +56,12 @@ export interface AppSettings {
   globalAutoCommit: boolean;
   /** The open project's auto-commit override; `null` when it has none or no project is open. */
   projectAutoCommit: boolean | null;
+  /** Whether a session's pre-typed command is submitted in the open project: its override, else the global setting. */
+  autoSubmit: boolean;
+  /** The global auto-submit setting, which the open project's override, if any, wins over. */
+  globalAutoSubmit: boolean;
+  /** The open project's auto-submit override; `null` when it has none or no project is open. */
+  projectAutoSubmit: boolean | null;
   dontAsk: DontAsk;
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
@@ -121,6 +127,8 @@ export interface SessionInfo {
    * is a shell, which closing the tab ends, whether or not the CLI still runs in it.
    */
   manual?: true;
+  /** Set for a CLI without status hooks: its state is guessed from its terminal output, and shown as approximate. */
+  statusApproximate?: true;
 }
 
 /** The session work started, or why it could not start and what to do about it. */

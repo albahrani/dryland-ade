@@ -16,20 +16,32 @@ export interface PretypeOptions {
   write(key: string): void;
   /** Whether output seen since the last pause shows a screen keys must not reach, such as a trust dialog. */
   blocks(output: string): boolean;
+  /** Whether to press Enter once the text is typed (the auto-submit setting). */
+  submit: boolean;
   timing: PretypeTiming;
 }
 
+/** The listener to feed a CLI's output, and the way to stand it down. */
+export type Pretyper = ((output: string) => void) & {
+  /** The user typed: nothing more is typed and nothing is submitted, so their keys never mix with ours. */
+  cancel(): void;
+};
+
 /**
- * Types `text` into an interactive CLI without submitting it: once its output has paused and that output shows no
- * blocking screen, one key at a time and never Enter. Returns the listener to feed the CLI's output; it types once.
+ * Types `text` into an interactive CLI: once its output has paused and that output shows no blocking screen, one
+ * key at a time, and Enter after it only when `submit` is set. Returns the listener to feed the CLI's output; it
+ * types once, and stops for good when cancelled.
  */
-export function createPretyper({ text, write, blocks, timing }: PretypeOptions): (output: string) => void {
+export function createPretyper({ text, write, blocks, submit, timing }: PretypeOptions): Pretyper {
   let seen = "";
   let timer: ReturnType<typeof setTimeout> | undefined;
   let typing = false;
+  let cancelled = false;
 
   async function typeAll(): Promise<void> {
-    for (const key of text) {
+    const keys = submit ? [...text, "\r"] : [...text];
+    for (const key of keys) {
+      if (cancelled) return;
       write(key);
       if (timing.charDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, timing.charDelayMs));
     }
@@ -45,11 +57,25 @@ export function createPretyper({ text, write, blocks, timing }: PretypeOptions):
     void typeAll();
   }
 
-  return (output) => {
-    if (typing) return;
+  const listener = (output: string): void => {
+    if (typing || cancelled) return;
     // A CLI that never pauses would grow this without end; a prompt fits in the tail.
     seen = (seen + output).slice(-SEEN_LIMIT);
     clearTimeout(timer);
     timer = setTimeout(onQuiet, timing.quietMs);
   };
+  return Object.assign(listener, {
+    cancel() {
+      cancelled = true;
+      clearTimeout(timer);
+    },
+  });
+}
+
+/**
+ * Whether `data`, written to a terminal from the renderer, is the user typing: the renderer's terminal also writes
+ * its replies to the CLI's queries (cursor position, device attributes, focus), which are control sequences.
+ */
+export function isKeystroke(data: string): boolean {
+  return typeof data === "string" && data !== "" && !/^\x1b[[\]PO]/.test(data);
 }
