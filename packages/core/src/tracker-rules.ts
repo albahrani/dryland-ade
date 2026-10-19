@@ -1,7 +1,7 @@
 import { DrylandError } from "./errors.ts";
 import { TRIAGE_ROLES, type Ticket, type TriageRole } from "./ticket.ts";
 
-/** What every tracker backend checks before it writes, so the rules and their messages are the same everywhere. */
+// What every tracker backend checks before it writes, so the rules and their messages are the same everywhere.
 
 /** A role may be given as the canonical role or as the repo's own label for it; anything else fails with the valid ones. */
 export function resolveTriageRole(labels: ReadonlyMap<TriageRole, string>, role: string): TriageRole {

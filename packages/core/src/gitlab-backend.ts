@@ -161,7 +161,7 @@ export function withBodyBlockers(description: string, ids: string[]): string {
 const labelsOf = (issue: GitlabIssue): string[] => issue.labels ?? [];
 
 /** The number of the map a ticket belongs to, from its `map:<number>` label. */
-const mapOf =(issue: GitlabIssue): string | undefined =>
+const mapOf = (issue: GitlabIssue): string | undefined =>
   labelsOf(issue)
     .find((name) => /^map:\d+$/i.test(name))
     ?.slice(GITLAB_MAP_LABEL_PREFIX.length);
@@ -215,10 +215,12 @@ async function blockersOf(
 ): Promise<string[] | "unknown"> {
   if (native) {
     const links = await restList(runner, cwd, `${PROJECT}/issues/${issue.iid}/links`);
-    if (!links.ok) return "unknown";
-    return (links.json as GitlabIssueLink[])
-      .filter((link) => link.link_type === "is_blocked_by")
-      .map((link) => String(link.iid));
+    if (links.ok) {
+      return (links.json as GitlabIssueLink[])
+        .filter((link) => link.link_type === "is_blocked_by")
+        .map((link) => String(link.iid));
+    }
+    // Links that cannot be read fall back to the body line, then to unknown.
   }
   const fromBody = readBodyBlockers(issue.description ?? "");
   return fromBody.line ? fromBody.blockers : "unknown";
