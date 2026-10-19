@@ -14,6 +14,7 @@ import {
   nodeProcessRunner,
   readMapDetail,
   readProjectState,
+  readTrackerWidget,
   readSessionIndex,
   resumeArgs,
   sessionsOf,
@@ -22,7 +23,7 @@ import {
   SESSION_RETENTION_ENV,
   startLiveListener,
 } from "@dryland/core";
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, powerMonitor, shell } from "electron";
 import {
   type AppSettings,
   type AppState,
@@ -69,6 +70,7 @@ import { isQuitAnswer, type QuitListing, type QuitRequest } from "../shared/quit
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
+import { TrackerPoller } from "./tracker-poller.ts";
 import { pausedTickets } from "../shared/paused-session.ts";
 import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
@@ -310,7 +312,8 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
 async function projectView(): Promise<{ view: ProjectView; mainCheckout: string | null } | null> {
   if (project === null) return null;
   const { tree, mainCheckout } = await loadTree(project.path);
-  return { view: { path: project.path, name: basename(project.path), tree }, mainCheckout };
+  const tracker = mainCheckout === null ? null : await readTrackerWidget(nodeProcessRunner, mainCheckout);
+  return { view: { path: project.path, name: basename(project.path), tree, tracker }, mainCheckout };
 }
 
 async function currentState(): Promise<AppState> {
@@ -357,6 +360,9 @@ async function openProject(path: string): Promise<void> {
     store.update({ lastProject: path, openProjects: addProject(store.read().openProjects, path) });
   }
   if (loaded?.mainCheckout) stopWatching = watchProject(loaded.mainCheckout, () => void refresh());
+  // A GitHub or GitLab project has no files to watch, so its tickets are polled instead.
+  if (loaded?.view.tracker) trackerPoller.start(loaded.view.tracker.kind);
+  else trackerPoller.stop();
   // The project's auto-commit override shows in the menu and decides its writes.
   buildMenu();
   sendSettings();
@@ -394,6 +400,8 @@ const refresh = latestOnly(projectView, (loaded) => {
   if (loaded !== null) sendToWindow("project:changed", loaded.view);
 });
 
+const trackerPoller = new TrackerPoller(refresh);
+
 async function pickProject(): Promise<void> {
   if (window === null) return;
   const result = await dialog.showOpenDialog(window, { title: "Open project", properties: ["openDirectory"] });
@@ -428,6 +436,7 @@ async function closeOpenProject(path: string): Promise<void> {
   stopWatching = null;
   explorerWatcher.stop();
   project = null;
+  trackerPoller.stop();
   store.update({ lastProject: null });
   buildMenu();
   sendSettings();
@@ -474,7 +483,8 @@ function createWindow(): void {
   });
   // Git state behind the next steps changes outside the watched tracker files, e.g. a commit made in a terminal.
   window.on("focus", () => {
-    void refresh();
+    // A polled remote project re-reads through the poller, which never overlaps a read still running.
+    void (trackerPoller.active ? trackerPoller.focus() : refresh());
     void reconcileSessions();
   });
   if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -564,6 +574,18 @@ ipcMain.handle("sessions-layout:save", (_event, layout: unknown) => {
   if (project === null) return;
   const saved = store.read().sessionsLayout;
   store.update({ sessionsLayout: { ...saved, [project.path]: parseSessionsLayout(layout) } });
+});
+ipcMain.handle("tracker:widget-action", async (_event, kind: unknown): Promise<string | null> => {
+  const loaded = await projectView();
+  if (loaded === null || loaded.mainCheckout === null) return null;
+  if (kind === "reveal-issues") {
+    const error = await shell.openPath(join(loaded.mainCheckout, ".scratch"));
+    return error === "" ? null : error;
+  }
+  if (kind !== "open-issues" || loaded.view.tracker === null) return null;
+  const cli = loaded.view.tracker.kind === "github" ? "gh" : "glab";
+  const result = await nodeProcessRunner.run(cli, ["issue", "list", "--web"], { cwd: loaded.mainCheckout });
+  return result.exitCode === 0 ? null : `${cli} issue list --web failed: ${result.stderr.trim()}`;
 });
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 /** The Explorer reads the open project's worktrees; nothing without a project. */

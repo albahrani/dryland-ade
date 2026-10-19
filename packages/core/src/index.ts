@@ -29,6 +29,7 @@ export * from "./ticket-write.ts";
 export * from "./tickets.ts";
 export * from "./tickets-tree.ts";
 export * from "./tracker-backend.ts";
+export * from "./tracker-widget.ts";
 export * from "./tracker-write.ts";
 export * from "./tracker.ts";
 export * from "./triage-labels.ts";

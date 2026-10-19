@@ -27,7 +27,7 @@ export async function readProjectState(
   mainCheckout: string,
   sessions: SessionSnapshot[] | null = null,
 ): Promise<ProjectState> {
-  const tickets = (await exists(join(mainCheckout, TRACKER_DOC))) ? await readTickets(mainCheckout) : [];
+  const tickets = (await exists(join(mainCheckout, TRACKER_DOC))) ? await readTickets(mainCheckout, runner) : [];
   const efforts = await readEfforts(mainCheckout);
   return {
     tree: buildTicketsTree(tickets, efforts),

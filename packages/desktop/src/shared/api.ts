@@ -6,7 +6,9 @@ import type {
   TicketDetail,
   TicketRef,
   TicketsTree,
+  TrackerWidgetInfo,
 } from "@dryland/core";
+import type { TrackerWidgetAction } from "./tracker-widget.ts";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
 import type { OpenProject, ProjectSummary } from "./projects.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "./quit.ts";
@@ -40,6 +42,8 @@ export interface ProjectView {
   path: string;
   name: string;
   tree: TreeLoad;
+  /** What the tracker widget shows; `null` when the tracker doc is missing or names no tracker Dryland reads. */
+  tracker: TrackerWidgetInfo | null;
 }
 
 /** How much of the live-events panel shows: all of it, its newest line, or nothing. */
@@ -162,6 +166,8 @@ export interface DrylandApi {
   /** Each open project's tracker, live session count and next-up item. */
   projectSummaries(): Promise<ProjectSummary[]>;
   dismissLegend(): Promise<void>;
+  /** Carries out the tracker widget's action; resolves with what went wrong, or `null`. */
+  trackerWidgetAction(kind: TrackerWidgetAction["kind"]): Promise<string | null>;
   /** Remembers how much of the live-events panel shows. */
   setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;
   /** Remembers the open tabs of the open project. */

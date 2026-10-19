@@ -10,6 +10,10 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
+## Writing tickets
+
+Change tickets and map indexes only through the `dryland` CLI (`dryland ticket claim`, `resolve`, `create`, `block`, `triage`; `dryland map index`), never by editing the files. This is the ADE tracker; Dryland shows a repo whose tracker doc never mentions `dryland` in lens mode.
+
 ## When a skill says "publish to the issue tracker"
 
 Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).

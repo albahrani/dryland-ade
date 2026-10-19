@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import type { TrackerWidgetInfo } from "@dryland/core";
+import { type TrackerWidgetAction, trackerWidgetView } from "../../shared/tracker-widget.ts";
 import type { SessionInfo } from "../../shared/api.ts";
 import type { OpenProject, ProjectSummary } from "../../shared/projects.ts";
 import { sessionTitle } from "../../shared/work-target.ts";
@@ -162,5 +164,35 @@ export function AllProjectsDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The menu bar's tracker widget: the tracker, its action, and the warnings that go with it. */
+export function TrackerWidget({
+  info,
+  onError,
+}: {
+  info: TrackerWidgetInfo | null;
+  onError: (message: string) => void;
+}) {
+  const view = trackerWidgetView(info);
+  const act = async (kind: TrackerWidgetAction["kind"]) => {
+    const error = await window.dryland.trackerWidgetAction(kind);
+    if (error !== null) onError(error);
+  };
+  return (
+    <span className="tracker-widget" title={view.notes.join(" ")}>
+      <span className="project-widget">{view.label}</span>
+      {view.action !== null && (
+        <button className="project-widget" onClick={() => void act(view.action!.kind)}>
+          {view.action.label}
+        </button>
+      )}
+      {view.notes.map((note) => (
+        <span key={note} className="tracker-note" role="status">
+          ⚠ {note}
+        </span>
+      ))}
+    </span>
   );
 }

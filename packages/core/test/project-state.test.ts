@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { nextSteps, nodeProcessRunner, readProjectState } from "../src/index.ts";
+import { DrylandError, nextSteps, nodeProcessRunner, type ProcessRunner, readProjectState } from "../src/index.ts";
 
 function checkout(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "dryland-project-state-"));
@@ -142,5 +142,32 @@ describe("readProjectState", () => {
     );
 
     expect((await readProjectState(nodeProcessRunner, root)).snapshot.sessions).toBeNull();
+  });
+});
+
+describe("readProjectState with a GitHub tracker and a broken gh", () => {
+  const github = () => checkout({ "docs/agents/issue-tracker.md": "# Issue tracker: GitHub\n" });
+  /** `gh issue list` fails; `gh --version` and `gh auth status` succeed unless named in `failing`. */
+  const runner = (failing: string[]): ProcessRunner => ({
+    async run(command, args) {
+      const call = [command, ...args].join(" ");
+      const broken = call.startsWith("git ") ? false : call.startsWith("gh issue") || failing.includes(call);
+      return { stdout: "", stderr: broken ? "boom" : "", exitCode: broken ? 1 : 0 };
+    },
+  });
+
+  it("says gh is missing and what to install, instead of an empty tree", async () => {
+    const error = await readProjectState(runner(["gh --version"]), github()).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DrylandError);
+    expect((error as DrylandError).message).toContain("not installed");
+    expect((error as DrylandError).nextAction).toContain("gh auth login");
+  });
+
+  it("says gh is logged out and to log in", async () => {
+    const error = await readProjectState(runner(["gh auth status"]), github()).catch((e: unknown) => e);
+
+    expect((error as DrylandError).message).toContain("not logged in");
+    expect((error as DrylandError).nextAction).toBe("Run `gh auth login`.");
   });
 });

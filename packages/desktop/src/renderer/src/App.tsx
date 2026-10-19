@@ -22,7 +22,7 @@ import {
   trackStateSince,
 } from "../../shared/sessions-view.ts";
 import { stateLabel } from "../../shared/session-meta.ts";
-import { AllProjectsDialog, ProjectWidget } from "./ProjectsUi.tsx";
+import { AllProjectsDialog, ProjectWidget, TrackerWidget } from "./ProjectsUi.tsx";
 import { projectSessions } from "../../shared/projects.ts";
 import { SessionsView } from "./SessionsView.tsx";
 import { SkillSetupPanel } from "./SkillSetupPanel.tsx";
@@ -593,6 +593,7 @@ export function App() {
           onOpen={() => void openProject()}
           onAll={() => setDialog("all-projects")}
         />
+        {project !== null && <TrackerWidget info={project.tracker} onError={setNotice} />}
         <button className="project-widget" disabled={project === null} onClick={() => void newTerminal()}>
           New terminal
         </button>

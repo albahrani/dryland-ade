@@ -35,7 +35,13 @@ export interface RemoteBackend {
   create(
     runner: ProcessRunner,
     cwd: string,
-    input: { map: string; title: string; type: TicketType; question?: string | undefined; blockedBy?: string[] | undefined },
+    input: {
+      map: string;
+      title: string;
+      type: TicketType;
+      question?: string | undefined;
+      blockedBy?: string[] | undefined;
+    },
   ): Promise<TicketWriteResult>;
   claim(runner: ProcessRunner, cwd: string, reference: string): Promise<TicketWriteResult & { alreadyHeld: boolean }>;
   release(runner: ProcessRunner, cwd: string, reference: string): Promise<TicketWriteResult>;

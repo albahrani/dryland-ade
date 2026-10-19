@@ -9,6 +9,7 @@ const api: DrylandApi = {
   switchProject: (path) => ipcRenderer.invoke("project:switch", path),
   closeProject: (path) => ipcRenderer.invoke("project:close", path),
   projectSummaries: () => ipcRenderer.invoke("projects:summaries"),
+  trackerWidgetAction: (kind) => ipcRenderer.invoke("tracker:widget-action", kind),
   dismissLegend: () => ipcRenderer.invoke("legend:dismiss"),
   setLiveEventsPanel: (mode) => ipcRenderer.invoke("live-events:mode", mode),
   saveTabs: (tabs) => ipcRenderer.invoke("tabs:save", tabs),

@@ -12,6 +12,25 @@ const HEADINGS: Record<string, TrackerKind> = {
   gitlab: "gitlab",
 };
 
+/**
+ * Whether the tracker doc sends agents through the `dryland` CLI, which makes the repo's tracker the ADE tracker.
+ * A doc that never mentions it describes a plain native tracker, which Dryland reads in lens mode.
+ */
+export const isAdeTrackerDoc = (doc: string): boolean => /\bdryland\b/i.test(doc);
+
+export interface TrackerInfo {
+  kind: TrackerKind;
+  /** A plain native tracker: Dryland reads and launches, and claims are best-effort. */
+  lens: boolean;
+}
+
+/** Reads which tracker the repo uses, and whether it is the ADE tracker, from `docs/agents/issue-tracker.md`. */
+export async function readTrackerInfo(mainCheckout: string): Promise<TrackerInfo> {
+  const kind = await readTrackerKind(mainCheckout);
+  const doc = await readFile(join(mainCheckout, TRACKER_DOC), "utf8");
+  return { kind, lens: !isAdeTrackerDoc(doc) };
+}
+
 /** Reads which tracker the repo uses from the title of `docs/agents/issue-tracker.md`. */
 export async function readTrackerKind(mainCheckout: string): Promise<TrackerKind> {
   const doc = await readFile(join(mainCheckout, TRACKER_DOC), "utf8").catch(() => null);
