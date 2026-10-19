@@ -1,7 +1,7 @@
 # Header fields inserted below the Spec line
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 
 ## What to build
 
@@ -20,8 +20,12 @@ Fix: the header block ends at the first blank line after it has started. A missi
 
 ## Acceptance criteria
 
-- [ ] Triage and claim on a ticket with `Type:`, a blank line and a `Spec:` line, and no `Status:`, add `Status:` directly under `Type:`; the `Spec:` paragraph is untouched
-- [ ] `ticket block --add` on such a ticket adds `Blocked by:` in the header block, after `Status:` when there is one
-- [ ] A `Status:` or `Blocked by:` line already present is still rewritten in place, wherever it is
-- [ ] CRLF and mixed line endings are kept, as the current tests check
+- [x] Triage and claim on a ticket with `Type:`, a blank line and a `Spec:` line, and no `Status:`, add `Status:` directly under `Type:`; the `Spec:` paragraph is untouched
+- [x] `ticket block --add` on such a ticket adds `Blocked by:` in the header block, after `Status:` when there is one
+- [x] A `Status:` or `Blocked by:` line already present is still rewritten in place, wherever it is
+- [x] CRLF and mixed line endings are kept, as the current tests check
 - [ ] Tickets created by `dryland ticket create` read the same through `ticket show` before and after the fix
+
+## Answer
+
+Fixed in ed58898 and 1698913. rewriteHeaderField now treats the header block as the run of fields up to the first blank line and adds a missing Status after Type, a missing Blocked by after Status and its annotation. A field already present anywhere is still rewritten in place. Tests in packages/cli/test/ticket-header-placement.test.ts cover triage, claim, block, CRLF and in-place rewrites. Known limit: no test compares ticket show output for created tickets; createTicket is untouched and its existing tests pass. Edge: a Status below a blank line is not seen as the anchor for a new Blocked by.
