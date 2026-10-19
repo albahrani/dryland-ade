@@ -745,3 +745,70 @@ test("links a CLI started by hand in a terminal tab to its ticket by working dir
   ).toBeVisible();
   await app.close();
 });
+
+/** A fake `copilot` that prints where it runs and then idles on stdin; it fires no hooks. */
+function stubCopilot(): string {
+  const dir = mkdtempSync(join(tmpdir(), "dryland-e2e-copilot-"));
+  const script = join(dir, "stub-copilot.cjs");
+  writeFileSync(
+    script,
+    "console.log(`copilot-ready cwd=${require('node:path').basename(process.cwd())}`); process.stdin.resume();",
+  );
+  if (windows) {
+    writeFileSync(join(dir, "copilot.cmd"), `@"${process.execPath}" "${script}" %*\r\n`);
+  } else {
+    writeFileSync(join(dir, "copilot"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`);
+    chmodSync(join(dir, "copilot"), 0o755);
+  }
+  return dir;
+}
+
+test("asks before Copilot CLI's first user-config write, writes nothing on cancel, and can stop asking", async () => {
+  const copilotHome = mkdtempSync(join(tmpdir(), "dryland-e2e-copilot-home-"));
+  const config = '{\n  "theme": "dark",\n  "trustedFolders": []\n}\n';
+  writeFileSync(join(copilotHome, "config.json"), config);
+  const env = { ...withPath((dirs) => [stubCopilot(), ...dirs]), COPILOT_HOME: copilotHome };
+  const { app, window } = await openTicket(env);
+  const hookFile = join(copilotHome, "hooks", "dryland.json");
+  const dialog = window.getByRole("dialog", { name: "Confirm write" });
+  const start = window.getByRole("group", { name: "Start work" });
+  await start.getByLabel("Agent CLI").selectOption({ label: "GitHub Copilot CLI" });
+
+  // The confirmation names the files; cancelling starts nothing and writes nothing.
+  await start.getByRole("button", { name: "Start with GitHub Copilot CLI" }).click();
+  await expect(dialog).toContainText("trustedFolders");
+  await expect(dialog).toContainText("dryland doctor --install-hooks");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  expect(existsSync(hookFile)).toBe(false);
+  expect(readFileSync(join(copilotHome, "config.json"), "utf8")).toBe(config);
+  await expect(window.getByRole("tab", { name: /GitHub Copilot CLI/ })).toHaveCount(0);
+
+  // Confirming installs the hook file, trusts the worktree and starts the session.
+  await start.getByRole("button", { name: "Start with GitHub Copilot CLI" }).click();
+  await dialog.getByLabel("Dryland-owned user-config writes").check();
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  await expect(window.getByRole("tab", { name: "GitHub Copilot CLI shop/02" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(window.locator(".xterm-rows:visible")).toContainText("copilot-ready cwd=shop-02-grill");
+  expect(existsSync(hookFile)).toBe(true);
+  const saved = JSON.parse(readFileSync(join(copilotHome, "config.json"), "utf8")) as {
+    theme: string;
+    trustedFolders: string[];
+  };
+  expect(saved.theme).toBe("dark");
+  expect(saved.trustedFolders).toHaveLength(1);
+  expect(saved.trustedFolders[0]).toContain("shop-02-grill");
+
+  // "Do not ask again" is kept: Settings lists it as not asked.
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
+    file?.submenu?.items.find((item) => item.label === "Settings...")?.click();
+  });
+  const settings = window.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("tab", { name: "Write confirmations" }).click();
+  await expect(settings.getByRole("button", { name: "Reset Dryland-owned user-config writes" })).toBeEnabled();
+  await app.close();
+});
