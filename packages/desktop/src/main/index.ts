@@ -758,9 +758,15 @@ async function quitFromDialog(): Promise<void> {
   app.quit();
 }
 
-/** Resolves when the window says it shows the quit dialog. */
-function windowShowsQuitDialog(): Promise<void> {
-  return new Promise((resolve) => ipcMain.once("quit:shown", () => resolve()));
+/** Resolves when the window says it shows the quit dialog; `stop` stops listening. */
+function windowShowsQuitDialog(): { shown: Promise<void>; stop: () => void } {
+  let stop = () => {};
+  const shown = new Promise<void>((resolve) => {
+    const listener = () => resolve();
+    ipcMain.once("quit:shown", listener);
+    stop = () => void ipcMain.removeListener("quit:shown", listener);
+  });
+  return { shown, stop };
 }
 
 /** The native message box, for a window that does not answer; on Quit, stops them and quits. */
@@ -784,11 +790,11 @@ async function confirmQuit(): Promise<void> {
   quit = "asking";
   const listing = quitListing(runningSessions(), status.states(), new Set(unseen.ids()));
   if (listing.length === 0) return void (await shutDown());
-  const shown = window === null || window.isDestroyed() ? null : windowShowsQuitDialog();
-  if (shown !== null) {
+  if (window !== null && !window.isDestroyed()) {
+    const { shown, stop } = windowShowsQuitDialog();
     sendToWindow("quit:request", { sessions: listing } satisfies QuitRequest);
     if ((await whoAsks(shown)) === "in-app") return;
-    ipcMain.removeAllListeners("quit:shown");
+    stop();
   }
   await askNatively(listing);
 }

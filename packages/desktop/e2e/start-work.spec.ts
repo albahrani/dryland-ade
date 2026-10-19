@@ -334,7 +334,7 @@ test("shows the shutdown steps after Quit, and Quit now abandons a slow one and 
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
   const screen = window.locator(".xterm-rows:visible");
   await expect(screen).toContainText("/implement shop/02");
-  const pid = Number(/pid=(d+)/.exec(await screen.innerText())?.[1]);
+  const pid = Number(/pid=(\d+)/.exec(await screen.innerText())?.[1]);
 
   void app.evaluate(({ app }) => app.quit());
   const dialog = window.getByRole("dialog", { name: "Quit Dryland" });
@@ -367,6 +367,8 @@ test("asks natively when the window does not answer the quit request", async () 
   const closed = app.waitForEvent("close", { timeout: 15_000 });
   await app.evaluate(({ app }) => app.quit()).catch(() => {});
   await closed;
+  // The app is gone, so what the native box was asked is read from the process's exit alone: it quit only because
+  // the stubbed box answered Quit, as nothing else could answer for the crashed window.
 });
 
 test("quitting with no running session asks nothing", async () => {
