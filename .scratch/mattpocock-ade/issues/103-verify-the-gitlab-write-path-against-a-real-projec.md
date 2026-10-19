@@ -1,6 +1,7 @@
 # Verify the GitLab write path against a real project
 
 Type: task
+Status: ready-for-human
 
 ## Question
 
