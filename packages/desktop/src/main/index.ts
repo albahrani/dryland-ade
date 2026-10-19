@@ -59,6 +59,7 @@ import { createUnseenOutput } from "./unseen-output.ts";
 import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../shared/stop-session.ts";
 import { createExplorer } from "./explorer.ts";
 import { createExplorerWatcher } from "./explorer-watch.ts";
+import { createSourceControl } from "./source-control.ts";
 import { watchProject } from "./watch-project.ts";
 import { createWorkStarter } from "./work.ts";
 import { isRootHint } from "../shared/explorer.ts";
@@ -513,6 +514,28 @@ ipcMain.handle("explorer:watch", async (_event, root: unknown, dirs: unknown) =>
   const gitDir = await explorerFor().watchTarget(text(root, "root"), dirs as string[]);
   explorerWatcher.set(root as string, dirs as string[], gitDir ?? undefined);
 });
+const sourceControlFor = () => {
+  const explorer = explorerFor();
+  return createSourceControl(nodeProcessRunner, project!.path, explorer);
+};
+const paths = (value: unknown): string[] => {
+  if (!Array.isArray(value) || !value.every((path) => typeof path === "string")) {
+    throw new TypeError("paths must be strings");
+  }
+  return value as string[];
+};
+ipcMain.handle("source-control:status", (_event, root: unknown) => sourceControlFor().status(text(root, "root")));
+ipcMain.handle("source-control:graph", (_event, root: unknown) => sourceControlFor().graph(text(root, "root")));
+ipcMain.handle("source-control:unlinked", () => sourceControlFor().unlinked());
+ipcMain.handle("source-control:stage", (_event, root: unknown, files: unknown) =>
+  sourceControlFor().stage(text(root, "root"), paths(files)),
+);
+ipcMain.handle("source-control:unstage", (_event, root: unknown, files: unknown) =>
+  sourceControlFor().unstage(text(root, "root"), paths(files)),
+);
+ipcMain.handle("source-control:commit", (_event, root: unknown, message: unknown) =>
+  sourceControlFor().commit(text(root, "root"), text(message, "message")),
+);
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
   if (isLiveEventsPanelMode(mode)) store.update({ liveEventsPanel: mode });

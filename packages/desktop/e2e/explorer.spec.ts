@@ -84,7 +84,7 @@ test("shows the selected ticket's worktree, opens files and diffs read-only, and
   await app.close();
 });
 
-test("lists an edit in a closed folder under Changes, and drops the file once it is committed", async () => {
+test("stages and commits from Source Control, which follows an edit in a closed folder and an outside commit", async () => {
   const { repo } = fixture();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
   const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`] });
@@ -97,14 +97,28 @@ test("lists an edit in a closed folder under Changes, and drops the file once it
   await expect(explorer.getByRole("heading", { name: "Main checkout (main)" })).toBeVisible();
 
   write(repo, "src/greeting.ts", "export const greeting = 'changed';\n");
-  const changes = explorer.getByRole("region", { name: "Changed files" });
-  await expect(changes.getByRole("button", { name: /src\/greeting.ts/ })).toBeVisible();
+  const sourceControl = window.getByRole("region", { name: "Source Control" });
+  const changes = sourceControl.getByRole("region", { name: "Changed files" });
+  const staged = sourceControl.getByRole("region", { name: "Staged files" });
+  await expect(changes.getByRole("button", { name: /^[MAUD] src\/greeting.ts$/ })).toBeVisible();
 
-  // The watchers are armed a moment after the list shows.
+  // Stage, then commit from the box: the file leaves both lists and the graph keeps the message.
+  await changes.getByRole("button", { name: "Stage src/greeting.ts" }).click();
+  await expect(staged.getByRole("button", { name: /^[MAUD] src\/greeting.ts$/ })).toBeVisible();
+  await expect(changes.getByRole("button", { name: /^[MAUD] src\/greeting.ts$/ })).toHaveCount(0);
+  await sourceControl.getByRole("textbox", { name: "Commit message" }).fill("Greet differently");
+  await sourceControl.getByRole("button", { name: "Commit", exact: true }).click();
+  await expect(staged.getByRole("listitem")).toHaveCount(0);
+  await expect(sourceControl.getByRole("region", { name: "Commit graph" })).toContainText("Greet differently");
+  expect(execFileSync("git", ["log", "-1", "--format=%s"], { cwd: repo }).toString().trim()).toBe("Greet differently");
+
+  // A commit made outside the app reaches the pane too; it changes no working file, only git's own.
+  write(repo, "src/greeting.ts", "export const greeting = 'again';\n");
+  await expect(changes.getByRole("button", { name: /^[MAUD] src\/greeting.ts$/ })).toBeVisible();
   await window.waitForTimeout(500);
-  // The commit changes no working file, only git's own.
   execFileSync("git", ["commit", "-q", "-a", "-m", "Change greeting"], { cwd: repo, stdio: "pipe" });
-  await expect(changes).toHaveCount(0);
+  await expect(changes.getByRole("listitem")).toHaveCount(0);
+  await expect(sourceControl.getByRole("region", { name: "Commit graph" })).toContainText("Change greeting");
 
   await app.close();
 });

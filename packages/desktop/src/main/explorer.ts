@@ -69,7 +69,12 @@ export function createExplorer(
 
   async function toRoot(
     mainCheckout: string,
-    entry: { path: string; branch: string | null; main: boolean; link: { ticket: string | null } },
+    entry: {
+      path: string;
+      branch: string | null;
+      main: boolean;
+      link: { kind: ExplorerRoot["link"]; ticket: string | null };
+    },
   ): Promise<ExplorerRoot> {
     // The main checkout shows its uncommitted changes; a worktree, everything since it left the default branch.
     let base: string | null = null;
@@ -78,7 +83,14 @@ export function createExplorer(
       const mergeBase = branch === null ? null : await git(entry.path, ["merge-base", "HEAD", branch]);
       if (mergeBase?.ok) base = mergeBase.stdout.trim();
     }
-    return { path: entry.path, branch: entry.branch, main: entry.main, ticket: entry.link.ticket, base };
+    return {
+      path: entry.path,
+      branch: entry.branch,
+      main: entry.main,
+      ticket: entry.link.ticket,
+      link: entry.link.kind,
+      base,
+    };
   }
 
   async function resolveRoot(hint: RootHint): Promise<ExplorerRoot> {
@@ -91,11 +103,16 @@ export function createExplorer(
       chosen = entries.find((entry) => sameDir(entry.path, hint.path)) ?? main;
     } else if (hint?.kind === "ticket") {
       const ref = ticketRef(hint.ticket);
-      chosen = entries.find((entry) => entry.link.kind === "name" && entry.link.ticket === ref) ?? main;
+      // A branch tied to the ticket only by a commit trailer is its worktree too.
+      chosen =
+        entries.find(
+          (entry) => (entry.link.kind === "name" || entry.link.kind === "trailer") && entry.link.ticket === ref,
+        ) ?? main;
     }
     return toRoot(mainCheckout, chosen);
   }
 
+  /** The worktree `root` names, or a refusal when git does not list it for this project. */
   async function knownRoot(root: string): Promise<ExplorerRoot> {
     const mainCheckout = await findMainCheckout(runner, projectPath);
     const entry = (await listWorktrees(runner, mainCheckout)).find((e) => sameDir(e.path, root));
@@ -240,7 +257,12 @@ export function createExplorer(
     return ok ? stdout.trim() : null;
   }
 
-  return { resolveRoot, watchTarget, listDirectory, readFile, changes, diff };
+  /** Every worktree of the project with its link to a ticket. */
+  async function worktrees() {
+    return listWorktrees(runner, await findMainCheckout(runner, projectPath));
+  }
+
+  return { resolveRoot, knownRoot, worktrees, watchTarget, listDirectory, readFile, changes, diff };
 }
 
 const ticketRef = (ticket: TicketRef): string => `${ticket.map}/${ticket.id}`;

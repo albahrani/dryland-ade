@@ -13,7 +13,7 @@ const CHANGES_POLL_MS = 2000;
 const STATUS_LETTER = { added: "A", modified: "M", deleted: "D", untracked: "U" } as const;
 
 /**
- * The file tree of the worktree a selection belongs to, and the files changed in it. Directories load as they are
+ * The file tree of the worktree a selection belongs to, with a badge on each changed file (the list is Source Control's). Directories load as they are
  * opened, and only the open ones are watched, so a huge or ignored directory costs nothing until it is asked for.
  */
 export function Explorer({
@@ -177,24 +177,6 @@ export function Explorer({
       <h3 className="explorer-root" title={root.path}>
         {rootLabel(root)}
       </h3>
-      {changes.length > 0 && (
-        <section className="explorer-changes" aria-label="Changed files">
-          <h4>Changes ({changes.length})</h4>
-          <ul>
-            {changes.map((change) => (
-              <li key={change.path}>
-                <button
-                  className="tree-name"
-                  title={`${change.status}: open diff`}
-                  onClick={() => onOpenDiff(root.path, change.path)}
-                >
-                  <span className={`change change-${change.status}`}>{STATUS_LETTER[change.status]}</span> {change.path}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       {renderDir("", 0)}
     </section>
   );

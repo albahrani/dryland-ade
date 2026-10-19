@@ -9,6 +9,7 @@ import type {
 } from "@dryland/core";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
 import type { NextUp } from "./next-up.ts";
+import type { CommitGraph, CommitResult, SourceControlStatus, UnlinkedBranch } from "./source-control.ts";
 import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
 import type { StopConfirmation } from "./stop-session.ts";
@@ -149,6 +150,16 @@ export interface DrylandApi {
   explorerDiff(root: string, path: string): Promise<DiffContent>;
   /** Watches exactly these directories of a worktree (`""` is its top); `onExplorerChanged` fires when they change. */
   explorerWatch(root: string, dirs: string[]): Promise<void>;
+  /** The staged and the changed files of a worktree, against its HEAD. */
+  sourceControlStatus(root: string): Promise<SourceControlStatus>;
+  /** The worktree branch's commits relative to the default branch. */
+  sourceControlGraph(root: string): Promise<CommitGraph>;
+  /** The project's worktrees that no ticket link covers. */
+  sourceControlUnlinked(): Promise<UnlinkedBranch[]>;
+  sourceControlStage(root: string, paths: string[]): Promise<void>;
+  sourceControlUnstage(root: string, paths: string[]): Promise<void>;
+  /** Commits what is staged in that worktree with `message`. */
+  sourceControlCommit(root: string, message: string): Promise<CommitResult>;
   /** Called after files change in the watched directories. Returns an unsubscribe function. */
   onExplorerChanged(callback: () => void): () => void;
   /** Starts a shell in the open project's main checkout; resolves with its id, or `null` without a project. */

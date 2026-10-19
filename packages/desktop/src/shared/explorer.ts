@@ -23,6 +23,8 @@ export interface ExplorerRoot {
   main: boolean;
   /** `<map>/<NN>` of the ticket the worktree is linked to, if any. */
   ticket: string | null;
+  /** How the worktree is tied to its ticket: by branch name, by commit trailer only, a scratch branch, or not at all. */
+  link: "name" | "trailer" | "scratch" | "unlinked";
   /** The commit changes are shown against; `null` shows uncommitted changes (HEAD), as the main checkout does. */
   base: string | null;
 }

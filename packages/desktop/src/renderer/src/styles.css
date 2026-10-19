@@ -1071,14 +1071,46 @@ ul {
   font-weight: 600;
 }
 
-.explorer h4 {
+.source-control {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.link-note {
+  margin: 0 0 4px;
+  color: var(--fg-dim);
+  font-size: 11px;
+}
+
+.commit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.graph {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.graph-base {
+  color: var(--fg-dim);
+}
+
+.explorer h4,
+.source-control h4 {
   margin: 8px 0 4px;
   color: var(--fg-dim);
   font-size: 11px;
   text-transform: uppercase;
 }
 
-.explorer ul {
+.explorer ul,
+.source-control ul {
   margin: 0;
   padding: 0;
   list-style: none;

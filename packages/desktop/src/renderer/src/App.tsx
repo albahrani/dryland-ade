@@ -40,6 +40,7 @@ import {
 } from "../../shared/tabs.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
 import { Explorer } from "./Explorer.tsx";
+import { SourceControl } from "./SourceControl.tsx";
 import { DiffTab, FileTab } from "./FileTab.tsx";
 import type { RootHint } from "../../shared/explorer.ts";
 import { baseName, dirName } from "../../shared/paths.ts";
@@ -225,6 +226,8 @@ export function App() {
   const [now, setNow] = useState(Date.now);
   // Counts the changes the Explorer's watched directories report; open file tabs and the tree read again on each.
   const [explorerRevision, setExplorerRevision] = useState(0);
+  // A worktree the user picked from Source Control's unlinked branches, for as long as the same tab stays focused.
+  const [pinned, setPinned] = useState<{ tab: string | null; path: string } | null>(null);
 
   const sessionStatesNow = state?.sessionStates;
   useEffect(() => {
@@ -503,6 +506,10 @@ export function App() {
     void runAction(pending.action);
   };
   const activeTab = activeItem(tabs);
+  const worktreeHint: RootHint =
+    pinned !== null && pinned.tab === tabs.active
+      ? { kind: "worktree", path: pinned.path }
+      : explorerHint(activeTab, sessions);
   const activeDocument = activeTab?.kind === "ticket" || activeTab?.kind === "map" ? activeTab : undefined;
   const activeSession = activeTab?.kind === "terminal" ? sessions.get(activeTab.id) : undefined;
   const allSessions = [...sessions.values()];
@@ -688,18 +695,27 @@ export function App() {
         {project === null ? (
           <p className="empty">Open a git repo to browse its files.</p>
         ) : (
-          <Explorer
-            hint={explorerHint(activeTab, sessions)}
-            projectView={project}
-            revision={explorerRevision}
-            watchedDirs={(root) =>
-              tabs.open.flatMap((tab) =>
-                (tab.kind === "file" || tab.kind === "diff") && tab.root === root ? [dirName(tab.path)] : [],
-              )
-            }
-            onOpenFile={(root, path) => setTabs(openTab(tabs, { kind: "file", root, path }))}
-            onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
-          />
+          <>
+            <Explorer
+              hint={worktreeHint}
+              projectView={project}
+              revision={explorerRevision}
+              watchedDirs={(root) =>
+                tabs.open.flatMap((tab) =>
+                  (tab.kind === "file" || tab.kind === "diff") && tab.root === root ? [dirName(tab.path)] : [],
+                )
+              }
+              onOpenFile={(root, path) => setTabs(openTab(tabs, { kind: "file", root, path }))}
+              onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
+            />
+            <SourceControl
+              hint={worktreeHint}
+              projectView={project}
+              revision={explorerRevision}
+              onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
+              onShowWorktree={(path) => setPinned({ tab: tabs.active, path })}
+            />
+          </>
         )}
       </aside>
       {dialog === "new-ticket" && project?.tree.ok && (

@@ -218,7 +218,7 @@ test("creates a ticket without asking once tracker metadata writes are no longer
   const confirm = window.getByRole("dialog", { name: "Confirm write" });
   await confirm.getByLabel("Don't ask again for tracker metadata writes from a button").check();
   await confirm.getByRole("button", { name: "Confirm" }).click();
-  await expect(window.getByText("Refund orders")).toBeVisible();
+  await expect(window.getByRole("region", { name: "Tickets" }).getByText("Refund orders")).toBeVisible();
 
   // The "+" in the Tickets view opens the same dialog.
   await window.getByRole("button", { name: "New ticket" }).click();
