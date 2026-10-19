@@ -171,7 +171,9 @@ test("shows the session's state from Claude Code's hooks on its tab and on its t
   await window.keyboard.type("~");
   await expectState("idle");
   await window.keyboard.type("#");
-  await expectState("ended");
+  // The ticket shows "ended" for a moment only: the session's claim is then re-read as paused, which it shows instead.
+  await expect(badges("ended")[0]!).toHaveAttribute("title", "Claude Code: ended");
+  await expect(badges("Paused")[1]!).toHaveAttribute("title", "Claude Code: Paused");
 
   // A second session on the ticket: the ticket shows it over the ended one.
   const ticketBadge = (state: string) =>
