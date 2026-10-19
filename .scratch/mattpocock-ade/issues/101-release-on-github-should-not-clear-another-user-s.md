@@ -1,6 +1,8 @@
 # Release on GitHub should not clear another user's claim
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-19T20:41:46.502Z","was":""}} -->
 
 ## Question
 
