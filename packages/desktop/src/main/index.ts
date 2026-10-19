@@ -513,8 +513,9 @@ ipcMain.handle("explorer:watch", async (_event, root: unknown, dirs: unknown) =>
   )
     throw new TypeError("dirs must be relative directories of the worktree");
   // Only a worktree of the project is watched; reading its root first validates it.
-  await explorerFor().changes(text(root, "root"));
-  explorerWatcher.set(root as string, dirs as string[]);
+  const explorer = explorerFor();
+  await explorer.changes(text(root, "root"));
+  explorerWatcher.set(root as string, dirs as string[], (await explorer.gitDir(root as string)) ?? undefined);
 });
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 ipcMain.handle("live-events:mode", (_event, mode: unknown) => {

@@ -50,7 +50,7 @@ export function createExplorer(
   const maxFileBytes = limits.maxFileBytes ?? MAX_FILE_BYTES;
 
   const git = async (cwd: string, args: string[]): Promise<{ ok: boolean; stdout: string }> => {
-    const result = await runner.run("git", args, { cwd });
+    const result = await runner.run("git", ["--no-optional-locks", ...args], { cwd });
     return { ok: result.exitCode === 0, stdout: result.stdout };
   };
 
@@ -196,7 +196,14 @@ export function createExplorer(
     return [`@@ -0,0 +1,${lines.length} @@`, ...lines.map((line) => `+${line}`)].join("\n");
   }
 
-  return { resolveRoot, listDirectory, readFile, changes, diff };
+  /** The directory git keeps this worktree's HEAD and index in; a linked worktree has its own. */
+  async function gitDir(root: string): Promise<string | null> {
+    await knownRoot(root);
+    const { ok, stdout } = await git(root, ["rev-parse", "--absolute-git-dir"]);
+    return ok ? stdout.trim() : null;
+  }
+
+  return { resolveRoot, gitDir, listDirectory, readFile, changes, diff };
 }
 
 const ticketRef = (ticket: TicketRef): string => `${ticket.map}/${ticket.id}`;

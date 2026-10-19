@@ -7,6 +7,9 @@ import {
   rootLabel,
 } from "../../shared/explorer.ts";
 
+/** How often the changed-files list asks git again, for edits in directories the tree has closed. */
+const CHANGES_POLL_MS = 2000;
+
 const STATUS_LETTER = { added: "A", modified: "M", deleted: "D", untracked: "U" } as const;
 
 /**
@@ -95,6 +98,19 @@ export function Explorer({
     };
   }, [rootPath, expandedKey, extraKey, revision]);
 
+  // Only open directories are watched, so a file edited in a closed one is found by asking git now and then.
+  useEffect(() => {
+    if (rootPath === undefined) return;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      window.dryland.explorerChanges(rootPath).then(
+        (next) => setChanges((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next)),
+        () => undefined,
+      );
+    }, CHANGES_POLL_MS);
+    return () => clearInterval(timer);
+  }, [rootPath]);
+
   if (error !== null)
     return (
       <p className="notice" role="alert">
@@ -132,7 +148,7 @@ export function Explorer({
                     {open ? "▾" : "▸"} {entry.name}
                   </button>
                 ) : (
-                  <button className="tree-name" onClick={() => onOpenFile(root.path, entry.path)}>
+                  <button className="tree-name tree-file" onClick={() => onOpenFile(root.path, entry.path)}>
                     {entry.name}
                   </button>
                 )}
@@ -162,7 +178,7 @@ export function Explorer({
         {rootLabel(root)}
       </h3>
       {changes.length > 0 && (
-        <div className="explorer-changes" aria-label="Changed files">
+        <section className="explorer-changes" aria-label="Changed files">
           <h4>Changes ({changes.length})</h4>
           <ul>
             {changes.map((change) => (
@@ -177,7 +193,7 @@ export function Explorer({
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
       {renderDir("", 0)}
     </section>

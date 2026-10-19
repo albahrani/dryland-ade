@@ -83,3 +83,28 @@ test("shows the selected ticket's worktree, opens files and diffs read-only, and
 
   await app.close();
 });
+
+test("lists an edit in a closed folder under Changes, and drops the file once it is committed", async () => {
+  const { repo } = fixture();
+  const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
+  const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`] });
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+  }, repo);
+  const window = await app.firstWindow();
+  await window.getByRole("button", { name: "Open project..." }).click();
+  const explorer = window.getByRole("region", { name: "Explorer" });
+  await expect(explorer.getByRole("heading", { name: "Main checkout (main)" })).toBeVisible();
+
+  write(repo, "src/greeting.ts", "export const greeting = 'changed';\n");
+  const changes = explorer.getByRole("region", { name: "Changed files" });
+  await expect(changes.getByRole("button", { name: /src\/greeting.ts/ })).toBeVisible();
+
+  // The watchers are armed a moment after the list shows.
+  await window.waitForTimeout(500);
+  // The commit changes no working file, only git's own.
+  execFileSync("git", ["commit", "-q", "-a", "-m", "Change greeting"], { cwd: repo, stdio: "pipe" });
+  await expect(changes).toHaveCount(0);
+
+  await app.close();
+});

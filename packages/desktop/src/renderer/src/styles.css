@@ -1202,3 +1202,8 @@ ul {
 .hljs-class .hljs-title {
   color: #4ec9b0;
 }
+
+/* A file lines up with the names of folders, which start with a chevron. */
+.tree-file {
+  padding-left: calc(4px + 2ch);
+}

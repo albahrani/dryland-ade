@@ -12,6 +12,8 @@ const write = (root: string, file: string, content: string | Buffer) => {
 };
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
 
+const canonical = (path: string | null) => realpathSync.native(path ?? "");
+
 let repo: string;
 let worktree: string;
 let explorer: ReturnType<typeof createExplorer>;
@@ -50,6 +52,13 @@ describe("root", () => {
   it("is a worktree named by path, and falls back to main for a path git does not list", async () => {
     expect((await explorer.resolveRoot({ kind: "worktree", path: worktree })).path).toBe(worktree);
     expect((await explorer.resolveRoot({ kind: "worktree", path: join(repo, "src") })).path).toBe(repo);
+  });
+});
+
+describe("git directory", () => {
+  it("is the worktree's own, so its commits can be watched", async () => {
+    expect(canonical(await explorer.gitDir(repo))).toBe(canonical(join(repo, ".git")));
+    expect(canonical(await explorer.gitDir(worktree))).toMatch(/\.git[\\/]worktrees[\\/]/);
   });
 });
 
