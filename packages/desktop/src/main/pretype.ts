@@ -77,5 +77,8 @@ export function createPretyper({ text, write, blocks, submit, timing }: PretypeO
  * its replies to the CLI's queries (cursor position, device attributes, focus), which are control sequences.
  */
 export function isKeystroke(data: string): boolean {
-  return typeof data === "string" && data !== "" && !/^\x1b[[\]PO]/.test(data);
+  return typeof data === "string" && data !== "" && !TERMINAL_REPLY.test(data);
 }
+
+/** Cursor position, device attributes and focus reports, and OSC or DCS answers such as the background colour. */
+const TERMINAL_REPLY = /^\x1b(?:\[(?:\??[\d;]*R|[?>][\d;]*c|[IO]|\?[\d;$]*y)|[\]P][^]*)$/;

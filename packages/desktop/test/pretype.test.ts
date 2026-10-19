@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPretyper } from "../src/main/pretype.ts";
+import { createPretyper, isKeystroke } from "../src/main/pretype.ts";
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -47,5 +47,27 @@ describe("the pre-typer", () => {
     await pause(80);
     expect(written).toHaveLength(sofar);
     expect(written).not.toContain("\r");
+  });
+});
+
+describe("telling the user's keys from the terminal's replies", () => {
+  it("takes text, arrows, paste and a bare Escape for the user", () => {
+    for (const data of ["x", "\r", "\x1b[A", "\x1bOA", "\x1b[3~", "\x1b[200~pasted\x1b[201~", "\x1b"]) {
+      expect(isKeystroke(data)).toBe(true);
+    }
+  });
+
+  it("takes the replies to the CLI's queries for the terminal's own", () => {
+    for (const data of [
+      "\x1b[12;40R",
+      "\x1b[?1;2c",
+      "\x1b[>0;276;0c",
+      "\x1b[I",
+      "\x1b[O",
+      "\x1b]11;rgb:0000/0000/0000\x07",
+    ]) {
+      expect(isKeystroke(data)).toBe(false);
+    }
+    expect(isKeystroke("")).toBe(false);
   });
 });
