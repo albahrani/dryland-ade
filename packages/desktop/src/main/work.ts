@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { delimiter, extname, join } from "node:path";
+import { delimiter } from "node:path";
 import {
   AGENT_ADAPTERS,
   type AgentAdapter,
@@ -11,9 +10,11 @@ import {
   envKey,
   findExecutable,
   findMainCheckout,
-  hookSettings,
+  launchArgs,
   installedSkills,
   nextSteps,
+  programFor,
+  type LiveEvent,
   type ProcessRunner,
   readRepoSnapshot,
   readSessionIndex,
@@ -26,15 +27,22 @@ import {
   type TicketRef,
   skillCommand,
   worktreeForScratch,
+  worktreeAt,
   worktreeForTicket,
 } from "@dryland/core";
 import type { AgentAvailability, SessionInfo } from "../shared/api.ts";
 import { trackerArgs } from "../shared/tracker-actions.ts";
-import { chosenSkillCommand, MAP_WORKTREE_SLUG, NEW_MAP_EFFORT, type WorkTarget } from "../shared/work-target.ts";
+import {
+  chosenSkillCommand,
+  MAP_WORKTREE_SLUG,
+  NEW_MAP_EFFORT,
+  SCRATCH_EFFORT,
+  SCRATCH_SLUG,
+  type WorkTarget,
+} from "../shared/work-target.ts";
 import type { DrylandCli } from "./dryland-cli.ts";
 import { createPretyper, PRETYPE_TIMING, type PretypeTiming } from "./pretype.ts";
 import { sessionItem } from "./session-recording.ts";
-import type { ShellSpec } from "./shell.ts";
 import type { TerminalManager } from "./terminals.ts";
 
 export interface WorkStarterOptions {
@@ -82,33 +90,20 @@ export interface WorkStarter {
    * cannot resume, or a session of it is already running.
    */
   resumeSession(projectPath: string, ticket: TicketRef, mode: "resume" | "pick"): Promise<StartedWork>;
+  /**
+   * Opens a plain terminal in `cwd` where an Agent CLI typed by hand reports like a session: the launcher's shims
+   * on `PATH`, and the terminal's own id as `DRYLAND_PANE_KEY`. Returns the terminal's id.
+   */
+  openShell(cwd: string): string;
+  /**
+   * Takes the CLI that sent `event` for a session of its own, when it was started by hand in a terminal opened by
+   * `openShell` that still runs: linked by its working directory to the ticket of the Dryland-created worktree it
+   * runs in, or to none when the directory is not one (unlinked, or scratch work in a scratch worktree). Returns the
+   * new session; `null` when the event is not from such a CLI or its session is already taken.
+   */
+  adoptManual(projectPath: string, event: LiveEvent): Promise<SessionInfo | null>;
   /** The sessions started so far, as recorded at spawn. */
   sessions(): SessionInfo[];
-}
-
-/** Windows runs a `.cmd` or `.bat` only through `cmd.exe`; anything else is spawned directly. */
-function programFor(executable: string, args: string[], env: Record<string, string | undefined>): ShellSpec {
-  if (process.platform === "win32" && [".cmd", ".bat"].includes(extname(executable).toLowerCase())) {
-    return { file: env[envKey(env, "ComSpec")] || "cmd.exe", args: ["/d", "/c", executable, ...args] };
-  }
-  return { file: executable, args };
-}
-
-/**
- * The adapter's launch arguments, the arguments that name or resume the CLI's session, and its settings flag naming
- * a file in `hooksDir` that holds the status hooks, written fresh on every launch. A file rather than inline JSON,
- * which `cmd.exe` would mangle.
- */
-function launchArgs(adapter: AgentAdapter, hooksDir: string, sessionArgs: readonly string[]): string[] {
-  const args = [...adapter.launchArgs, ...sessionArgs];
-  if (adapter.hookInjection.kind !== "settings-flag") return args;
-  mkdirSync(hooksDir, { recursive: true });
-  const file = join(hooksDir, `${adapter.id}.json`);
-  // Renamed into place, so a CLI starting in parallel never reads half a file.
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  writeFileSync(temporary, JSON.stringify(hookSettings(adapter.statusEvents), null, 2));
-  renameSync(temporary, file);
-  return [...args, adapter.hookInjection.flag, file];
 }
 
 /** The user's home as the CLIs read it: `USERPROFILE` on Windows, `HOME` elsewhere; `null` when unset. */
@@ -119,6 +114,12 @@ function homeOf(env: Record<string, string | undefined>): string | null {
     if (value !== undefined && value !== "") return value;
   }
   return null;
+}
+
+/** The ticket reference of a `<map>/<id>` string. */
+function refOf(ticket: string): TicketRef {
+  const slash = ticket.lastIndexOf("/");
+  return { map: ticket.slice(0, slash), id: ticket.slice(slash + 1) };
 }
 
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
@@ -200,6 +201,10 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       } else if (target.kind === "map") {
         worktree = await worktreeForScratch(runner, mainCheckout, target.map, MAP_WORKTREE_SLUG);
         command = skill !== null ? chosenSkillCommand(skill, target) : `/wayfinder ${target.map}`;
+      } else if (target.kind === "scratch") {
+        // Always a new worktree: each ticketless session is its own exploration.
+        worktree = await createWorktree(runner, mainCheckout, { map: SCRATCH_EFFORT, slug: SCRATCH_SLUG });
+        command = skill !== null ? chosenSkillCommand(skill, target) : null;
       } else {
         // Always a new worktree: each new map is its own exploration, named only once the skill has charted it.
         worktree = await createWorktree(runner, mainCheckout, { map: NEW_MAP_EFFORT, slug: MAP_WORKTREE_SLUG });
@@ -314,6 +319,47 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       };
       started.push(session);
       return { session, warnings };
+    },
+
+    openShell: (cwd) =>
+      terminals.open({
+        cwd,
+        env: (id) => {
+          const pathKey = envKey(env, "PATH");
+          const path = [launcherDir, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
+          const inherited = Object.fromEntries(
+            Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+          );
+          return { ...inherited, [pathKey]: path, DRYLAND_PANE_KEY: id, DRYLAND_HOOKS_DIR: hooksDir };
+        },
+      }),
+
+    async adoptManual(projectPath, event) {
+      const { agent, cwd, pane } = event;
+      if (agent === undefined || cwd === undefined || pane === undefined) return null;
+      const adapter = AGENT_ADAPTERS.find((a) => a.id === agent);
+      if (adapter === undefined || !terminals.liveIds().includes(pane)) return null;
+      if (started.some((s) => s.id === event.session_id)) return null;
+      const entry = await worktreeAt(runner, await findMainCheckout(runner, projectPath), cwd);
+      const branch = entry?.branch ?? "";
+      const ticket = entry?.link.ticket == null ? null : refOf(entry.link.ticket);
+      const effort = entry?.link.kind === "scratch" ? branch.slice(0, branch.indexOf("/")) : null;
+      const session: SessionInfo = {
+        id: event.session_id,
+        terminalId: pane,
+        agent: { id: adapter.id, name: adapter.name },
+        agentSessionId: event.agent_session_id ?? null,
+        ticket,
+        map: ticket?.map ?? (effort === null || effort === NEW_MAP_EFFORT || effort === SCRATCH_EFFORT ? null : effort),
+        worktree: { branch, path: entry?.path ?? cwd },
+        command: null,
+        startedAt: new Date().toISOString(),
+        manual: true,
+      };
+      // The shell outlives its CLI, so a CLI run again in it replaces the session it ended.
+      for (let i = started.length - 1; i >= 0; i--) if (started[i]?.terminalId === pane) started.splice(i, 1);
+      started.push(session);
+      return session;
     },
 
     sessions: () => [...started],

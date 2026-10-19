@@ -112,6 +112,18 @@ describe("dryland status", () => {
     expect(received[1]).not.toHaveProperty("agent_session_id");
   });
 
+  it("sends the adapter and working directory when the CLI was started by hand through `dryland agent`", async () => {
+    const repo = TempRepo.create();
+    const { env, received } = await runningApp();
+
+    await repo.run(["status", "session.started"], repo.path, { ...env, DRYLAND_AGENT: "claude-code" });
+    await repo.run(["status", "session.started"], repo.path, env);
+
+    expect(received[0]).toMatchObject({ agent: "claude-code", cwd: expect.any(String) });
+    expect(received[1]).not.toHaveProperty("agent");
+    expect(received[1]).not.toHaveProperty("cwd");
+  });
+
   it("exits 0 with no output when the app is not running", async () => {
     const repo = TempRepo.create();
 

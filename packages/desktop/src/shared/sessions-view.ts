@@ -2,6 +2,7 @@ import type { PausedWas, SessionState, TicketRef, TicketsTree } from "@dryland/c
 import { SESSION_META } from "./session-meta.ts";
 import type { PausedSession } from "./paused-session.ts";
 import { type ItemRef, ticketKey } from "./tabs.ts";
+import { isScratch } from "./work-target.ts";
 
 /** How the Hidden pane groups its tree: by map (Unlinked last), by agent, or not at all. Never by state. */
 export const SESSION_GROUPINGS = ["map", "agent", "none"] as const;
@@ -131,9 +132,19 @@ export const mapTitle = (tree: TicketsTree | null, name: string): string =>
  * The title of what a session works on: its ticket's, its map's, or "New map". A ticket the tree does not hold
  * reads as its `map/id`.
  */
-export function sessionItemTitle(tree: TicketsTree | null, session: Pick<ViewSession, "ticket" | "map">): string {
+export function sessionItemTitle(
+  tree: TicketsTree | null,
+  session: Pick<ViewSession, "ticket" | "map"> & { worktree?: { branch: string }; manual?: true },
+): string {
   const { ticket } = session;
-  if (ticket === null) return session.map === null ? "New map" : mapTitle(tree, session.map);
+  if (ticket === null)
+    return session.map === null
+      ? isScratch(session)
+        ? "Scratch"
+        : session.manual
+          ? "Unlinked"
+          : "New map"
+      : mapTitle(tree, session.map);
   const map = tree?.maps.find((m) => m.name === ticket.map);
   const found = map && [...map.planning, ...map.implementation, ...map.done].find((t) => t.id === ticket.id);
   return found?.title ?? ticketKey(ticket);

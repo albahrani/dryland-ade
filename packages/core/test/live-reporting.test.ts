@@ -129,6 +129,22 @@ describe("live reporting", () => {
     expect(received).toEqual([event]);
   });
 
+  it("carries the adapter and working directory of a CLI started by hand, and rejects malformed ones", async () => {
+    const dir = appDir();
+    const { listener, received } = await listen(dir);
+    const event: LiveEvent = { ...EVENT, kind: "session.idle", agent: "claude-code", cwd: "/work/shop-02" };
+
+    await sendLiveEvent(event, { env: { DRYLAND_APP_DIR: dir } });
+    const bad = await fetch(`http://127.0.0.1:${listener.port}/events`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${listener.token}` },
+      body: JSON.stringify({ ...EVENT, cwd: 7 }),
+    });
+
+    expect(received).toEqual([event]);
+    expect(bad.status).toBe(400);
+  });
+
   it("listens on the loopback address only", async () => {
     const { listener } = await listen(appDir());
     const external = Object.values(networkInterfaces())

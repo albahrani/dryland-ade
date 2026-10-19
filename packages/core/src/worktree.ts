@@ -1,4 +1,4 @@
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { exists } from "./env-fs.ts";
 import { DrylandError, requireOneLine } from "./errors.ts";
 import { ticketFile } from "./local-markdown.ts";
@@ -279,6 +279,19 @@ async function snapshotWorktrees(
 /** Every worktree of the repo containing `cwd`, each with the ticket it links to. */
 export async function listWorktrees(runner: ProcessRunner, cwd: string): Promise<WorktreeEntry[]> {
   return (await snapshotWorktrees(runner, await findMainCheckout(runner, cwd))).entries;
+}
+
+/**
+ * The worktree of the repo containing `repo` that holds directory `cwd`, the innermost when worktrees nest; `null`
+ * when `cwd` is in none of them. This links a session started by hand to its ticket by working directory.
+ */
+export async function worktreeAt(runner: ProcessRunner, repo: string, cwd: string): Promise<WorktreeEntry | null> {
+  const target = resolve(cwd);
+  const holding = (await listWorktrees(runner, repo)).filter((entry) => {
+    const rel = relative(entry.path, target);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  });
+  return holding.sort((a, b) => b.path.length - a.path.length)[0] ?? null;
 }
 
 /** What git says about one ticket's Linked worktrees, folded into one entry per ticket. */

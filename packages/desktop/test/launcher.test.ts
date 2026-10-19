@@ -53,6 +53,35 @@ describe("the dryland launcher", () => {
     expect(status).toBe(1);
   });
 
+  it("runs an Agent CLI typed by hand through its shim: the real binary behind the shim, hooks injected", () => {
+    const root = mkdtempSync(join(tmpdir(), "dryland-shim-"));
+    const dir = join(root, "bin");
+    writeLauncher(dir, { runtime: process.execPath, cli: CLI_BUNDLE }, [{ id: "claude-code", binary: "claude" }]);
+    // The real CLI sits further along PATH than the shim; it reports what it was run with.
+    const real = join(root, "real");
+    mkdirSync(real);
+    writeFileSync(
+      join(real, process.platform === "win32" ? "claude.cmd" : "claude"),
+      process.platform === "win32"
+        ? "@echo off\r\necho AGENT=%DRYLAND_AGENT% ARGS=%*\r\n"
+        : '#!/bin/sh\necho "AGENT=$DRYLAND_AGENT ARGS=$*"\n',
+      { mode: 0o755 },
+    );
+    const hooksDir = join(root, "hooks");
+    const pathKey = envKey(process.env, "PATH");
+    const env = {
+      ...process.env,
+      [pathKey]: [dir, real, process.env[pathKey] ?? ""].join(delimiter),
+      DRYLAND_HOOKS_DIR: hooksDir,
+    };
+
+    const out = execSync("claude --resume abc", { cwd: root, env, encoding: "utf8", stdio: "pipe" });
+
+    expect(out).toContain("AGENT=claude-code");
+    // The batch shim quotes the path, the shell one does not.
+    expect(out.replaceAll('"', "")).toContain(`--resume abc --settings ${join(hooksDir, "claude-code.json")}`);
+  });
+
   it("replaces a launcher left by an earlier version", () => {
     const dir = join(mkdtempSync(join(tmpdir(), "dryland-launcher-")), "bin");
     writeLauncher(dir, { runtime: process.execPath, cli: join(dir, "gone.mjs") });

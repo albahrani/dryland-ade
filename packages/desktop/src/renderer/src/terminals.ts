@@ -71,11 +71,23 @@ export function disposeTerminal(id: string): void {
   entries.delete(id);
 }
 
+/**
+ * Notes `message` in terminal `id` and turns what it shows into a transcript: the output stays to be read, and no
+ * more input is taken. A terminal with no view has nothing to turn.
+ */
+export function endTerminal(id: string, message: string): void {
+  const term = entries.get(id)?.term;
+  if (term === undefined) return;
+  term.write(`\r\n\x1b[2m${message}\x1b[0m\r\n`);
+  term.options.disableStdin = true;
+  term.options.cursorBlink = false;
+}
+
 /** Routes terminal output and exits from the main process to the registered terminals. */
 export function routeTerminalEvents(): () => void {
   const stopData = window.dryland.onTerminalData((id, data) => entries.get(id)?.term.write(data));
   const stopExit = window.dryland.onTerminalExit((id, exitCode) =>
-    entries.get(id)?.term.write(`\r\n\x1b[2m[process exited with code ${exitCode}]\x1b[0m\r\n`),
+    endTerminal(id, `[process exited with code ${exitCode}]`),
   );
   return () => {
     stopData();

@@ -2,8 +2,18 @@ import type { TicketRef } from "@dryland/core";
 import { isRecord, isTicketRef, MAP_NAME } from "./tracker-actions.ts";
 import { ticketKey } from "./tabs.ts";
 
-/** What a session starts on: a ticket, a map to continue, or a map the `/wayfinder` skill has yet to chart. */
-export type WorkTarget = { kind: "ticket"; ticket: TicketRef } | { kind: "map"; map: string } | { kind: "new-map" };
+/**
+ * What a session starts on: a ticket, a map to continue, a map the `/wayfinder` skill has yet to chart, or nothing
+ * (exploratory work in a scratch worktree of its own).
+ */
+export type WorkTarget =
+  { kind: "ticket"; ticket: TicketRef } | { kind: "map"; map: string } | { kind: "new-map" } | { kind: "scratch" };
+
+/** The effort a ticketless session's worktree is named after, as `scratch/scratch-session`. */
+export const SCRATCH_EFFORT = "scratch";
+
+/** The name part of a ticketless session's scratch worktree. */
+export const SCRATCH_SLUG = "session";
 
 /** The effort a new map's temporary worktree is named after, as `new-map/scratch-wayfinder`, until the skill names it. */
 export const NEW_MAP_EFFORT = "new-map";
@@ -23,6 +33,7 @@ export function isWorkTarget(value: unknown): value is WorkTarget {
     case "map":
       return typeof value.map === "string" && MAP_NAME.test(value.map);
     case "new-map":
+    case "scratch":
       return true;
     default:
       return false;
@@ -44,16 +55,24 @@ export function chosenSkillCommand(skill: string, target: WorkTarget): string {
     case "map":
       return `/${skill} ${target.map}`;
     case "new-map":
+    case "scratch":
       return `/${skill} `;
   }
 }
+
+/** Whether a session with no ticket or map works in a ticketless session's scratch worktree. */
+export const isScratch = (session: { map: string | null; worktree?: { branch: string } }): boolean =>
+  session.map === null && session.worktree?.branch.startsWith(`${SCRATCH_EFFORT}/`) === true;
 
 /** How a session's tab is named: its agent and what it works on. */
 export function sessionTitle(session: {
   agent: { name: string };
   ticket: TicketRef | null;
   map: string | null;
+  worktree?: { branch: string };
+  manual?: true;
 }): string {
-  const on = session.ticket !== null ? ticketKey(session.ticket) : (session.map ?? "new map");
+  const unnamed = isScratch(session) ? "scratch" : session.manual ? "unlinked" : "new map";
+  const on = session.ticket !== null ? ticketKey(session.ticket) : (session.map ?? unnamed);
   return `${session.agent.name} ${on}`;
 }

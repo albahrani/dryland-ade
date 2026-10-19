@@ -103,6 +103,11 @@ export interface SessionInfo {
   command: string | null;
   /** ISO timestamp of the spawn. */
   startedAt: string;
+  /**
+   * Set for a session the user started by hand in a plain terminal tab (linked by its working directory): the tab
+   * is a shell, which closing the tab ends, whether or not the CLI still runs in it.
+   */
+  manual?: true;
 }
 
 /** The session work started, or why it could not start and what to do about it. */
@@ -122,7 +127,7 @@ export interface ResumedAllResult {
 export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
 /** What the application menu asks of the window: the dialogs that live in the renderer. */
-export type MenuCommand = "new-ticket" | "new-map";
+export type MenuCommand = "new-ticket" | "new-map" | "new-scratch";
 
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {

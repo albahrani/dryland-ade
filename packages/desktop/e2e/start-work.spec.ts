@@ -613,3 +613,72 @@ test("Resume all resumes paused sessions hidden, on a map or everywhere, and a s
   await expect(fourth.window.getByLabel("Session counts")).toHaveText("0 open · 1 hidden");
   await fourth.app.close();
 });
+
+test("starts a session without a ticket in a scratch worktree, and an ended session stays readable until its tab closes", async () => {
+  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
+    file?.submenu?.items.find((item) => item.label === "New Scratch Session...")?.click();
+  });
+  const dialog = window.getByRole("dialog", { name: "New scratch session" });
+  await dialog.getByRole("button", { name: "Open Claude Code" }).click();
+
+  await expect(window.getByRole("tab", { name: "Claude Code scratch" })).toHaveAttribute("aria-selected", "true");
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("agent-ready cwd=scratch-scratch-session");
+  expect(execFileSync("git", ["worktree", "list"], { cwd: repo, encoding: "utf8" })).toContain(
+    "scratch/scratch-session",
+  );
+
+  // The CLI ends on its own: the tab keeps everything it printed, is marked ended and takes no more input.
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("#");
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: ended" })).toBeVisible();
+  await expect(screen).toContainText("[process exited with code 0]");
+  await expect(screen).toContainText("agent-ready cwd=scratch-scratch-session");
+
+  // Closing the tab removes the ended session from the Sessions view.
+  await window.getByRole("button", { name: "Sessions", exact: true }).click();
+  const counts = window.getByLabel("Session counts");
+  await expect(counts).toHaveText("1 open · 0 hidden");
+  await window.getByRole("button", { name: "Close Claude Code scratch" }).click();
+  await expect(counts).toHaveText("0 open · 0 hidden");
+  await app.close();
+});
+
+test("links a CLI started by hand in a terminal tab to its ticket by working directory, or leaves it unlinked", async () => {
+  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  // A worktree Dryland made for shop/02 earlier; nothing here starts a session on it.
+  const worktree = join(`${repo}.worktrees`, "shop-02-grill");
+  execFileSync("git", ["worktree", "add", "-q", "-b", "shop/02-grill", worktree], { cwd: repo, stdio: "pipe" });
+  const screen = window.locator(".xterm-rows:visible");
+
+  // In the main checkout, which Dryland did not create for any ticket: unlinked.
+  await window.getByRole("button", { name: "New terminal" }).click();
+  await expect(window.getByRole("tab", { name: "Terminal 1" })).toHaveAttribute("aria-selected", "true");
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("claude");
+  await window.keyboard.press("Enter");
+  await expect(screen).toContainText("agent-ready cwd=");
+  await window.keyboard.type("~");
+  await window.getByRole("button", { name: "Sessions", exact: true }).click();
+  const openPane = window.getByRole("region", { name: "Open sessions" });
+  await expect(openPane.getByRole("button", { name: "Unlinked" })).toBeVisible();
+
+  // Inside the ticket's worktree: the session belongs to the ticket.
+  await window.getByRole("button", { name: "New terminal" }).click();
+  await expect(window.getByRole("tab", { name: "Terminal 2" })).toHaveAttribute("aria-selected", "true");
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type(`cd "${worktree}"`);
+  await window.keyboard.press("Enter");
+  await window.keyboard.type("claude");
+  await window.keyboard.press("Enter");
+  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
+  await window.keyboard.type("~");
+  await window.getByRole("button", { name: "Tickets", exact: true }).click();
+  await expect(
+    window.getByRole("region", { name: "Tickets" }).getByRole("img", { name: "Claude Code: idle" }),
+  ).toBeVisible();
+  await app.close();
+});

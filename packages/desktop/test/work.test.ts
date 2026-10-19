@@ -347,6 +347,45 @@ describe("continuing a map and starting a new one", () => {
   });
 });
 
+describe("starting a session without a ticket", () => {
+  it("opens the Agent CLI in a new scratch worktree with nothing typed, claiming nothing", async () => {
+    const repo = fixtureRepo();
+    const head = git(repo, "rev-parse", "HEAD");
+    const { provider, starter } = setup();
+
+    const { session: first } = await starter.startWork(repo, { kind: "scratch" }, "claude-code");
+    const { session: second } = await starter.startWork(repo, { kind: "scratch" }, "claude-code");
+
+    expect(first).toMatchObject({
+      ticket: null,
+      map: null,
+      command: null,
+      worktree: { branch: "scratch/scratch-session" },
+    });
+    expect(second.worktree.branch).toBe("scratch/scratch-session-2");
+    expect(provider.spawned[0]?.options.cwd).toBe(first.worktree.path);
+    provider.spawned[0]?.emit("❯ ");
+    await pause(50);
+    expect(typed(provider.spawned[0])).toBe("");
+    expect(git(repo, "rev-parse", "HEAD")).toBe(head);
+    expect(git(repo, "status", "--porcelain")).toBe("");
+  });
+
+  it("types the chosen skill, and records the session under its scratch worktree branch", async () => {
+    const home = mkdtempSync(join(tmpdir(), "dryland-home-"));
+    installSkill(home, "grilling");
+    const repo = fixtureRepo();
+    const { provider, starter } = setup(undefined, { HOME: home, USERPROFILE: home });
+
+    const { session } = await starter.startWork(repo, { kind: "scratch" }, "claude-code", "grilling");
+
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/grilling "));
+    const { index } = await readSessionIndex(nodeProcessRunner, repo);
+    expect(index.items["scratch/scratch-session"]?.map((s) => s.sessionId)).toEqual([session.agentSessionId]);
+  });
+});
+
 describe("launching any installed skill", () => {
   function withSkills() {
     const repo = fixtureRepo();
@@ -490,5 +529,93 @@ describe("resuming a paused session", () => {
     expect(index.items["shop/02"]?.map((s) => s.sessionId)).toEqual([session.agentSessionId, old.agentSessionId]);
     expect(session.agentSessionId).not.toBe(old.agentSessionId);
     expect(session.command).toBe("/implement shop/02");
+  });
+});
+
+describe("sessions started by hand in a terminal", () => {
+  const byHand = (pane: string, cwd: string, session = "by-hand-1") => ({
+    session_id: session,
+    kind: "session.started" as const,
+    timestamp: "2026-10-19T12:00:00.000Z",
+    agent: "claude-code",
+    cwd,
+    pane,
+  });
+
+  it("opens a plain terminal that knows its pane and where Dryland keeps the status hooks", () => {
+    const { provider, starter, hooksDir } = setup();
+
+    const terminalId = starter.openShell("/repo");
+
+    const options = provider.spawned[0]?.options;
+    expect(options).toMatchObject({ file: "/bin/fake-sh", cwd: "/repo" });
+    expect(options?.env).toMatchObject({ DRYLAND_PANE_KEY: terminalId, DRYLAND_HOOKS_DIR: hooksDir });
+    expect(options?.env.PATH?.split(delimiter)[0]).toBe("/opt/dryland/bin");
+    expect(options?.env).not.toHaveProperty("DRYLAND_SESSION_ID");
+  });
+
+  it("links a CLI started anywhere inside a ticket's worktree to that ticket", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    const { session: started } = await starter.startWork(repo, onTicket("02"), "claude-code");
+    const shell = starter.openShell(repo);
+    const inside = join(started.worktree.path, ".scratch", "shop");
+
+    const adopted = await starter.adoptManual(repo, byHand(shell, inside));
+
+    expect(adopted).toMatchObject({
+      id: "by-hand-1",
+      terminalId: shell,
+      manual: true,
+      agent: { id: "claude-code" },
+      ticket: { map: "shop", id: "02" },
+      map: "shop",
+      worktree: { branch: "shop/02-grill", path: started.worktree.path },
+    });
+    expect(starter.sessions()).toContainEqual(adopted);
+  });
+
+  it("leaves a CLI started in a directory Dryland did not create unlinked", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    const shell = starter.openShell(repo);
+
+    const adopted = await starter.adoptManual(repo, byHand(shell, repo));
+
+    expect(adopted).toMatchObject({ manual: true, ticket: null, map: null });
+  });
+
+  it("takes a CLI in a scratch worktree as scratch work, with no ticket and no map", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    const { session: scratch } = await starter.startWork(repo, { kind: "scratch" }, "claude-code");
+    const shell = starter.openShell(repo);
+
+    const adopted = await starter.adoptManual(repo, byHand(shell, scratch.worktree.path));
+
+    expect(adopted).toMatchObject({ ticket: null, map: null, worktree: { branch: "scratch/scratch-session" } });
+  });
+
+  it("replaces the session a terminal's CLI ended with the next one run in the same terminal", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    const shell = starter.openShell(repo);
+
+    await starter.adoptManual(repo, byHand(shell, repo, "first"));
+    await starter.adoptManual(repo, byHand(shell, repo, "second"));
+
+    expect(starter.sessions().map((s) => s.id)).toEqual(["second"]);
+  });
+
+  it("adopts a session once, and only from a terminal it opened that is still running", async () => {
+    const repo = fixtureRepo();
+    const { starter } = setup();
+    const shell = starter.openShell(repo);
+
+    expect(await starter.adoptManual(repo, byHand("not-a-terminal", repo))).toBeNull();
+    expect(await starter.adoptManual(repo, { ...byHand(shell, repo), agent: "no-such-cli" })).toBeNull();
+    expect(await starter.adoptManual(repo, byHand(shell, repo))).not.toBeNull();
+    expect(await starter.adoptManual(repo, byHand(shell, repo))).toBeNull();
+    expect(starter.sessions()).toHaveLength(1);
   });
 });

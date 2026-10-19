@@ -97,6 +97,19 @@ describe("the session recorder", () => {
     expect(Date.parse(entry?.lastSeen ?? "")).toBeGreaterThan(Date.parse("2026-10-16T12:00:00.000Z"));
   });
 
+  it("records a session started by hand under its ticket, and one linked to nothing nowhere", async () => {
+    const repo = fixtureRepo();
+    const hand = sessionIn(repo, { id: "hand", manual: true, agentSessionId: null });
+    const lost = sessionIn(repo, { id: "lost", manual: true, ticket: null, map: null, agentSessionId: null });
+    const { recorder, indexed } = recorderFor(repo, [hand, lost]);
+
+    recorder.apply(event("session.idle", { session_id: "hand", agent_session_id: "typed-id" }));
+    recorder.apply(event("session.idle", { session_id: "lost", agent_session_id: "lost-id" }));
+
+    expect((await indexed()).map((s) => s.sessionId)).toEqual(["typed-id"]);
+    expect((await indexed("shop/02-grill")).map((s) => s.sessionId)).toEqual([]);
+  });
+
   it("records a new CLI session id as the item's newest session and keeps the old one", async () => {
     const repo = fixtureRepo();
     const { recorder, indexed } = recorderFor(repo, [sessionIn(repo)]);

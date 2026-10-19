@@ -46,12 +46,19 @@ import type { RootHint } from "../../shared/explorer.ts";
 import { baseName, dirName } from "../../shared/paths.ts";
 import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
-import { NewMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
+import { NewMapDialog, NewScratchDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
-import { disposeTerminal, existingTerminal, getOrCreateTerminal, lastLine, routeTerminalEvents } from "./terminals.ts";
+import {
+  disposeTerminal,
+  endTerminal,
+  existingTerminal,
+  getOrCreateTerminal,
+  lastLine,
+  routeTerminalEvents,
+} from "./terminals.ts";
 import { ConfirmStop, type SessionHandlers, UnseenMark } from "./SessionControls.tsx";
 import { stopNeedsConfirmation } from "../../shared/stop-session.ts";
 import { PausedBadge, SessionBadge } from "./status.tsx";
@@ -326,7 +333,9 @@ export function App() {
   const closeItem = (ref: ItemRef) => {
     if (ref.kind === "terminal") {
       // A plain terminal ends; a session is only hidden, and its output stays in the main process for replay.
-      if (!sessions.has(ref.id)) window.dryland.closeTerminal(ref.id);
+      // A session started by hand is its terminal's shell: it ends with the tab.
+      const session = sessions.get(ref.id);
+      if (session === undefined || session.manual === true) window.dryland.closeTerminal(ref.id);
       disposeTerminal(ref.id);
     }
     setTabs(closeTab(tabs, tabKey(ref)));
@@ -443,10 +452,8 @@ export function App() {
   };
   const stopSession = (session: SessionInfo) => {
     setStopping(null);
-    void window.dryland.stopSession(session.id).then(() =>
-      // Only a view still open shows it; a hidden session has none.
-      existingTerminal(session.terminalId)?.term.write("\r\n\x1b[2m[session stopped]\x1b[0m\r\n"),
-    );
+    // Only a view still open shows it; a hidden session has none.
+    void window.dryland.stopSession(session.id).then(() => endTerminal(session.terminalId, "[session stopped]"));
   };
   const requestStop = (session: SessionInfo) => {
     if (stopNeedsConfirmation(settings.stopConfirmation, sessionState(session), isUnseen(session)))
@@ -745,6 +752,15 @@ export function App() {
           onStart={async (agentId, skill) => {
             setDialog(null);
             await startWork({ kind: "new-map" }, agentId, skill);
+          }}
+        />
+      )}
+      {dialog === "new-scratch" && project !== null && (
+        <NewScratchDialog
+          onCancel={() => setDialog(null)}
+          onStart={async (agentId, skill) => {
+            setDialog(null);
+            await startWork({ kind: "scratch" }, agentId, skill);
           }}
         />
       )}

@@ -176,9 +176,30 @@ function terminalEnded(id: string): void {
   void refresh();
 }
 
+/** Live events in the order they came, so one that adopts a hand-started session finishes before the next. */
+let liveEvents = Promise.resolve();
+
 /** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
 function onLiveEvent(event: LiveEvent): void {
   sendToWindow("live:event", event);
+  liveEvents = liveEvents.then(() => applyLiveEvent(event)).catch((error: unknown) => console.warn(error));
+}
+
+/**
+ * A CLI started by hand in a Dryland terminal reports from a session Dryland did not start; the first event it sends
+ * makes it one, linked by its working directory.
+ */
+async function adoptHandStarted(event: LiveEvent): Promise<void> {
+  if (project === null || event.pane === undefined) return;
+  const session = await work.adoptManual(project.path, event);
+  if (session === null) return;
+  status.launched(session.id);
+  sendToWindow("sessions:started", [session]);
+  sendSessionStates();
+}
+
+async function applyLiveEvent(event: LiveEvent): Promise<void> {
+  await adoptHandStarted(event);
   recorder.apply(event);
   const stateChanged = status.apply(event);
   if (stateChanged) sendSessionStates();
@@ -449,6 +470,11 @@ function buildMenu(): void {
             click: menuCommand("new-map"),
           },
           {
+            label: "New Scratch Session...",
+            enabled: project !== null,
+            click: menuCommand("new-scratch"),
+          },
+          {
             label: "New Ticket...",
             accelerator: "CmdOrCtrl+N",
             enabled: project !== null,
@@ -543,7 +569,7 @@ ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();
   if (loaded === null) return null;
-  return terminals.open({ cwd: loaded.mainCheckout ?? loaded.view.path });
+  return work.openShell(loaded.mainCheckout ?? loaded.view.path);
 });
 ipcMain.handle("agents:list", () => work.listAgents());
 ipcMain.handle("skills:list", async (_event, agentId: unknown): Promise<string[]> => {
@@ -611,8 +637,11 @@ ipcMain.on("terminal:write", (_event, id: string, data: string) => terminals.wri
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 ipcMain.on("terminal:close", (_event, id: string) => {
   // Closing a session's tab hides the session: its CLI keeps running until the session is stopped.
-  if (sessionIn(id) !== undefined) return;
+  // A session started by hand is its terminal's shell: that ends with the tab.
+  const session = sessionIn(id);
+  if (session !== undefined && session.manual !== true) return;
   terminals.close(id);
+  if (session !== undefined) terminalEnded(id);
 });
 ipcMain.on("terminal:view", (_event, id: unknown) => {
   const session = typeof id === "string" ? sessionIn(id) : undefined;
@@ -641,7 +670,12 @@ app.on("second-instance", () => {
 void app.whenReady().then(async () => {
   if (!primary) return;
   // The CLI bundle is built next to this file; the launcher runs it with this very Electron binary.
-  writeLauncher(launcherDir, { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") });
+  writeLauncher(
+    launcherDir,
+    { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") },
+    // The shim adds only the status-hooks flag; a CLI with launch arguments of its own needs a richer one.
+    AGENT_ADAPTERS.filter((a) => a.launchArgs.length === 0).map(({ id, binary }) => ({ id, binary })),
+  );
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.
   try {
     live = await startLiveListener({ lockFile: liveLockFile(process.env), onEvent: onLiveEvent });

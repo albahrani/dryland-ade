@@ -1,5 +1,6 @@
 import { type LiveEvent, type ProcessRunner, recordSession, sessionStateOf } from "@dryland/core";
 import type { SessionInfo } from "../shared/api.ts";
+import { isScratch } from "../shared/work-target.ts";
 
 /**
  * The session index item a session works on (ADR 0010): its ticket as `<map>/<NN>`, the map it continues, or for a
@@ -39,6 +40,8 @@ export function createSessionRecorder({ runner, sessions, warn }: SessionRecorde
       const state = sessionStateOf(event.kind);
       const session = sessions().find((s) => s.id === event.session_id);
       if (state === null || session === undefined) return;
+      // An unlinked session started by hand belongs to no item of the index; the worktree it ran in is not Dryland's.
+      if (session.manual && session.ticket === null && session.map === null && !isScratch(session)) return;
       const sessionId = event.agent_session_id ?? latest.get(session.id) ?? session.agentSessionId;
       if (sessionId === null) return;
       latest.set(session.id, sessionId);

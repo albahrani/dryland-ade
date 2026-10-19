@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   AGENT_ADAPTERS,
   blockTicket,
@@ -8,8 +9,10 @@ import {
   createWorktree,
   currentAgentSession,
   DrylandError,
+  findExecutable,
   indexMap,
   isLiveEventKind,
+  launchArgs,
   LIVE_EVENT_KINDS,
   listTickets,
   listWorktrees,
@@ -27,6 +30,7 @@ import {
   showTicket,
   ticketKind,
   triageTicket,
+  withoutPathDir,
   type DoctorReport,
   type IndexedSession,
   type LiveEvent,
@@ -199,6 +203,10 @@ function reportLiveEvent(kind: LiveEventKind, payload?: unknown, session?: strin
     kind,
     timestamp: new Date().toISOString(),
     ...(agentSession === null ? {} : { agent_session_id: agentSession.sessionId }),
+    // A CLI started by hand through the launcher's shim: the app links it to a worktree by where it runs.
+    ...(process.env["DRYLAND_AGENT"] === undefined
+      ? {}
+      : { agent: process.env["DRYLAND_AGENT"], cwd: process.cwd(), pane: process.env["DRYLAND_PANE_KEY"] }),
   };
   return sendLiveEvent(payload === undefined ? event : { ...event, payload });
 }
@@ -466,7 +474,39 @@ const COMMANDS: Record<
 const VALUE_OPTIONS = new Set(Object.values(COMMANDS).flatMap((command) => command.options ?? []));
 const SWITCHES = new Set(Object.values(COMMANDS).flatMap((command) => command.switches ?? []));
 
+/**
+ * What the launcher's shim for the Agent CLI `id` needs to start it by hand the way a Dryland session starts, one
+ * item per line: the real executable behind the shim, the id of the new session, and, where the CLI takes its status
+ * hooks as a settings flag, that flag and its file. The shim runs the CLI itself, so the CLI keeps the terminal.
+ */
+async function prepareAgent(id: string | undefined): Promise<string> {
+  const adapter = AGENT_ADAPTERS.find((a) => a.id === id);
+  if (adapter === undefined) {
+    throw new DrylandError(`There is no Agent CLI "${id ?? ""}".`, "Run the Agent CLI by its own name instead.");
+  }
+  const launcherDir = process.env["DRYLAND_LAUNCHER_DIR"];
+  const executable = await findExecutable(
+    adapter.binary,
+    launcherDir === undefined ? process.env : withoutPathDir(process.env, launcherDir),
+  );
+  if (executable === null) {
+    throw new DrylandError(
+      `${adapter.name} is not installed: \`${adapter.binary}\` is not on PATH.`,
+      `Install ${adapter.name}.`,
+    );
+  }
+  const hooksDir = process.env["DRYLAND_HOOKS_DIR"];
+  // Each run is a session of its own, named here since no Dryland launch named it.
+  const lines = [executable, process.env["DRYLAND_SESSION_ID"] || randomUUID()];
+  if (hooksDir !== undefined) lines.push(...launchArgs(adapter, hooksDir, []));
+  return `${lines.join("\n")}\n`;
+}
+
 async function run(args: string[]): Promise<number> {
+  if (args[0] === "agent-prepare") {
+    process.stdout.write(await prepareAgent(args[1]));
+    return 0;
+  }
   const json = args.includes("--json");
   if (args.includes("--commit") && args.includes("--no-commit")) {
     throw new DrylandError("--commit and --no-commit contradict each other.", "Pass one of them, or neither.");

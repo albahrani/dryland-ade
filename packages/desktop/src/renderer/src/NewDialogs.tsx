@@ -132,6 +132,22 @@ export function NewTicketDialog({
   );
 }
 
+/** New scratch session: only the Agent CLI is chosen; it opens in a scratch worktree of its own with nothing typed. */
+export function NewScratchDialog({ onStart, onCancel }: { onStart: StartHandler; onCancel: () => void }) {
+  return (
+    <Dialog title="New scratch session">
+      <p>
+        For exploratory work with no ticket. The Agent CLI opens in a new scratch worktree, so the work is isolated from
+        your main checkout.
+      </p>
+      <StartWork onStart={onStart} label={(agent) => `Open ${agent}`} />
+      <div className="modal-actions">
+        <button onClick={onCancel}>Cancel</button>
+      </div>
+    </Dialog>
+  );
+}
+
 /** New map: only the Agent CLI is chosen; the `/wayfinder` skill charts and names the map in its session. */
 export function NewMapDialog({ onStart, onCancel }: { onStart: StartHandler; onCancel: () => void }) {
   return (
