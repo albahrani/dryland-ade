@@ -162,6 +162,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Copilot CLI adapter](issues/43-copilot-cli-adapter.md): Copilot CLI is a first-class Agent CLI: user-level env-gated hook file, trusted folders edited under its lock, doctor install/remove.
 
+- [Best-effort adapters and auto-submit](issues/44-best-effort-adapters-and-auto-submit.md): Codex and Gemini as best-effort adapters with output-guessed approximate status, and opt-in auto-submit with a per-project override.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
