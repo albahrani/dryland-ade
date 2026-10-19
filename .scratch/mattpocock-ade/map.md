@@ -154,6 +154,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Session linking, scratch sessions and transcripts](issues/38-session-linking-scratch-sessions-and-transcripts.md): Hand-started CLIs link by working directory, ticketless sessions get a scratch worktree, ended tabs stay read-only.
 
+- [In-app quit dialog with stop progress](issues/81-in-app-quit-dialog-with-stop-progress.md): A user quit asks in an in-app dialog, shows shutdown progress and offers Quit now; the 2-second budget is for OS-forced shutdown only.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
