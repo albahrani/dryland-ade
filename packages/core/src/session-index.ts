@@ -8,6 +8,15 @@ import { acquireLock, removeLeftoverTemps, writeAtomically } from "./tracker-wri
 /** How long a session stays in the index after it was last seen, unless the caller says otherwise. */
 export const DEFAULT_SESSION_RETENTION_DAYS = 30;
 
+/** The variable the app sets, so a `dryland` run in one of its sessions applies the user's retention period. */
+export const SESSION_RETENTION_ENV = "DRYLAND_SESSION_RETENTION_DAYS";
+
+/** The retention period `env` carries: a positive whole number of days, else the default. */
+export function retentionDaysFromEnv(env: NodeJS.ProcessEnv): number {
+  const days = Number(env[SESSION_RETENTION_ENV]);
+  return Number.isInteger(days) && days > 0 ? days : DEFAULT_SESSION_RETENTION_DAYS;
+}
+
 const DAY_MS = 24 * 60 * 60_000;
 const LAST_STATES = ["running", "waiting", "idle"] as const;
 

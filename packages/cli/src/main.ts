@@ -21,6 +21,7 @@ import {
   pruneWorktree,
   readSessionIndex,
   recordSession,
+  retentionDaysFromEnv,
   releaseTicket,
   resolveTicket,
   runDoctor,
@@ -225,7 +226,9 @@ async function recordAgentSession(ticket: string): Promise<string[]> {
   const session = currentAgentSession(AGENT_ADAPTERS, process.env);
   if (session === null) return [];
   try {
-    return await recordSession(nodeProcessRunner, process.cwd(), ticket, session);
+    return await recordSession(nodeProcessRunner, process.cwd(), ticket, session, {
+      retentionDays: retentionDaysFromEnv(process.env),
+    });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return [`The session was not recorded in the session index (${reason}).`];

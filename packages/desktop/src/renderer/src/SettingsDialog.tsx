@@ -99,6 +99,20 @@ export function SettingsDialog({
                 />
                 Resume sessions on start
               </label>
+              <label>
+                Keep sessions for{" "}
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={settings.sessionRetentionDays}
+                  onChange={(event) => {
+                    const days = event.target.valueAsNumber;
+                    if (Number.isInteger(days) && days > 0) onChange({ kind: "session-retention", value: days });
+                  }}
+                />{" "}
+                days after they were last seen
+              </label>
               <div>
                 <button disabled={!legendDismissed} onClick={() => onChange({ kind: "reset-legend" })}>
                   Show the legend again

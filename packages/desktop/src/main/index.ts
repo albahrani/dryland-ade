@@ -18,6 +18,7 @@ import {
   sessionsOf,
   readTicketDetail,
   reconcileSessionIndex,
+  SESSION_RETENTION_ENV,
   startLiveListener,
 } from "@dryland/core";
 import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor } from "electron";
@@ -125,6 +126,7 @@ const recorder = createSessionRecorder({
   runner: nodeProcessRunner,
   sessions: () => work.sessions(),
   warn: (message) => console.warn(message),
+  retentionDays: () => store.read().sessionRetentionDays,
 });
 const sendSessionStates = () => sendToWindow("sessions:states", status.states());
 const unseen = createUnseenOutput();
@@ -142,6 +144,7 @@ function settings(): AppSettings {
     dontAsk: saved.dontAsk,
     stopConfirmation: saved.stopConfirmation,
     resumeOnStart: saved.resumeOnStart,
+    sessionRetentionDays: saved.sessionRetentionDays,
   };
 }
 const sendSettings = () => sendToWindow("settings:changed", settings());
@@ -331,7 +334,9 @@ async function reconcileSessions(): Promise<void> {
   if (project === null || reconciling || Date.now() - lastReconciled < RECONCILE_MIN_INTERVAL_MS) return;
   reconciling = true;
   try {
-    const { changed, warnings } = await reconcileSessionIndex(nodeProcessRunner, project.path);
+    const { changed, warnings } = await reconcileSessionIndex(nodeProcessRunner, project.path, {
+      retentionDays: store.read().sessionRetentionDays,
+    });
     warnings.forEach((message) => console.warn(message));
     if (changed) void refresh();
   } catch (error) {
@@ -394,7 +399,8 @@ function createWindow(): void {
 
 /** Stores a settings change and sends the new settings to the window. */
 function changeSettings(patch: Partial<UiState>): void {
-  store.update(patch);
+  const saved = store.update(patch);
+  ptyEnv[SESSION_RETENTION_ENV] = String(saved.sessionRetentionDays);
   sendSettings();
 }
 
@@ -639,6 +645,7 @@ void app.whenReady().then(async () => {
     // The shim adds only the status-hooks flag; a CLI with launch arguments of its own needs a richer one.
     AGENT_ADAPTERS.filter((a) => a.launchArgs.length === 0).map(({ id, binary }) => ({ id, binary })),
   );
+  ptyEnv[SESSION_RETENTION_ENV] = String(store.read().sessionRetentionDays);
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.
   try {
     live = await startLiveListener({ lockFile: liveLockFile(process.env), onEvent: onLiveEvent });

@@ -4,6 +4,7 @@ import {
   currentAgentSession,
   parseSessionIndex,
   resumeArgs,
+  retentionDaysFromEnv,
   type SessionIndex,
   sessionIdArgs,
   withSession,
@@ -145,5 +146,17 @@ describe("currentAgentSession", () => {
     expect(currentAgentSession([CLAUDE_CODE], {})).toBeNull();
     expect(currentAgentSession([CLAUDE_CODE], { CLAUDE_CODE_SESSION_ID: " " })).toBeNull();
     expect(currentAgentSession([{ ...CLAUDE_CODE, sessionEnv: null }], { CLAUDE_CODE_SESSION_ID: "abc" })).toBeNull();
+  });
+});
+
+describe("retentionDaysFromEnv", () => {
+  it("reads the app's retention setting from DRYLAND_SESSION_RETENTION_DAYS", () => {
+    expect(retentionDaysFromEnv({ DRYLAND_SESSION_RETENTION_DAYS: "7" })).toBe(7);
+  });
+
+  it("falls back to the default when it is unset or not a positive whole number", () => {
+    for (const value of [undefined, "", "0", "-3", "2.5", "soon"]) {
+      expect(retentionDaysFromEnv({ DRYLAND_SESSION_RETENTION_DAYS: value })).toBe(30);
+    }
   });
 });

@@ -1,7 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { DEFAULT_SESSION_RETENTION_DAYS } from "@dryland/core";
 import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
 import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
+import { isRetentionDays } from "../shared/settings-change.ts";
 import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
 import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
@@ -26,6 +28,8 @@ export interface UiState {
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
   resumeOnStart: boolean;
+  /** Days a session stays in the session index after it was last seen. */
+  sessionRetentionDays: number;
 }
 
 const DEFAULTS: UiState = {
@@ -39,6 +43,7 @@ const DEFAULTS: UiState = {
   dontAsk: ASK_ALWAYS,
   stopConfirmation: DEFAULT_STOP_CONFIRMATION,
   resumeOnStart: false,
+  sessionRetentionDays: DEFAULT_SESSION_RETENTION_DAYS,
 };
 
 export interface UiStateStore {
@@ -88,6 +93,9 @@ function parse(text: string): UiState {
     dontAsk: parseDontAsk(raw.dontAsk),
     stopConfirmation: isStopConfirmation(raw.stopConfirmation) ? raw.stopConfirmation : DEFAULTS.stopConfirmation,
     resumeOnStart: typeof raw.resumeOnStart === "boolean" ? raw.resumeOnStart : DEFAULTS.resumeOnStart,
+    sessionRetentionDays: isRetentionDays(raw.sessionRetentionDays)
+      ? raw.sessionRetentionDays
+      : DEFAULTS.sessionRetentionDays,
   };
 }
 

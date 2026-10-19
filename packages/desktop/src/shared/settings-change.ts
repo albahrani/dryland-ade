@@ -1,6 +1,10 @@
 import { isRecord, isConfirmationType, type ConfirmationType, type DontAsk } from "./tracker-actions.ts";
 import { isStopConfirmation, type StopConfirmation } from "./stop-session.ts";
 
+/** Whether `value` is a usable retention period: a positive whole number of days. */
+export const isRetentionDays = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value > 0;
+
 /** A change the Settings dialog asks for; the main process validates it and applies it to the stored settings. */
 export type SettingsChange =
   | { kind: "auto-commit"; value: boolean }
@@ -8,6 +12,8 @@ export type SettingsChange =
   | { kind: "project-auto-commit"; value: boolean | null }
   | { kind: "resume-on-start"; value: boolean }
   | { kind: "stop-confirmation"; value: StopConfirmation }
+  /** Days a session stays in the session index after it was last seen. */
+  | { kind: "session-retention"; value: number }
   | { kind: "reset-confirmation"; type: ConfirmationType }
   | { kind: "reset-legend" };
 
@@ -22,6 +28,7 @@ export interface SettingsPatch extends Partial<SettingsSnapshot> {
   autoCommit?: boolean;
   resumeOnStart?: boolean;
   stopConfirmation?: StopConfirmation;
+  sessionRetentionDays?: number;
   legendDismissed?: boolean;
 }
 
@@ -36,6 +43,8 @@ export function isSettingsChange(value: unknown): value is SettingsChange {
       return typeof value.value === "boolean" || value.value === null;
     case "stop-confirmation":
       return isStopConfirmation(value.value);
+    case "session-retention":
+      return isRetentionDays(value.value);
     case "reset-confirmation":
       return isConfirmationType(value.type);
     case "reset-legend":
@@ -54,6 +63,8 @@ export function settingsPatch(saved: SettingsSnapshot, change: SettingsChange, p
       return { resumeOnStart: change.value };
     case "stop-confirmation":
       return { stopConfirmation: change.value };
+    case "session-retention":
+      return { sessionRetentionDays: change.value };
     case "reset-legend":
       return { legendDismissed: false };
     case "reset-confirmation":

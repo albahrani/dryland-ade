@@ -17,6 +17,8 @@ export interface SessionRecorderOptions {
   sessions: () => SessionInfo[];
   /** Told about an index that could not be written or had to be replaced; the index is a cache, nothing fails. */
   warn: (message: string) => void;
+  /** How long a session stays in the index after it was last seen; the default when left out. */
+  retentionDays?: () => number;
 }
 
 export interface SessionRecorder {
@@ -30,7 +32,7 @@ export interface SessionRecorder {
 }
 
 /** Keeps the session index current from hook events, writing in the order the events came. */
-export function createSessionRecorder({ runner, sessions, warn }: SessionRecorderOptions): SessionRecorder {
+export function createSessionRecorder({ runner, sessions, warn, retentionDays }: SessionRecorderOptions): SessionRecorder {
   /** The CLI session id each session last reported, by Dryland session id. */
   const latest = new Map<string, string>();
   let pending = Promise.resolve();
@@ -52,7 +54,9 @@ export function createSessionRecorder({ runner, sessions, warn }: SessionRecorde
       };
       pending = pending.then(async () => {
         try {
-          const warnings = await recordSession(runner, session.worktree.path, sessionItem(session), recorded);
+          const warnings = await recordSession(runner, session.worktree.path, sessionItem(session), recorded, {
+            retentionDays: retentionDays?.(),
+          });
           warnings.forEach(warn);
         } catch (error) {
           warn(`The session was not recorded in the session index (${(error as Error).message}).`);

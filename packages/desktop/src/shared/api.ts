@@ -59,6 +59,8 @@ export interface AppSettings {
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
   resumeOnStart: boolean;
+  /** Days a session stays in the session index after it was last seen. */
+  sessionRetentionDays: number;
 }
 
 export interface AppState {

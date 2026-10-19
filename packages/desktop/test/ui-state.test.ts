@@ -13,6 +13,7 @@ const SETTINGS_DEFAULTS = {
   dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
   stopConfirmation: "busy-or-unseen",
   resumeOnStart: false,
+  sessionRetentionDays: 30,
 };
 
 describe("ui state store", () => {
@@ -144,6 +145,17 @@ describe("ui state store", () => {
 
     writeFileSync(file, JSON.stringify({ resumeOnStart: "yes" }));
     expect(createUiStateStore(file).read().resumeOnStart).toBe(false);
+  });
+
+  it("remembers the session retention period, falling back to 30 days for anything but a positive whole number", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ sessionRetentionDays: 7 });
+    expect(createUiStateStore(file).read().sessionRetentionDays).toBe(7);
+
+    for (const bad of [0, -1, 1.5, "7"]) {
+      writeFileSync(file, JSON.stringify({ sessionRetentionDays: bad }));
+      expect(createUiStateStore(file).read().sessionRetentionDays).toBe(30);
+    }
   });
 
   it("remembers auto-commit globally and per project, dropping overrides that are not on or off", () => {

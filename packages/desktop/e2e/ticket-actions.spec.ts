@@ -199,6 +199,13 @@ test("Settings shows a project override over the global auto-commit, clears it, 
   await expect(settings.getByText("Following the global setting.")).toBeVisible();
   await expect(settings.getByLabel("Auto-commit tracker writes in this project")).not.toBeChecked();
 
+  // The retention period defaults to 30 days and can be changed.
+  await settings.getByRole("tab", { name: "General" }).click();
+  const retention = settings.getByLabel("Keep sessions for");
+  await expect(retention).toHaveValue("30");
+  await retention.fill("7");
+  await expect(retention).toHaveValue("7");
+
   await settings.getByRole("tab", { name: "Updates" }).click();
   await expect(settings).toContainText("arrives with ticket 58");
   await app.close();

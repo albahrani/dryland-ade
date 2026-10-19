@@ -13,6 +13,9 @@ describe("settings changes", () => {
     expect(isSettingsChange({ kind: "stop-confirmation", value: "never" })).toBe(true);
     expect(isSettingsChange({ kind: "reset-confirmation", type: "user-config" })).toBe(true);
     expect(isSettingsChange({ kind: "reset-legend" })).toBe(true);
+    expect(isSettingsChange({ kind: "session-retention", value: 14 })).toBe(true);
+    expect(isSettingsChange({ kind: "session-retention", value: 0 })).toBe(false);
+    expect(isSettingsChange({ kind: "session-retention", value: 1.5 })).toBe(false);
 
     expect(isSettingsChange({ kind: "auto-commit", value: "no" })).toBe(false);
     expect(isSettingsChange({ kind: "project-auto-commit", value: undefined })).toBe(false);
@@ -46,6 +49,9 @@ describe("settings changes", () => {
     expect(settingsPatch(saved, { kind: "resume-on-start", value: true }, null)).toEqual({ resumeOnStart: true });
     expect(settingsPatch(saved, { kind: "stop-confirmation", value: "always" }, null)).toEqual({
       stopConfirmation: "always",
+    });
+    expect(settingsPatch(saved, { kind: "session-retention", value: 14 }, null)).toEqual({
+      sessionRetentionDays: 14,
     });
     expect(settingsPatch(saved, { kind: "reset-legend" }, null)).toEqual({ legendDismissed: false });
   });
