@@ -152,6 +152,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Status below a blank line anchors a new Blocked by](issues/84-status-below-a-blank-line-anchors-a-new-blocked-by.md): A Status anywhere, with its annotation, anchors a new Blocked by; an orphan annotation anchors nothing.
 
+- [Session linking, scratch sessions and transcripts](issues/38-session-linking-scratch-sessions-and-transcripts.md): Hand-started CLIs link by working directory, ticketless sessions get a scratch worktree, ended tabs stay read-only.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
