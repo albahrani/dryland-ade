@@ -158,6 +158,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Settings dialog: General, Tracker and Write confirmations](issues/55-settings-dialog-general-tracker-confirmations.md): Settings modal with six tabs; auto-commit with project override, confirmation resets, stop rule and resume-on-start moved out of menus.
 
+- [Multiple projects](issues/42-multiple-projects.md): Several projects open at once with a project widget, an All Projects dialog and per-project tabs; sessions keep running across switches.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
