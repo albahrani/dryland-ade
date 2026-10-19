@@ -21,7 +21,7 @@ import {
   SESSION_RETENTION_ENV,
   startLiveListener,
 } from "@dryland/core";
-import { app, BrowserWindow, dialog, ipcMain, Menu, powerMonitor } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import {
   type AppSettings,
   type AppState,
@@ -432,6 +432,8 @@ async function projectSummaries(): Promise<ProjectSummary[]> {
 }
 
 function createWindow(): void {
+  // The UI is dark only, so the window frame, menus and native dialogs follow it, not the system setting.
+  nativeTheme.themeSource = "dark";
   window = new BrowserWindow({
     width: 1280,
     height: 800,
