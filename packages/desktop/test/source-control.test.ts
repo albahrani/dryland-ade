@@ -131,3 +131,21 @@ describe("linking", () => {
     expect((await sc.unlinked()).map((u) => u.branch)).not.toContain("side-work");
   });
 });
+
+describe("conflicts", () => {
+  it("lists an unmerged file once, as changed, never as staged", async () => {
+    const other = join(repo, "..", `${repo.split(/[\\/]/).at(-1)}-conflict`);
+    git(repo, "worktree", "add", "-q", "-b", "conflict-side", other);
+    write(other, "src/a.ts", "side\n");
+    git(other, "commit", "-q", "-a", "-m", "Side");
+    write(repo, "src/a.ts", "main\n");
+    git(repo, "commit", "-q", "-a", "-m", "Main edit");
+    try {
+      git(other, "merge", "main");
+    } catch {
+      // the conflict is the point
+    }
+
+    expect(await sc.status(other)).toEqual({ staged: [], changed: [{ path: "src/a.ts", status: "modified" }] });
+  });
+});

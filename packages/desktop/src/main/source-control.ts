@@ -1,4 +1,4 @@
-import { defaultBranch, DrylandError, type ProcessRunner } from "@dryland/core";
+import { defaultBranch, DrylandError, type ProcessRunner, type WorktreeEntry } from "@dryland/core";
 import type { ChangedFile, ChangeStatus, ExplorerRoot } from "../shared/explorer.ts";
 import { isRelativeInside } from "../shared/paths.ts";
 import type {
@@ -12,12 +12,12 @@ import type {
 const MAX_BRANCH_COMMITS = 50;
 const BASE_CONTEXT = 5;
 
-const STATUS: Record<string, ChangeStatus> = { A: "added", M: "modified", D: "deleted", T: "modified", U: "modified" };
+const STATUS: Record<string, ChangeStatus> = { A: "added", M: "modified", D: "deleted", T: "modified" };
 
 /** What Source Control needs of the Explorer: which worktrees the project has, and the check that a root is one. */
 interface Worktrees {
   knownRoot(root: string): Promise<ExplorerRoot>;
-  worktrees(): Promise<{ path: string; branch: string | null; main: boolean; link: { kind: string } }[]>;
+  worktrees(): Promise<WorktreeEntry[]>;
 }
 
 /**
@@ -43,6 +43,11 @@ export function createSourceControl(runner: ProcessRunner, projectPath: string, 
       const path = entry.slice(3);
       if (index === "?") {
         changed.push({ path, status: "untracked" });
+        continue;
+      }
+      // An unmerged file (conflict) is not staged until it is resolved, so it is listed once, as changed.
+      if (index === "U" || tree === "U" || (index === "A" && tree === "A") || (index === "D" && tree === "D")) {
+        changed.push({ path, status: "modified" });
         continue;
       }
       if (index !== " " && index !== "!") staged.push({ path, status: STATUS[index] ?? "modified" });
