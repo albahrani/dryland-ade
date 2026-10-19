@@ -103,6 +103,26 @@ function withPath(edit: (dirs: string[]) => string[]): Record<string, string> {
   return env;
 }
 
+/**
+ * Starts the app. Its `close()` quits like the user does: with sessions running, the quit dialog asks first, and
+ * the tests answer Quit unless they say otherwise.
+ */
+async function launchApp(env: Record<string, string>, userData: string) {
+  const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`], env });
+  const close = app.close.bind(app);
+  app.close = async () => {
+    const closed = app.waitForEvent("close");
+    void app.evaluate(({ app }) => app.quit()).catch(() => {});
+    const quit = (await app.firstWindow())
+      .getByRole("dialog", { name: "Quit Dryland" })
+      .getByRole("button", { name: "Quit", exact: true });
+    await Promise.race([closed, quit.click().catch(() => {})]);
+    await closed.catch(() => {});
+    await close().catch(() => {});
+  };
+  return app;
+}
+
 async function openTicket(env: Record<string, string>) {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
@@ -110,11 +130,9 @@ async function openTicket(env: Record<string, string>) {
 }
 
 async function openProjectAt(env: Record<string, string>, repo: string, userData: string) {
-  const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`], env });
+  const app = await launchApp(env, userData);
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
-    // Quitting with sessions running asks first; the tests answer Quit unless they say otherwise.
-    dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
   }, repo);
   const window = await app.firstWindow();
   await window.getByRole("button", { name: "Open project..." }).click();
@@ -286,42 +304,69 @@ test("quitting with a running session asks first, then stops it and keeps its cl
   const before = claimed();
   expect(before.ticket).toContain("Status: claimed");
 
-  // Cancel: the question lists the session, and nothing stops.
-  await app.evaluate(({ app, dialog }) => {
-    const asked: string[] = [];
-    (globalThis as { asked?: string[] }).asked = asked;
-    dialog.showMessageBox = async (...args: unknown[]) => {
-      const options = args.at(-1) as { message: string; detail: string };
-      asked.push(`${options.message}\n${options.detail}`);
-      return { response: 1, checkboxChecked: false };
-    };
-    app.quit();
-  });
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as { asked?: string[] }).asked ?? []))
-    .toEqual([expect.stringContaining("1 session is still running.")]);
-  const [question] = await app.evaluate(() => (globalThis as { asked?: string[] }).asked ?? []);
-  expect(question).toContain("• Claude Code shop/02 (launched) in shop/02-grill");
+  // Cancel: the dialog lists the session, and nothing stops.
+  void app.evaluate(({ app }) => app.quit());
+  const dialog = window.getByRole("dialog", { name: "Quit Dryland" });
+  await expect(dialog).toContainText("1 session is still running.");
+  const row = dialog.getByRole("list", { name: "Running sessions" }).getByRole("listitem").first();
+  await expect(row).toContainText("Claude Code shop/02");
+  await expect(row).toContainText("launched · shop/02-grill");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
   await window.locator(".xterm:visible").click();
   await window.keyboard.type("x");
   await expect(screen).toContainText("/implement shop/02x");
+  expect(alive(pid)).toBe(true);
 
-  // Quit: the CLI is gone, and the claim and the branch's history are as they were.
-  await app.evaluate(({ dialog }) => {
-    dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
-  });
-  await app.close();
-  await expect
-    .poll(() => {
-      try {
-        process.kill(pid, 0);
-        return "alive";
-      } catch {
-        return "gone";
-      }
-    })
-    .toBe("gone");
+  // Closing the window asks the same question; Quit stops the CLI, and the claim and the branch's history are as they were.
+  void app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
+  await expect(dialog).toBeVisible();
+  const closed = app.waitForEvent("close");
+  await dialog.getByRole("button", { name: "Quit", exact: true }).click();
+  await closed;
+  await expect.poll(() => alive(pid)).toBe(false);
   expect(claimed()).toEqual(before);
+});
+
+test("shows the shutdown steps after Quit, and Quit now abandons a slow one and quits at once", async () => {
+  const env = { ...withPath((dirs) => [stubAgent(), ...dirs]), DRYLAND_TEST_SLOW_SHUTDOWN_MS: "120000" };
+  const { app, window } = await openTicket(env);
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  const screen = window.locator(".xterm-rows:visible");
+  await expect(screen).toContainText("/implement shop/02");
+  const pid = Number(/pid=(d+)/.exec(await screen.innerText())?.[1]);
+
+  void app.evaluate(({ app }) => app.quit());
+  const dialog = window.getByRole("dialog", { name: "Quit Dryland" });
+  await dialog.getByRole("button", { name: "Quit", exact: true }).click();
+  // The PTYs are killed and the index flushed; the slow step is still running, with no deadline.
+  const steps = dialog.getByRole("list", { name: "Shutdown progress" });
+  await expect(steps.getByRole("listitem").filter({ hasText: "kill PTYs" })).toHaveAttribute("data-state", "done");
+  await expect(steps.getByRole("listitem").filter({ hasText: "test delay" })).toHaveAttribute("data-state", "running");
+  await window.waitForTimeout(2500);
+  await expect(dialog).toBeVisible();
+
+  const closed = app.waitForEvent("close", { timeout: 10_000 });
+  await dialog.getByRole("button", { name: "Quit now" }).click();
+  await closed;
+  await expect.poll(() => alive(pid)).toBe(false);
+});
+
+test("asks natively when the window does not answer the quit request", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("/implement shop/02");
+  await app.evaluate(({ BrowserWindow, dialog }) => {
+    (globalThis as { asked?: number }).asked = 0;
+    dialog.showMessageBox = async () => {
+      (globalThis as { asked?: number }).asked = ((globalThis as { asked?: number }).asked ?? 0) + 1;
+      return { response: 0, checkboxChecked: false };
+    };
+    BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+  });
+  const closed = app.waitForEvent("close", { timeout: 15_000 });
+  await app.evaluate(({ app }) => app.quit()).catch(() => {});
+  await closed;
 });
 
 test("quitting with no running session asks nothing", async () => {
@@ -519,10 +564,7 @@ test("stops a session and resumes it from the paused box, in its worktree with t
 
 /** Starts the app again on the same project and settings, which it opens by itself. */
 async function relaunch(env: Record<string, string>, userData: string) {
-  const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`], env });
-  await app.evaluate(({ dialog }) => {
-    dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
-  });
+  const app = await launchApp(env, userData);
   return { app, window: await app.firstWindow() };
 }
 

@@ -8,6 +8,7 @@ import type {
   TicketsTree,
 } from "@dryland/core";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
+import type { QuitAnswer, QuitProgress, QuitRequest } from "./quit.ts";
 import type { NextUp } from "./next-up.ts";
 import type { CommitGraph, CommitResult, SourceControlStatus, UnlinkedBranch } from "./source-control.ts";
 import type { PausedSession } from "./paused-session.ts";
@@ -202,6 +203,12 @@ export interface DrylandApi {
   replayTerminal(id: string): Promise<string | null>;
   /** Kills a session's Agent CLI; its claim and its session index entry stay, so it can be resumed. */
   stopSession(sessionId: string): Promise<void>;
+  /** Answers the quit dialog: keep everything, stop and quit, or ("now") abandon the remaining steps and quit at once. */
+  answerQuit(answer: QuitAnswer): Promise<void>;
+  /** Called when the user quits while sessions run, with what would stop; the window shows the question. */
+  onQuitRequest(callback: (request: QuitRequest) => void): () => void;
+  /** Called with each shutdown step's progress after the quit is confirmed. Returns an unsubscribe function. */
+  onQuitProgress(callback: (progress: QuitProgress) => void): () => void;
   /** Called with output of any terminal. Returns an unsubscribe function. */
   onTerminalData(callback: (id: string, data: string) => void): () => void;
   /** Called when a terminal's process ends by itself. Returns an unsubscribe function. */

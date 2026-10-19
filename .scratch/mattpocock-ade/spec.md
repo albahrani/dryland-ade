@@ -289,7 +289,7 @@ Three packages in a pnpm workspace under the `@dryland` scope:
 ### Lifecycle, packaging and release (ADRs 0002, 0004)
 
 - Quitting with live sessions, hidden ones included, shows a confirmation listing them, then stops them. Claims are kept and the sessions become paused.
-- Quit and system shutdown share a hard 2-second budget, in this order: kill PTYs, flush the session index and UI state. Nothing is released at quit or shutdown.
+- System shutdown (OS-forced: no question) has a hard 2-second budget, in this order: kill PTYs, flush the session index and UI state. A quit the user starts has no budget: an in-app dialog lists the running sessions, shows each step's progress after confirming and offers "Quit now"; a window that does not answer within about 2 seconds is replaced by a native message box. Nothing is released at quit or shutdown.
 - `electron-builder` targets: NSIS (Windows x64), DMG (macOS arm64 and x64), AppImage and deb (Linux x64). Unsigned in v1. Distribution through GitHub Releases plus build-from-source.
 - `electron-updater` with `latest` and `beta` channels, default `latest`, checked at most daily plus on demand, applied on next quit. Auto-update on Windows NSIS and Linux AppImage; notify-only on macOS and deb.
 - The `dryland` launcher ships in the install directory and is replaced on every update. Global `PATH` is opt-in (NSIS checkbox, a `dryland doctor` symlink on macOS/Linux, the deb's system link).

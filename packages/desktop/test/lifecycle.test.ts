@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type QuitSession,
+  QUIT_ANSWER_MS,
   quitConfirmation,
+  quitListing,
   runShutdown,
   SHUTDOWN_BUDGET_MS,
   shutdownSteps,
+  whoAsks,
 } from "../src/main/lifecycle.ts";
 import { createTerminalManager } from "../src/main/terminals.ts";
 import { FakePtyProvider } from "./fake-pty.ts";
@@ -113,13 +116,15 @@ const session = (id: string, ticket: QuitSession["ticket"], map: string | null, 
   worktree: { branch },
 });
 
+const confirm = (...args: Parameters<typeof quitListing>) => quitConfirmation(quitListing(...args));
+
 describe("quit confirmation", () => {
   it("asks nothing when no session runs", () => {
-    expect(quitConfirmation([], {})).toBeNull();
+    expect(confirm([], {})).toBeNull();
   });
 
   it("lists every running session, those waiting on the user first", () => {
-    const confirmation = quitConfirmation(
+    const confirmation = confirm(
       [
         session("a", { map: "shop", id: "02" }, "shop", "shop/02-grill"),
         session("b", null, "shop", "shop/scratch-wayfinder"),
@@ -139,8 +144,8 @@ describe("quit confirmation", () => {
 
   it("leaves out a session whose CLI reported its end, and asks nothing when only such remain", () => {
     const ended = session("a", { map: "shop", id: "02" }, "shop", "shop/02-grill");
-    expect(quitConfirmation([ended], { a: "ended" })).toBeNull();
-    const confirmation = quitConfirmation([ended, session("b", null, "shop", "shop/scratch-wayfinder")], {
+    expect(confirm([ended], { a: "ended" })).toBeNull();
+    const confirmation = confirm([ended, session("b", null, "shop", "shop/scratch-wayfinder")], {
       a: "ended",
     });
     expect(confirmation?.message).toBe("1 session is still running. Quit Dryland and stop it?");
@@ -148,7 +153,7 @@ describe("quit confirmation", () => {
   });
 
   it("lists sessions with unseen output after those waiting and before the rest, saying so", () => {
-    const confirmation = quitConfirmation(
+    const confirmation = confirm(
       [
         session("a", { map: "shop", id: "02" }, "shop", "shop/02-grill"),
         session("b", { map: "shop", id: "03" }, "shop", "shop/03-cart"),
@@ -165,8 +170,81 @@ describe("quit confirmation", () => {
   });
 
   it("speaks of one session in the singular", () => {
-    const confirmation = quitConfirmation([session("a", null, null, "new-map/scratch-wayfinder")], {});
+    const confirmation = confirm([session("a", null, null, "new-map/scratch-wayfinder")], {});
     expect(confirmation?.message).toBe("1 session is still running. Quit Dryland and stop it?");
     expect(confirmation?.detail).toContain("• Claude Code new map (launched) in new-map/scratch-wayfinder");
+  });
+});
+
+describe("a quit the user starts", () => {
+  afterEach(() => void vi.useRealTimers());
+
+  it("runs without a deadline, however slow a step is, and reports each step's progress", async () => {
+    vi.useFakeTimers();
+    const progress: string[] = [];
+    const done = vi.fn();
+    void runShutdown(
+      [
+        { name: "kill PTYs", run: () => {} },
+        { name: "flush", run: () => later(30_000, () => {}) },
+      ],
+      null,
+      { onStep: (step, state) => progress.push(`${step}:${state}`) },
+    ).then(done);
+    await vi.advanceTimersByTimeAsync(SHUTDOWN_BUDGET_MS * 5);
+    expect(done).not.toHaveBeenCalled();
+    expect(progress).toEqual([
+      "kill PTYs:pending",
+      "flush:pending",
+      "kill PTYs:running",
+      "kill PTYs:done",
+      "flush:running",
+    ]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(done).toHaveBeenCalledWith({ completed: ["kill PTYs", "flush"], failed: [], abandoned: [] });
+    expect(progress.at(-1)).toBe("flush:done");
+  });
+
+  it("quits now: abandons a slow step and the ones after it at once", async () => {
+    vi.useFakeTimers();
+    const abandon = new AbortController();
+    const progress: string[] = [];
+    const done = vi.fn();
+    void runShutdown(
+      [
+        { name: "kill PTYs", run: () => {} },
+        { name: "flush", run: () => later(30_000, () => {}) },
+        { name: "after", run: () => {} },
+      ],
+      null,
+      { onStep: (step, state) => progress.push(`${step}:${state}`), abandon: abandon.signal },
+    ).then(done);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(done).not.toHaveBeenCalled();
+    abandon.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toHaveBeenCalledWith({ completed: ["kill PTYs"], failed: [], abandoned: ["flush", "after"] });
+    expect(progress.slice(-2)).toEqual(["flush:abandoned", "after:abandoned"]);
+  });
+});
+
+describe("who asks about quitting", () => {
+  afterEach(() => void vi.useRealTimers());
+
+  it("is the window when it acknowledges the request", async () => {
+    vi.useFakeTimers();
+    expect(await whoAsks(Promise.resolve())).toBe("in-app");
+  });
+
+  it("is the native message box when the window stays silent past the wait", async () => {
+    vi.useFakeTimers();
+    const asker = whoAsks(new Promise(() => {}));
+    await vi.advanceTimersByTimeAsync(QUIT_ANSWER_MS - 1);
+    let settled = false;
+    void asker.then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await asker).toBe("native");
   });
 });

@@ -1,5 +1,6 @@
 import type { LiveEvent, SessionState } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
+import type { QuitAnswer, QuitProgress, QuitRequest } from "../shared/quit.ts";
 import type { AppSettings, DrylandApi, MenuCommand, ProjectView, SessionInfo } from "../shared/api.ts";
 
 const api: DrylandApi = {
@@ -36,6 +37,21 @@ const api: DrylandApi = {
   viewTerminal: (id) => ipcRenderer.send("terminal:view", id),
   replayTerminal: (id) => ipcRenderer.invoke("terminal:replay", id),
   stopSession: (sessionId) => ipcRenderer.invoke("session:stop", sessionId),
+  answerQuit: (answer: QuitAnswer) => ipcRenderer.invoke("quit:answer", answer),
+  onQuitRequest(callback) {
+    const listener = (_event: unknown, request: QuitRequest) => {
+      callback(request);
+      // Sent once the window has the request in hand, so the main process knows it need not ask natively.
+      ipcRenderer.send("quit:shown");
+    };
+    ipcRenderer.on("quit:request", listener);
+    return () => ipcRenderer.removeListener("quit:request", listener);
+  },
+  onQuitProgress(callback) {
+    const listener = (_event: unknown, progress: QuitProgress) => callback(progress);
+    ipcRenderer.on("quit:progress", listener);
+    return () => ipcRenderer.removeListener("quit:progress", listener);
+  },
   onTerminalData(callback) {
     const listener = (_event: unknown, id: string, data: string) => callback(id, data);
     ipcRenderer.on("terminal:data", listener);

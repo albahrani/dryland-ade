@@ -46,7 +46,17 @@ import {
 import { createDrylandCli } from "./dryland-cli.ts";
 import { latestOnly } from "./latest-only.ts";
 import { writeLauncher } from "./launcher.ts";
-import { quitConfirmation, runShutdown, shutdownSteps } from "./lifecycle.ts";
+import {
+  quitConfirmation,
+  quitListing,
+  runShutdown,
+  SHUTDOWN_BUDGET_MS,
+  type ShutdownHooks,
+  type ShutdownStep,
+  shutdownSteps,
+  whoAsks,
+} from "./lifecycle.ts";
+import { isQuitAnswer, type QuitListing, type QuitRequest } from "../shared/quit.ts";
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
@@ -707,29 +717,55 @@ const runningSessions = () => {
 };
 
 /**
- * Stops everything within the shutdown budget: no process outlives the app (ADR 0002). Nothing is released and no
- * tracker is written; claims stay and the sessions become paused (ADR 0010). UI state is written as it changes, so
- * none is pending here; session index writes may be, and are flushed.
+ * Stops everything: no process outlives the app (ADR 0002). Nothing is released and no tracker is written; claims
+ * stay and the sessions become paused (ADR 0010). UI state is written as it changes, so none is pending here;
+ * session index writes may be, and are flushed. An OS-forced shutdown has the 2-second budget; a user quit has none,
+ * reports its steps to the window, and can be abandoned.
  */
-async function stopEverything(): Promise<void> {
+async function stopEverything(budgetMs: number | null, hooks: ShutdownHooks = {}): Promise<void> {
   stopWatching?.();
   stopWatching = null;
   explorerWatcher.stop();
-  const report = await runShutdown(shutdownSteps(terminals, [{ name: "flush session index", run: recorder.flush }]));
+  // Lets the e2e tests hold a quit open long enough to press "Quit now"; never set in use.
+  const slowMs = Number(process.env.DRYLAND_TEST_SLOW_SHUTDOWN_MS);
+  const slow: ShutdownStep[] =
+    slowMs > 0 ? [{ name: "test delay", run: () => new Promise((r) => setTimeout(r, slowMs)) }] : [];
+  const report = await runShutdown(
+    shutdownSteps(terminals, [{ name: "flush session index", run: recorder.flush }, ...slow]),
+    budgetMs,
+    hooks,
+  );
   if (report.failed.length > 0 || report.abandoned.length > 0) console.error("Shutdown was cut short.", report);
 }
 
-/** System shutdown: no question asked, only the budgeted stop. */
-async function shutDown(): Promise<void> {
+/** System shutdown, or a quit with nothing running: no question asked, only the stop. */
+async function shutDown(budgetMs: number | null = SHUTDOWN_BUDGET_MS): Promise<void> {
   quit = "allowed";
-  await stopEverything();
+  await stopEverything(budgetMs);
   app.quit();
 }
 
-/** Asks before quitting while sessions run; on Quit, stops them and quits. */
-async function confirmQuit(): Promise<void> {
-  quit = "asking";
-  const confirmation = quitConfirmation(runningSessions(), status.states(), new Set(unseen.ids()));
+/** Stopped by the quit dialog's "Quit now": the remaining steps are dropped. */
+let abandonQuit: AbortController | null = null;
+
+/** The quit dialog confirmed: stop with no deadline, telling the window each step's progress, then quit. */
+async function quitFromDialog(): Promise<void> {
+  quit = "allowed";
+  abandonQuit = new AbortController();
+  const abandon = abandonQuit.signal;
+  await stopEverything(null, { abandon, onStep: (step, state) => sendToWindow("quit:progress", { step, state }) });
+  abandonQuit = null;
+  app.quit();
+}
+
+/** Resolves when the window says it shows the quit dialog. */
+function windowShowsQuitDialog(): Promise<void> {
+  return new Promise((resolve) => ipcMain.once("quit:shown", () => resolve()));
+}
+
+/** The native message box, for a window that does not answer; on Quit, stops them and quits. */
+async function askNatively(listing: QuitListing[]): Promise<void> {
+  const confirmation = quitConfirmation(listing);
   if (confirmation !== null) {
     const options = { type: "question" as const, ...confirmation, defaultId: 1, cancelId: 1, noLink: true };
     const { response } = await (window === null
@@ -740,8 +776,29 @@ async function confirmQuit(): Promise<void> {
       return;
     }
   }
-  await shutDown();
+  await shutDown(null);
 }
+
+/** Asks before quitting while sessions run: in the window, or natively when the window does not answer. */
+async function confirmQuit(): Promise<void> {
+  quit = "asking";
+  const listing = quitListing(runningSessions(), status.states(), new Set(unseen.ids()));
+  if (listing.length === 0) return void (await shutDown());
+  const shown = window === null || window.isDestroyed() ? null : windowShowsQuitDialog();
+  if (shown !== null) {
+    sendToWindow("quit:request", { sessions: listing } satisfies QuitRequest);
+    if ((await whoAsks(shown)) === "in-app") return;
+    ipcMain.removeAllListeners("quit:shown");
+  }
+  await askNatively(listing);
+}
+
+ipcMain.handle("quit:answer", async (_event, answer: unknown) => {
+  if (!isQuitAnswer(answer)) return;
+  if (answer === "cancel" && quit === "asking") quit = "ask";
+  else if (answer === "confirm" && quit === "asking") await quitFromDialog();
+  else if (answer === "now") abandonQuit?.abort();
+});
 
 app.on("before-quit", (event) => {
   if (quit === "allowed") return;

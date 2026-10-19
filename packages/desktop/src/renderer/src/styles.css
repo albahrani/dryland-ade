@@ -681,6 +681,37 @@ ul {
   gap: 8px;
 }
 
+.modal .dim {
+  margin: 0;
+  color: var(--fg-dim);
+}
+
+.quit-sessions,
+.quit-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quit-sessions li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .modal .primary {
   border-color: var(--accent);
 }

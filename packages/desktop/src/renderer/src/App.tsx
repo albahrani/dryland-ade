@@ -38,6 +38,8 @@ import {
   type TabsState,
   ticketKey,
 } from "../../shared/tabs.ts";
+import { QuitDialog } from "./QuitDialog.tsx";
+import type { QuitRequest } from "../../shared/quit.ts";
 import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
 import { Explorer } from "./Explorer.tsx";
 import { SourceControl } from "./SourceControl.tsx";
@@ -223,6 +225,7 @@ export function App() {
   const [pending, setPending] = useState<(PendingWrite & { action: TicketAction }) | null>(null);
   // What the last tracker write or session start reported: its error, or the warnings it ran with.
   const [notice, setNotice] = useState<string | null>(null);
+  const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
   const [dialog, setDialog] = useState<MenuCommand | null>(null);
   // A session waiting for the user to confirm it should stop.
@@ -280,6 +283,7 @@ export function App() {
       setSessions((current) => new Map([...current, ...started.map((s) => [s.terminalId, s] as const)])),
     );
     const stopNotice = window.dryland.onNotice(setNotice);
+    const stopQuit = window.dryland.onQuitRequest(setQuitRequest);
     const stopProject = window.dryland.onProjectChanged((project) =>
       setState((current) => current && { ...current, project }),
     );
@@ -302,6 +306,7 @@ export function App() {
       stopExplorer();
       stopStarted();
       stopNotice();
+      stopQuit();
       stopMenu();
       stopProject();
       stopTerminals();
@@ -764,6 +769,7 @@ export function App() {
           }}
         />
       )}
+      {quitRequest !== null && <QuitDialog request={quitRequest} onClose={() => setQuitRequest(null)} />}
       {pending !== null && (
         <ConfirmWrite pending={pending} onConfirm={confirmPending} onCancel={() => setPending(null)} />
       )}
