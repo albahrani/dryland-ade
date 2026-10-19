@@ -53,6 +53,8 @@ export interface AgentAdapter {
    * `null` when the CLI cannot resume.
    */
   resumeFlag: string | null;
+  /** Whether a session id is joined to the resume flag with `=` instead of following it as an argument. */
+  resumeIdJoined: boolean;
   /**
    * Where the CLI keeps the history of session `sessionId` run in `cwd`, under `home`; `null` when it is not known
    * where, so a resume cannot be checked first.
@@ -98,6 +100,7 @@ export const CLAUDE_CODE: AgentAdapter = {
   // Verified against 2.1.301: hooks see the id given at launch in CLAUDE_CODE_SESSION_ID (ticket 74).
   sessionIdFlag: "--session-id",
   resumeFlag: "--resume",
+  resumeIdJoined: false,
   // Claude Code files a session's transcript under `~/.claude/projects/<cwd, every non-alphanumeric as "-">/<id>.jsonl`.
   historyFile: (home, cwd, sessionId) =>
     join(home, ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"), `${sessionId}.jsonl`),
@@ -124,8 +127,46 @@ export const CLAUDE_CODE: AgentAdapter = {
   },
 };
 
+/**
+ * GitHub Copilot CLI. Launch, the trust prompt and the hook events are recorded against 1.0.95 and 1.0.96 on
+ * Windows (tickets 17 and 19). The dev machine has no Copilot CLI, so the rest is built from those shapes and
+ * re-checked in the v1.0.0 smoke checklist.
+ */
+export const COPILOT_CLI: AgentAdapter = {
+  id: "copilot-cli",
+  name: "GitHub Copilot CLI",
+  tier: "first-class",
+  binary: "copilot",
+  launchArgs: [],
+  skillPrefix: "/",
+  skillDirs: [".github/skills", ".agents/skills", ".copilot/skills"],
+  initialPrompt: "pre-type",
+  // The folder trust dialog: "Yes", "Yes, and remember this folder for future sessions", "No (Esc)".
+  blockingPrompts: [/andrememberthisfolder/i, /trustthefilesinthisfolder/i],
+  parentSessionEnv: ["COPILOT_AGENT_SESSION_ID"],
+  sessionEnv: "COPILOT_AGENT_SESSION_ID",
+  sessionIdFlag: "--session-id",
+  resumeFlag: "--resume",
+  resumeIdJoined: true,
+  // Copilot silently starts a blank session under an id it does not know, so a resume looks for the session's
+  // folder first. Its history is not kept per directory, so `cwd` plays no part.
+  historyFile: (home, _cwd, sessionId) => join(home, ".copilot", "session-state", sessionId),
+  hookInjection: { kind: "user-config" },
+  // `sessionStart` fires only at the first submitted prompt, so it is left out: "launched" comes from the spawn.
+  // Its `agent_idle` notification does not fire for the main agent and is not relied on.
+  statusEvents: {
+    userPromptSubmitted: "running",
+    preToolUse: "running",
+    postToolUse: "running",
+    permissionRequest: "waiting",
+    "notification:permission_prompt": "waiting",
+    agentStop: "idle",
+    sessionEnd: "ended",
+  },
+};
+
 /** Every Agent CLI Dryland can start work with, in the order they are offered. */
-export const AGENT_ADAPTERS: readonly AgentAdapter[] = [CLAUDE_CODE];
+export const AGENT_ADAPTERS: readonly AgentAdapter[] = [CLAUDE_CODE, COPILOT_CLI];
 
 /** A rule engine command, such as `/implement shop/02`, written the way the adapter's CLI invokes skills. */
 export function skillCommand(adapter: AgentAdapter, command: string): string {
@@ -143,7 +184,8 @@ export function sessionIdArgs(adapter: AgentAdapter, sessionId: string): string[
  */
 export function resumeArgs(adapter: AgentAdapter, sessionId: string | null): string[] | null {
   if (adapter.resumeFlag === null) return null;
-  return sessionId === null ? [adapter.resumeFlag] : [adapter.resumeFlag, sessionId];
+  if (sessionId === null) return [adapter.resumeFlag];
+  return adapter.resumeIdJoined ? [`${adapter.resumeFlag}=${sessionId}`] : [adapter.resumeFlag, sessionId];
 }
 
 /** Whether the CLI still holds session `sessionId` of `cwd`: false when it cannot be told, so a resume is not tried. */
@@ -161,6 +203,23 @@ export async function sessionExists(
 interface HookGroup {
   matcher?: string;
   hooks: { type: "command"; command: string; timeout: number }[];
+}
+
+/**
+ * The session state the native hook `event` reports, given its JSON `payload`: the entry for `Event:<type>` when
+ * the payload names a notification type, else the one for `Event`; `null` when the event says nothing.
+ */
+export function hookStateOf(
+  adapter: AgentAdapter,
+  event: string,
+  payload: unknown,
+): Exclude<SessionState, "launched"> | null {
+  const type =
+    typeof payload === "object" && payload !== null
+      ? (payload as Record<string, unknown>)["notification_type"]
+      : undefined;
+  const typed = typeof type === "string" ? adapter.statusEvents[`${event}:${type}`] : undefined;
+  return typed ?? adapter.statusEvents[event] ?? null;
 }
 
 /** The live event kind that reports each session state; launched has none, it comes from Dryland's own spawn. */

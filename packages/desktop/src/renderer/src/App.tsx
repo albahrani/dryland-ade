@@ -226,6 +226,8 @@ export function App() {
   const [sessions, setSessions] = useState<ReadonlyMap<string, SessionInfo>>(new Map());
   // A write from a general button, waiting for the user to confirm it.
   const [pending, setPending] = useState<(PendingWrite & { action: TicketAction }) | null>(null);
+  // A session start waiting for the user to confirm the write to the Agent CLI's own config that it begins with.
+  const [pendingStart, setPendingStart] = useState<(PendingWrite & { start: () => Promise<void> }) | null>(null);
   // What the last tracker write or session start reported: its error, or the warnings it ran with.
   const [notice, setNotice] = useState<string | null>(null);
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
@@ -330,11 +332,7 @@ export function App() {
   const sessionState = (session: SessionInfo) => sessionStates[session.id] ?? "launched";
   const isUnseen = (session: SessionInfo) => unseenSessions.includes(session.id);
   const ticketSessionMap = ticketSessions(projectOnly, sessionStates);
-  const pausedMap = pausedSessions(
-    project?.tree.ok ? project.tree.pausedClaims : {},
-    projectOnly,
-    sessionStates,
-  );
+  const pausedMap = pausedSessions(project?.tree.ok ? project.tree.pausedClaims : {}, projectOnly, sessionStates);
   if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
   const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
     setState({ ...state, liveEventsPanel: mode });
@@ -372,7 +370,10 @@ export function App() {
       disposeTerminal(session.terminalId);
     }
     setSessions((current) => new Map([...current].filter(([, session]) => session.project !== path)));
-    setState({ ...next, tabs: next.project === null ? next.tabs : (projectTabs.current.get(next.project.path) ?? next.tabs) });
+    setState({
+      ...next,
+      tabs: next.project === null ? next.tabs : (projectTabs.current.get(next.project.path) ?? next.tabs),
+    });
   };
   /**
    * Shows terminal `id` in a new, focused tab, or in place of the tab `replacing`; registered first, so its first
@@ -390,7 +391,23 @@ export function App() {
         },
     );
   };
+  /** Starts work; the first start with a CLI that keeps its hooks in the user's own config asks before it writes there. */
   const startWork: StartWorkHandler = async (target, agentId, skill) => {
+    if (!settings.dontAsk["user-config"]) {
+      const text = await window.dryland.pendingUserConfigWrite(agentId);
+      if (text !== null) {
+        setPendingStart({
+          type: "user-config",
+          text,
+          command: commandLine(["doctor", "--install-hooks"]),
+          start: () => launchWork(target, agentId, skill),
+        });
+        return;
+      }
+    }
+    await launchWork(target, agentId, skill);
+  };
+  const launchWork: StartWorkHandler = async (target, agentId, skill) => {
     setTerminalError(null);
     const result = await window.dryland.startWork(target, agentId, skill);
     if (!result.ok) {
@@ -823,6 +840,21 @@ export function App() {
       {quitRequest !== null && <QuitDialog request={quitRequest} onClose={() => setQuitRequest(null)} />}
       {pending !== null && (
         <ConfirmWrite pending={pending} onConfirm={confirmPending} onCancel={() => setPending(null)} />
+      )}
+      {pendingStart !== null && (
+        <ConfirmWrite
+          pending={pendingStart}
+          onConfirm={(dontAskAgain) => {
+            const { start, type } = pendingStart;
+            setPendingStart(null);
+            if (dontAskAgain) {
+              setState({ ...state, settings: { ...settings, dontAsk: { ...settings.dontAsk, [type]: true } } });
+              void window.dryland.dontAskAgain(type);
+            }
+            void start();
+          }}
+          onCancel={() => setPendingStart(null)}
+        />
       )}
       {stopping !== null && (
         <ConfirmStop

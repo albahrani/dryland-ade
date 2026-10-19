@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -224,6 +224,7 @@ describe("starting work on a ticket", () => {
 
     expect(await starter.listAgents()).toEqual([
       { id: "claude-code", name: "Claude Code", available: false, reason: "`claude` is not on PATH." },
+      { id: "copilot-cli", name: "GitHub Copilot CLI", available: false, reason: "`copilot` is not on PATH." },
     ]);
     await expect(starter.startWork(repo, onTicket("02"), "claude-code")).rejects.toThrow(DrylandError);
     expect(provider.spawned).toEqual([]);
@@ -287,6 +288,7 @@ describe("starting work on a ticket", () => {
     const { starter } = setup();
     expect(await starter.listAgents()).toEqual([
       { id: "claude-code", name: "Claude Code", available: true, reason: null },
+      { id: "copilot-cli", name: "GitHub Copilot CLI", available: false, reason: "`copilot` is not on PATH." },
     ]);
   });
 });
@@ -623,5 +625,58 @@ describe("sessions started by hand in a terminal", () => {
     expect(await starter.adoptManual(repo, byHand(shell, repo))).not.toBeNull();
     expect(await starter.adoptManual(repo, byHand(shell, repo))).toBeNull();
     expect(starter.sessions()).toHaveLength(1);
+  });
+});
+
+describe("starting work with Copilot CLI", () => {
+  /** A PATH directory holding a stub `copilot`, and a Copilot home whose config trusts one folder. */
+  function copilotSetup() {
+    const dir = mkdtempSync(join(tmpdir(), "dryland-work-copilot-"));
+    const copilot = join(dir, windows ? "copilot.exe" : "copilot");
+    writeFileSync(copilot, "");
+    execFileSync(process.execPath, ["-e", `require("fs").chmodSync(${JSON.stringify(copilot)}, 0o755)`]);
+    const home = mkdtempSync(join(tmpdir(), "dryland-copilot-home-"));
+    const config = '{\n  "theme": "dark",\n  "trustedFolders": [\n    "/other"\n  ]\n}\n';
+    writeFileSync(join(home, "config.json"), config);
+    return { ...setup(dir, { COPILOT_HOME: home }), copilot, home, config };
+  }
+
+  it("asks first: the user's Copilot config would get Dryland's hook file, and says so once it is installed", async () => {
+    const { starter, home } = copilotSetup();
+
+    expect(await starter.pendingUserConfigWrite("copilot-cli")).toContain(join(home, "hooks", "dryland.json"));
+    expect(await starter.pendingUserConfigWrite("claude-code")).toBeNull();
+
+    await starter.startWork(fixtureRepo(), onTicket("02"), "copilot-cli");
+
+    expect(await starter.pendingUserConfigWrite("copilot-cli")).toBeNull();
+  });
+
+  it("installs the hook file, trusts the new worktree and types the command without submitting it", async () => {
+    const { provider, starter, copilot, home, config } = copilotSetup();
+
+    const { session, warnings } = await starter.startWork(fixtureRepo(), onTicket("02"), "copilot-cli");
+    expect(warnings).toEqual([]);
+    expect(existsSync(join(home, "hooks", "dryland.json"))).toBe(true);
+    const saved = JSON.parse(readFileSync(join(home, "config.json"), "utf8")) as Record<string, unknown>;
+    expect(saved["theme"]).toBe("dark");
+    expect(saved["trustedFolders"]).toContain(realpathSync.native(session.worktree.path));
+    expect(readFileSync(join(home, "config.json"), "utf8")).toContain(config.slice(0, config.indexOf("/other")));
+    const spawned = provider.spawned[0];
+    expect(spawned?.options.file).toBe(copilot);
+    expect(spawned?.options.args).toEqual(["--session-id", session.agentSessionId]);
+    spawned?.emit("GitHub Copilot\r\n> ");
+    await vi.waitFor(() => expect(typed(spawned)).toBe("/implement shop/02"));
+    expect(typed(spawned)).not.toContain("\r");
+  });
+
+  it("starts anyway, with a warning, when the config cannot be trusted into", async () => {
+    const { starter, home } = copilotSetup();
+    writeFileSync(join(home, "config.json"), "{ not json");
+
+    const { warnings } = await starter.startWork(fixtureRepo(), onTicket("02"), "copilot-cli");
+
+    expect(warnings.join(" ")).toContain("not valid JSON");
+    expect(readFileSync(join(home, "config.json"), "utf8")).toBe("{ not json");
   });
 });

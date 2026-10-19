@@ -198,6 +198,11 @@ export interface DrylandApi {
    */
   startWork(target: WorkTarget, agentId: string, skill: string | null): Promise<StartWorkResult>;
   /**
+   * What starting work with the Agent CLI would first write to the user's own config for it, as a sentence to
+   * confirm; `null` when nothing new. Asked before `startWork`, which makes the write.
+   */
+  pendingUserConfigWrite(agentId: string): Promise<string | null>;
+  /**
    * Continues a ticket's paused session in a new terminal ('resume'), or opens the CLI's own picker in the ticket's
    * worktree ('pick'), which is also what a session the CLI no longer has falls back to, with a warning saying so.
    */

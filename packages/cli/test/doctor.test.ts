@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isolatedPath, stubCli, TempRepo, tempDir, WINDOWS } from "./harness.ts";
@@ -90,6 +90,7 @@ describe("dryland doctor", () => {
       ["setup", false],
       ["tracker", true],
       ["path", true],
+      ["hooks", true],
     ]);
     expect(report.checks[0]?.nextAction).toContain("/setup-matt-pocock-skills");
     expect(report.checks[1]?.nextAction).toBeNull();
@@ -184,5 +185,62 @@ describe("dryland doctor", () => {
       expect(result.stdout).toContain(`FAIL  tracker  ${tracker} tracker, but \`${cli}\` is not logged in.`);
       expect(result.stdout).toContain(`Next: Run \`${cli} auth login\`.`);
     });
+  });
+});
+
+describe("dryland doctor --install-hooks and --remove-hooks", () => {
+  const CONFIG = '{\n  "model": "gpt-5",\n  "trustedFolders": [\n    "/somewhere"\n  ],\n  "banner": "never"\n}\n';
+
+  /** A repo with a linked worktree, Copilot on PATH, and a Copilot home holding `config`. */
+  function copilotRepo(config: string) {
+    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const worktree = repo.addWorktree("feature/x");
+    const stub = stubCli("copilot", 0);
+    const home = tempDir("dryland-copilot-home-");
+    const configFile = join(home, "config.json");
+    writeFileSync(configFile, config);
+    const env = { ...isolatedPath(dirWithDryland(), stub.dir), ...stub.env, COPILOT_HOME: home };
+    return { repo, worktree, home, configFile, env };
+  }
+
+  it("installs the hook file and trusts the worktrees, reports them, and removes both leaving the config as it was", async () => {
+    const { repo, worktree, home, configFile, env } = copilotRepo(CONFIG);
+
+    const missing = await doctor(repo, env);
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stdout).toMatch(/FAIL\s+hooks/);
+    expect(missing.stdout).toContain("Next: Run `dryland doctor --install-hooks`");
+
+    const installed = await doctor(repo, env, "--install-hooks");
+    expect(installed.exitCode).toBe(0);
+    expect(installed.stdout).toMatch(/OK\s+hooks\s+.*1 of 1 worktrees are trusted/);
+    expect(existsSync(join(home, "hooks", "dryland.json"))).toBe(true);
+    const config = JSON.parse(readFileSync(configFile, "utf8")) as Record<string, unknown>;
+    expect(config).toMatchObject({ model: "gpt-5", banner: "never" });
+    expect(JSON.stringify(config["trustedFolders"])).toContain(realpathSync.native(worktree).replaceAll("\\", "\\\\"));
+
+    const removed = await doctor(repo, env, "--remove-hooks");
+    expect(removed.stdout).toMatch(/FAIL\s+hooks/);
+    expect(existsSync(join(home, "hooks", "dryland.json"))).toBe(false);
+    expect(readFileSync(configFile, "utf8")).toBe(CONFIG);
+  });
+
+  it("skips a config that is not valid JSON with a warning, installing only the hook file", async () => {
+    const { repo, home, configFile, env } = copilotRepo("{ not json");
+
+    const result = await doctor(repo, env, "--install-hooks");
+
+    expect(result.stderr).toContain("not valid JSON");
+    expect(existsSync(join(home, "hooks", "dryland.json"))).toBe(true);
+    expect(readFileSync(configFile, "utf8")).toBe("{ not json");
+  });
+
+  it("is refused when both are given", async () => {
+    const { repo, env } = copilotRepo(CONFIG);
+
+    const result = await doctor(repo, env, "--install-hooks", "--remove-hooks");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("contradict");
   });
 });

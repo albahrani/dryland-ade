@@ -31,8 +31,8 @@ export interface NewTicket {
 export type ActionSource = "ticket" | "general-button";
 
 /**
- * The kinds of confirmed write, each with its own "do not ask again" flag. Only `tracker-metadata` is asked for so
- * far; the others are kept so the Settings dialog can show and reset them.
+ * The kinds of confirmed write, each with its own "do not ask again" flag. `tracker-metadata` and `user-config` are
+ * asked for so far; `prose-annotation` is kept so the Settings dialog can show and reset it.
  */
 export const CONFIRMATION_TYPES = ["tracker-metadata", "user-config", "prose-annotation"] as const;
 export type ConfirmationType = (typeof CONFIRMATION_TYPES)[number];

@@ -165,7 +165,11 @@ const sendSettings = () => sendToWindow("settings:changed", settings());
  * leaves its claim possibly stale. */
 function liveSessions(path: string): SessionSnapshot[] {
   const states = status.states();
-  return projectSessions(work.sessions(), path).map(({ id, ticket }) => ({ id, ticket, state: states[id] ?? "launched" }));
+  return projectSessions(work.sessions(), path).map(({ id, ticket }) => ({
+    id,
+    ticket,
+    state: states[id] ?? "launched",
+  }));
 }
 
 /**
@@ -608,6 +612,9 @@ ipcMain.handle("terminal:open", async () => {
   return id;
 });
 ipcMain.handle("agents:list", () => work.listAgents());
+ipcMain.handle("work:pending-user-config", (_event, agentId: unknown) =>
+  typeof agentId === "string" ? work.pendingUserConfigWrite(agentId).catch(() => null) : null,
+);
 ipcMain.handle("skills:list", async (_event, agentId: unknown): Promise<string[]> => {
   if (project === null || typeof agentId !== "string") return [];
   try {

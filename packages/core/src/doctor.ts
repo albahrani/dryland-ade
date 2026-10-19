@@ -1,10 +1,22 @@
-import { readdir } from "node:fs/promises";
+import { readdir, realpath } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { COPILOT_CLI } from "./agent-adapter.ts";
+import {
+  copilotHooksStatus,
+  copilotPaths,
+  installCopilotHooks,
+  readTrustedFolders,
+  removeCopilotHooks,
+  trustFolders,
+  untrustFolders,
+} from "./copilot-config.ts";
 import { exists, findExecutable } from "./env-fs.ts";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { readTrackerKind, type TrackerKind } from "./tracker.ts";
+import { listWorktrees } from "./worktree.ts";
 import { TRIAGE_LABELS_DOC } from "./triage-labels.ts";
 
 const SETUP_SKILL = "/setup-matt-pocock-skills";
@@ -13,7 +25,7 @@ const SETUP_DOCS = [TRIAGE_LABELS_DOC, "docs/agents/domain.md"];
 const SKILL_DIRS = [".claude/skills", ".agents/skills"];
 
 export interface DoctorCheck {
-  id: "setup" | "tracker" | "path";
+  id: "setup" | "tracker" | "path" | "hooks";
   ok: boolean;
   detail: string;
   /** What to do about a failing check; `null` when it passed. */
@@ -29,6 +41,8 @@ export interface DoctorReport {
 export interface DoctorOptions {
   /** The environment whose `PATH` is searched; defaults to `process.env`. */
   env?: Record<string, string | undefined>;
+  /** The user's home, where agent CLIs keep their config; defaults to the real one. */
+  home?: string;
 }
 
 const pass = (id: DoctorCheck["id"], detail: string): DoctorCheck => ({
@@ -105,13 +119,106 @@ async function checkPath(env: Record<string, string | undefined>): Promise<Docto
   );
 }
 
-/** Checks what the user can fix themselves: setup, tracker and `PATH`. Never throws for a failing check. */
+/** The linked worktrees of the project that exist on disk: the folders Copilot would ask to trust. */
+async function linkedWorktrees(runner: ProcessRunner, cwd: string): Promise<string[]> {
+  try {
+    const entries = await listWorktrees(runner, await findMainCheckout(runner, cwd));
+    const paths = entries.filter((entry) => !entry.main).map((entry) => entry.path);
+    return (await Promise.all(paths.map(async (path) => ((await exists(path)) ? path : null)))).filter(
+      (path): path is string => path !== null,
+    );
+  } catch (error) {
+    if (!(error instanceof DrylandError)) throw error;
+    return [];
+  }
+}
+
+const INSTALL_HOOKS = "Run `dryland doctor --install-hooks`.";
+
+async function checkHooks(
+  runner: ProcessRunner,
+  cwd: string,
+  env: Record<string, string | undefined>,
+  home: string,
+): Promise<DoctorCheck> {
+  const name = COPILOT_CLI.name;
+  if ((await findExecutable(COPILOT_CLI.binary, env)) === null) {
+    return pass("hooks", `${name} is not installed, so there are no hooks to check.`);
+  }
+  const paths = copilotPaths(env, home);
+  const status = await copilotHooksStatus(paths, COPILOT_CLI);
+  if (status !== "installed") {
+    const detail = status === "missing" ? "has no Dryland hook file" : "has an outdated Dryland hook file";
+    return fail("hooks", `${name} ${detail} (${paths.hookFile}).`, INSTALL_HOOKS);
+  }
+  const worktrees = await linkedWorktrees(runner, cwd);
+  const trusted = new Set(await readTrustedFolders(paths));
+  const count = (await Promise.all(worktrees.map(trustedPath))).filter((path) => trusted.has(path)).length;
+  return pass("hooks", `${name} hook file is installed; ${count} of ${worktrees.length} worktrees are trusted.`);
+}
+
+/** The spelling of a worktree path that is listed in `trustedFolders`: its real path. */
+const trustedPath = (path: string) => realpath(path).catch(() => path);
+
+export interface HooksResult {
+  /** What was done, one line each. */
+  lines: string[];
+  warnings: string[];
+}
+
+/**
+ * Installs the hook file of every Agent CLI that has no per-launch hook injection, and trusts the project's linked
+ * worktrees so the CLI asks no trust question there. Writes only what Dryland owns: its hook file and the trust entries.
+ */
+export async function installAgentHooks(
+  runner: ProcessRunner,
+  cwd: string,
+  options: DoctorOptions = {},
+): Promise<HooksResult> {
+  const paths = copilotPaths(options.env ?? process.env, options.home);
+  const lines: string[] = [];
+  const warnings: string[] = [];
+  const installed = await installCopilotHooks(paths, COPILOT_CLI);
+  lines.push(installed ? `Installed ${paths.hookFile}.` : `${paths.hookFile} is already installed.`);
+  const worktrees = await linkedWorktrees(runner, cwd);
+  if (worktrees.length > 0) {
+    const result = await trustFolders(paths, worktrees);
+    if (result.warning !== undefined) warnings.push(result.warning);
+    else if (result.status === "skipped")
+      warnings.push(`${paths.config} does not exist yet, so no worktree was trusted.`);
+    else lines.push(`Trusted ${worktrees.length} worktree${worktrees.length === 1 ? "" : "s"} in ${paths.config}.`);
+  }
+  return { lines, warnings };
+}
+
+/** Removes what `installAgentHooks` and the app wrote: the hook file and the trust entries of the project's worktrees. */
+export async function removeAgentHooks(
+  runner: ProcessRunner,
+  cwd: string,
+  options: DoctorOptions = {},
+): Promise<HooksResult> {
+  const paths = copilotPaths(options.env ?? process.env, options.home);
+  const lines: string[] = [];
+  const warnings: string[] = [];
+  lines.push((await removeCopilotHooks(paths)) ? `Removed ${paths.hookFile}.` : `${paths.hookFile} was not installed.`);
+  const worktrees = await linkedWorktrees(runner, cwd);
+  if (worktrees.length > 0) {
+    const result = await untrustFolders(paths, worktrees);
+    if (result.warning !== undefined) warnings.push(result.warning);
+    else if (result.status === "changed")
+      lines.push(`Removed the project's worktrees from trustedFolders in ${paths.config}.`);
+  }
+  return { lines, warnings };
+}
+
+/** Checks what the user can fix themselves: setup, tracker, `PATH` and agent hooks. Never throws for a failing check. */
 export async function runDoctor(
   runner: ProcessRunner,
   cwd: string,
   options: DoctorOptions = {},
 ): Promise<DoctorReport> {
   const checks: DoctorCheck[] = [];
+  const env = options.env ?? process.env;
   try {
     const mainCheckout = await findMainCheckout(runner, cwd);
     checks.push(await checkSetup(mainCheckout), await checkTracker(runner, mainCheckout));
@@ -119,6 +226,6 @@ export async function runDoctor(
     if (!(error instanceof DrylandError)) throw error;
     checks.push(fail("setup", error.message, error.nextAction), fail("tracker", error.message, error.nextAction));
   }
-  checks.push(await checkPath(options.env ?? process.env));
+  checks.push(await checkPath(env), await checkHooks(runner, cwd, env, options.home ?? homedir()));
   return { ok: checks.every((check) => check.ok), checks };
 }

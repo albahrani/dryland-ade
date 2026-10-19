@@ -1,9 +1,16 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { nodeProcessRunner, runDoctor, type ProcessResult, type ProcessRunner } from "../src/index.ts";
+import {
+  installAgentHooks,
+  nodeProcessRunner,
+  removeAgentHooks,
+  runDoctor,
+  type ProcessResult,
+  type ProcessRunner,
+} from "../src/index.ts";
 
 function repo(tracker: string): string {
   const root = mkdtempSync(join(tmpdir(), "dryland-doctor-"));
@@ -99,14 +106,71 @@ describe("runDoctor outside a git repository", () => {
   it("still reports every check, failing setup and tracker with the cause", async () => {
     const outside = mkdtempSync(join(tmpdir(), "dryland-notrepo-"));
 
-    const report = await runDoctor(nodeProcessRunner, outside, noPath);
+    const report = await runDoctor(nodeProcessRunner, outside, { ...noPath, home: tmpdir() });
 
     expect(report.ok).toBe(false);
     expect(report.checks.map((c) => [c.id, c.ok])).toEqual([
       ["setup", false],
       ["tracker", false],
       ["path", false],
+      ["hooks", true],
     ]);
     expect(report.checks[0]?.detail).toContain("not inside a git repository");
+  });
+});
+
+describe("runDoctor hooks check", () => {
+  /** A `PATH` holding a runnable `copilot`, and a Copilot home to install into. */
+  function withCopilot() {
+    const bin = mkdtempSync(join(tmpdir(), "dryland-copilot-bin-"));
+    const name = process.platform === "win32" ? "copilot.cmd" : "copilot";
+    writeFileSync(join(bin, name), "@echo off\n");
+    chmodSync(join(bin, name), 0o755);
+    const home = mkdtempSync(join(tmpdir(), "dryland-copilot-home-"));
+    return { options: { env: { PATH: bin }, home }, home };
+  }
+
+  it("passes when Copilot CLI is not installed: there are no hooks to check", async () => {
+    const report = await runDoctor(runnerWith({}), repo("Local Markdown"), { ...noPath, home: tmpdir() });
+
+    expect(report.checks.find((c) => c.id === "hooks")).toMatchObject({ ok: true });
+  });
+
+  it("fails with the next action when Copilot is installed but has no Dryland hook file", async () => {
+    const { options } = withCopilot();
+
+    const report = await runDoctor(runnerWith({}), repo("Local Markdown"), options);
+
+    expect(report.checks.find((c) => c.id === "hooks")).toMatchObject({
+      ok: false,
+      nextAction: expect.stringContaining("dryland doctor --install-hooks"),
+    });
+  });
+
+  it("installs the hook file and trusts the linked worktrees, then removes both", async () => {
+    const { options, home } = withCopilot();
+    const root = repo("Local Markdown");
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "i", "-q"], {
+      cwd: root,
+    });
+    const worktree = join(root, "..", `${basename(root)}-wt`);
+    execFileSync("git", ["worktree", "add", "-q", "-b", "shop/01-x", worktree], { cwd: root });
+    const config = join(home, ".copilot", "config.json");
+    mkdirSync(join(home, ".copilot"), { recursive: true });
+    writeFileSync(config, '{\n  "trustedFolders": []\n}\n');
+
+    const installed = await installAgentHooks(nodeProcessRunner, root, options);
+    const report = await runDoctor(nodeProcessRunner, root, options);
+
+    expect(installed.warnings).toEqual([]);
+    expect(report.checks.find((c) => c.id === "hooks")).toMatchObject({
+      ok: true,
+      detail: expect.stringContaining("1 of 1 worktrees are trusted"),
+    });
+
+    await removeAgentHooks(nodeProcessRunner, root, options);
+
+    expect(readFileSync(config, "utf8").replace(/\s/g, "")).toBe('{"trustedFolders":[]}');
+    expect((await runDoctor(nodeProcessRunner, root, options)).checks.find((c) => c.id === "hooks")?.ok).toBe(false);
   });
 });

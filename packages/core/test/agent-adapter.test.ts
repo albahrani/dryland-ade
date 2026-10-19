@@ -6,9 +6,13 @@ import {
   blocksInput,
   CLAUDE_CODE,
   commandForTicket,
+  COPILOT_CLI,
   findExecutable,
+  hookStateOf,
   type NextStep,
+  resumeArgs,
   sessionExists,
+  sessionIdArgs,
   skillCommand,
 } from "../src/index.ts";
 
@@ -129,5 +133,53 @@ describe("sessionExists", () => {
   it("is false without a home directory or for a CLI with no history file to check", async () => {
     expect(await sessionExists(CLAUDE_CODE, null, worktree, "abc")).toBe(false);
     expect(await sessionExists({ ...CLAUDE_CODE, historyFile: null }, "/home", worktree, "abc")).toBe(false);
+  });
+});
+
+describe("GitHub Copilot CLI adapter", () => {
+  it("types the skill command in Copilot's syntax, for the launch to leave unsubmitted", () => {
+    expect(skillCommand(COPILOT_CLI, "/implement shop/02")).toBe("/implement shop/02");
+    expect(COPILOT_CLI.initialPrompt).toBe("pre-type");
+    expect(COPILOT_CLI.launchArgs).toEqual([]);
+  });
+
+  it("gets its session id at launch with --session-id, and resumes with --resume=<id> or the picker", () => {
+    expect(sessionIdArgs(COPILOT_CLI, "abc")).toEqual(["--session-id", "abc"]);
+    expect(resumeArgs(COPILOT_CLI, "abc")).toEqual(["--resume=abc"]);
+    expect(resumeArgs(COPILOT_CLI, null)).toEqual(["--resume"]);
+    expect(COPILOT_CLI.sessionEnv).toBe("COPILOT_AGENT_SESSION_ID");
+  });
+
+  it("finds a session by its folder in session-state, whatever directory it ran in", async () => {
+    const home = mkdtempSync(join(tmpdir(), "home-"));
+    mkdirSync(join(home, ".copilot", "session-state", "abc"), { recursive: true });
+
+    expect(await sessionExists(COPILOT_CLI, home, join("T:", "elsewhere"), "abc")).toBe(true);
+    expect(await sessionExists(COPILOT_CLI, home, join("T:", "elsewhere"), "other")).toBe(false);
+  });
+
+  it.each([
+    ["userPromptSubmitted", {}, "running"],
+    ["preToolUse", {}, "running"],
+    ["postToolUse", {}, "running"],
+    ["permissionRequest", {}, "waiting"],
+    ["notification", { notification_type: "permission_prompt" }, "waiting"],
+    ["agentStop", {}, "idle"],
+    ["sessionEnd", { reason: "user_exit" }, "ended"],
+  ])("reports %s as %s", (event, payload, state) => {
+    expect(hookStateOf(COPILOT_CLI, event, payload)).toBe(state);
+  });
+
+  it("says nothing for sessionStart, which fires only at the first prompt, nor for the idle notification", () => {
+    expect(hookStateOf(COPILOT_CLI, "sessionStart", { source: "new" })).toBeNull();
+    expect(hookStateOf(COPILOT_CLI, "notification", { notification_type: "agent_idle" })).toBeNull();
+    expect(hookStateOf(COPILOT_CLI, "notification", undefined)).toBeNull();
+  });
+
+  it("sees the folder trust dialog, so nothing is typed into it", () => {
+    expect(
+      blocksInput(COPILOT_CLI, "Yes,\x1b[1Cand\x1b[1Cremember\x1b[1Cthis\x1b[1Cfolder\x1b[1Cfor\x1b[1Cfuture"),
+    ).toBe(true);
+    expect(blocksInput(COPILOT_CLI, "> Type @ to mention files")).toBe(false);
   });
 });

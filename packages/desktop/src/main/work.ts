@@ -21,8 +21,12 @@ import {
   readTickets,
   recordSession,
   resumeArgs,
+  copilotHooksStatus,
+  copilotPaths,
+  installCopilotHooks,
   sessionExists,
   sessionIdArgs,
+  trustFolders,
   sessionsOf,
   type TicketRef,
   skillCommand,
@@ -72,6 +76,12 @@ export interface WorkStarter {
   listAgents(): Promise<AgentAvailability[]>;
   /** The skills the Agent CLI has installed for the project, by name. */
   listSkills(projectPath: string, agentId: string): Promise<string[]>;
+  /**
+   * What starting work with the Agent CLI would first write to the user's own config for the CLI, in a sentence; `null`
+   * when it writes nothing new, as for a CLI with per-launch hooks or one whose hook file is already installed. The
+   * caller asks for confirmation before `startWork` when this says something (ADR 0003).
+   */
+  pendingUserConfigWrite(agentId: string): Promise<string | null>;
   /**
    * Opens the Agent CLI with a command typed but not submitted. On a ticket: in its worktree, created or reused,
    * with its next-step command, and the ticket is claimed for the worktree's branch; a ticket someone else holds keeps its
@@ -148,7 +158,36 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
     return { ...result, DRYLAND_SESSION_ID: sessionId, DRYLAND_PANE_KEY: paneKey };
   }
 
+  /**
+   * For a CLI without per-launch hook injection (Copilot CLI): installs Dryland's hook file in the user's config
+   * directory and trusts the new worktree, so no trust question interrupts the launch. A config that cannot be
+   * written is a warning, never a failed start.
+   */
+  async function prepareUserConfig(adapter: AgentAdapter, worktreePath: string, warnings: string[]): Promise<void> {
+    if (adapter.hookInjection.kind !== "user-config") return;
+    const paths = copilotPaths(env, homeOf(env) ?? undefined);
+    try {
+      await installCopilotHooks(paths, adapter);
+      const trusted = await trustFolders(paths, [worktreePath]);
+      if (trusted.warning !== undefined) warnings.push(trusted.warning);
+    } catch (error) {
+      warnings.push(`${adapter.name}'s status hooks were not installed (${(error as Error).message}).`);
+    }
+  }
+
   return {
+    async pendingUserConfigWrite(agentId) {
+      const adapter = adapterFor(agentId);
+      if (adapter.hookInjection.kind !== "user-config") return null;
+      const paths = copilotPaths(env, homeOf(env) ?? undefined);
+      if ((await copilotHooksStatus(paths, adapter)) === "installed") return null;
+      return (
+        `${adapter.name} cannot take status hooks per launch, so Dryland adds a hook file of its own, ${paths.hookFile}, ` +
+        `which does nothing outside Dryland's terminals, and lists the worktrees it creates under trustedFolders in ` +
+        `${paths.config}. No other key is touched.`
+      );
+    },
+
     async listAgents() {
       return Promise.all(
         AGENT_ADAPTERS.map(async ({ id, name, binary }) => {
@@ -210,6 +249,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         worktree = await createWorktree(runner, mainCheckout, { map: NEW_MAP_EFFORT, slug: MAP_WORKTREE_SLUG });
         command = skill !== null ? chosenSkillCommand(skill, target) : "/wayfinder ";
       }
+      await prepareUserConfig(adapter, worktree.path, warnings);
       const typed = command === null ? null : skillCommand(adapter, command);
       const ticket = target.kind === "ticket" ? { map: target.ticket.map, id: target.ticket.id } : null;
       const map = target.kind === "ticket" ? target.ticket.map : target.kind === "map" ? target.map : null;

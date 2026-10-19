@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TempRepo } from "./harness.ts";
+import { TempRepo, tempDir } from "./harness.ts";
 
 const LOCAL_TRACKER_DOC = "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n";
 const TICKET = "# Build the cart\n\nType: task\nStatus: ready-for-agent\n\nCarts live on the server.\n";
@@ -271,5 +271,21 @@ describe("dryland worktree prune", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("not linked");
     expect(existsSync(path)).toBe(true);
+  });
+});
+
+describe("dryland worktree prune and Copilot's trusted folders", () => {
+  it("takes the pruned worktree off trustedFolders and touches nothing else in the config", async () => {
+    const repo = shopRepo();
+    const { path } = await create(repo, "shop/01");
+    expect((await repo.run(["ticket", "resolve", "shop/01", "--answer", "Done."])).exitCode).toBe(0);
+    const home = tempDir("dryland-copilot-home-");
+    const config = `{\n  "theme": "dark",\n  "trustedFolders": [\n    "/other",\n    ${JSON.stringify(path)}\n  ]\n}\n`;
+    writeFileSync(join(home, "config.json"), config);
+
+    const result = await repo.run(["worktree", "prune", "shop/01-cart", "--yes"], repo.path, { COPILOT_HOME: home });
+
+    expect(result.exitCode).toBe(0);
+    expect(readFileSync(join(home, "config.json"), "utf8")).toBe(config.replace(`,\n    ${JSON.stringify(path)}`, ""));
   });
 });

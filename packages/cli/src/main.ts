@@ -6,11 +6,14 @@ import {
   claimTicket,
   commentOnTicket,
   createTicket,
+  copilotPaths,
   createWorktree,
   currentAgentSession,
   DrylandError,
   findExecutable,
+  hookStateOf,
   indexMap,
+  installAgentHooks,
   isLiveEventKind,
   launchArgs,
   LIVE_EVENT_KINDS,
@@ -23,14 +26,17 @@ import {
   recordSession,
   retentionDaysFromEnv,
   releaseTicket,
+  removeAgentHooks,
   resolveTicket,
   runDoctor,
+  SESSION_STATE_EVENTS,
   sendLiveEvent,
   sessionsOf,
   showMap,
   showTicket,
   ticketKind,
   triageTicket,
+  untrustFolders,
   withoutPathDir,
   type DoctorReport,
   type IndexedSession,
@@ -143,7 +149,7 @@ const USAGE = [
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
   "       dryland status <kind> [--session <id>] [--payload <json>] [--json]",
-  "       dryland doctor [--json]",
+  "       dryland doctor [--install-hooks | --remove-hooks] [--json]",
   "",
 ].join("\n");
 
@@ -197,13 +203,18 @@ function parsePayload(text: string | undefined): unknown {
  * Agent CLI's own session id when the CLI set one. Fire-and-forget: with no app running, or one that does not
  * answer, nothing happens.
  */
-function reportLiveEvent(kind: LiveEventKind, payload?: unknown, session?: string): Promise<boolean> {
-  const agentSession = currentAgentSession(AGENT_ADAPTERS, process.env);
+function reportLiveEvent(
+  kind: LiveEventKind,
+  payload?: unknown,
+  session?: string,
+  agentSessionId?: string,
+): Promise<boolean> {
+  const agentSession = currentAgentSession(AGENT_ADAPTERS, process.env)?.sessionId ?? agentSessionId;
   const event: LiveEvent = {
     session_id: session ?? process.env["DRYLAND_SESSION_ID"] ?? "",
     kind,
     timestamp: new Date().toISOString(),
-    ...(agentSession === null ? {} : { agent_session_id: agentSession.sessionId }),
+    ...(agentSession === undefined ? {} : { agent_session_id: agentSession }),
     // A CLI started by hand through the launcher's shim: the app links it to a worktree by where it runs.
     ...(process.env["DRYLAND_AGENT"] === undefined
       ? {}
@@ -432,9 +443,23 @@ const COMMANDS: Record<
   },
   doctor: {
     target: false,
-    run: async () => {
+    switches: ["install-hooks", "remove-hooks"],
+    run: async (_target, flags) => {
+      const install = flags.switches.has("install-hooks");
+      if (install && flags.switches.has("remove-hooks")) {
+        throw new DrylandError("--install-hooks and --remove-hooks contradict each other.", "Pass one of them.");
+      }
+      const changed =
+        install || flags.switches.has("remove-hooks")
+          ? await (install ? installAgentHooks : removeAgentHooks)(nodeProcessRunner, process.cwd())
+          : { lines: [], warnings: [] };
       const report = await runDoctor(nodeProcessRunner, process.cwd());
-      return { value: report, text: formatDoctor(report), exitCode: report.ok ? 0 : 1 };
+      return {
+        value: report,
+        text: `${changed.lines.map((line) => `${line}\n`).join("")}${formatDoctor(report)}`,
+        warnings: changed.warnings,
+        exitCode: report.ok ? 0 : 1,
+      };
     },
   },
   "worktree create": {
@@ -464,11 +489,13 @@ const COMMANDS: Record<
         yes: flags.switches.has("yes"),
         sessionAttached: flags.switches.has("session-attached"),
       });
+      // The worktree is gone, so Copilot has no use for its trust entry; a config that is not there is left alone.
+      const untrusted = pruned.removed ? await untrustFolders(copilotPaths(), [pruned.path]) : null;
       const text = pruned.removed
         ? `Removed worktree ${pruned.path} and branch ${pruned.branch}.\n`
         : `Nothing was removed: pruning ${pruned.branch} needs confirmation.\n` +
           `Run again with --yes to remove worktree ${pruned.path} and branch ${pruned.branch}.\n`;
-      return { value: pruned, text };
+      return { value: pruned, text, warnings: untrusted?.warning === undefined ? [] : [untrusted.warning] };
     },
   },
 };
@@ -505,9 +532,47 @@ async function prepareAgent(id: string | undefined): Promise<string> {
   return `${lines.join("\n")}\n`;
 }
 
+/** What the process has on stdin, or "" when nothing arrives soon: a hook must never hang its CLI. */
+async function readStdin(timeoutMs = 1000): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  const chunks: Buffer[] = [];
+  const read = (async () => {
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  })();
+  await Promise.race([read, new Promise((resolve) => setTimeout(resolve, timeoutMs).unref())]);
+  process.stdin.destroy();
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * The command a hook file of an Agent CLI without per-launch hook injection runs: reports the session state the
+ * native `event` stands for, with the payload the CLI wrote to stdin. Does nothing outside a Dryland terminal, and
+ * never fails, so it cannot break the CLI that runs it.
+ */
+async function agentHook(id: string | undefined, event: string | undefined): Promise<void> {
+  const adapter = AGENT_ADAPTERS.find((a) => a.id === id);
+  if (adapter === undefined || event === undefined || !process.env["DRYLAND_PANE_KEY"]) return;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(await readStdin());
+  } catch {
+    // No payload, or one that is not JSON: the event alone may still say enough.
+  }
+  const state = hookStateOf(adapter, event, payload);
+  if (state === null) return;
+  // The CLI's own session id is in the payload when it sets no variable for its hooks.
+  const own =
+    typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["sessionId"] : null;
+  await reportLiveEvent(SESSION_STATE_EVENTS[state], undefined, undefined, typeof own === "string" ? own : undefined);
+}
+
 async function run(args: string[]): Promise<number> {
   if (args[0] === "agent-prepare") {
     process.stdout.write(await prepareAgent(args[1]));
+    return 0;
+  }
+  if (args[0] === "agent-hook") {
+    await agentHook(args[1], args[2]);
     return 0;
   }
   const json = args.includes("--json");
