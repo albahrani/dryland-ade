@@ -47,6 +47,9 @@ export type FileContent =
   | { kind: "binary" }
   | { kind: "missing" };
 
+/** A changed file's `git diff` text; binary files have none, and an untracked large file is shown in part. */
+export type DiffContent = { kind: "text"; text: string; truncated: boolean } | { kind: "binary" };
+
 export type ChangeStatus = "added" | "modified" | "deleted" | "untracked";
 
 export interface ChangedFile {

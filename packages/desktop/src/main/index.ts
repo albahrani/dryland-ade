@@ -1,4 +1,4 @@
-import { basename, isAbsolute, join } from "node:path";
+import { basename, join } from "node:path";
 import {
   AGENT_ADAPTERS,
   DrylandError,
@@ -506,16 +506,12 @@ ipcMain.handle("explorer:diff", (_event, root: unknown, path: unknown) =>
   explorerFor().diff(text(root, "root"), text(path, "path")),
 );
 ipcMain.handle("explorer:watch", async (_event, root: unknown, dirs: unknown) => {
-  // Directories inside the worktree only: relative, and never stepping out of it.
-  if (
-    !Array.isArray(dirs) ||
-    !dirs.every((dir) => typeof dir === "string" && !isAbsolute(dir) && !dir.split(/[\\/]/).includes(".."))
-  )
-    throw new TypeError("dirs must be relative directories of the worktree");
-  // Only a worktree of the project is watched; reading its root first validates it.
-  const explorer = explorerFor();
-  await explorer.changes(text(root, "root"));
-  explorerWatcher.set(root as string, dirs as string[], (await explorer.gitDir(root as string)) ?? undefined);
+  if (!Array.isArray(dirs) || !dirs.every((dir) => typeof dir === "string")) {
+    throw new TypeError("dirs must be strings");
+  }
+  // Refuses a root that is no worktree of the project and directories outside it.
+  const gitDir = await explorerFor().watchTarget(text(root, "root"), dirs as string[]);
+  explorerWatcher.set(root as string, dirs as string[], gitDir ?? undefined);
 });
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 ipcMain.handle("live-events:mode", (_event, mode: unknown) => {

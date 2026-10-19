@@ -42,6 +42,7 @@ import { ConfirmWrite, type PendingWrite } from "./ConfirmWrite.tsx";
 import { Explorer } from "./Explorer.tsx";
 import { DiffTab, FileTab } from "./FileTab.tsx";
 import type { RootHint } from "../../shared/explorer.ts";
+import { baseName, dirName } from "../../shared/paths.ts";
 import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
 import { NewMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
@@ -76,8 +77,8 @@ function tabLabel(
   if (ref.kind === "terminal") return terminalTitles.get(ref.id) ?? "Terminal";
   // A restored session tab reads as the terminal it becomes, not as the ticket's own tab.
   if (ref.kind === "session") return `${paused.get(ticketKey(ref))?.agent ?? "Session"} ${ticketKey(ref)}`;
-  if (ref.kind === "file") return ref.path.split("/").at(-1) ?? ref.path;
-  if (ref.kind === "diff") return `${ref.path.split("/").at(-1) ?? ref.path} (diff)`;
+  if (ref.kind === "file") return baseName(ref.path);
+  if (ref.kind === "diff") return `${baseName(ref.path)} (diff)`;
   return ref.kind === "map" ? ref.name : `${ref.map}/${ref.id}`;
 }
 
@@ -693,9 +694,7 @@ export function App() {
             revision={explorerRevision}
             watchedDirs={(root) =>
               tabs.open.flatMap((tab) =>
-                (tab.kind === "file" || tab.kind === "diff") && tab.root === root
-                  ? [tab.path.split("/").slice(0, -1).join("/")]
-                  : [],
+                (tab.kind === "file" || tab.kind === "diff") && tab.root === root ? [dirName(tab.path)] : [],
               )
             }
             onOpenFile={(root, path) => setTabs(openTab(tabs, { kind: "file", root, path }))}

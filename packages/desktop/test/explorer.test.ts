@@ -55,10 +55,16 @@ describe("root", () => {
   });
 });
 
-describe("git directory", () => {
-  it("is the worktree's own, so its commits can be watched", async () => {
-    expect(canonical(await explorer.gitDir(repo))).toBe(canonical(join(repo, ".git")));
-    expect(canonical(await explorer.gitDir(worktree))).toMatch(/\.git[\\/]worktrees[\\/]/);
+describe("watching", () => {
+  it("names the worktree's own git directory, so its commits can be watched", async () => {
+    expect(canonical(await explorer.watchTarget(repo, [""]))).toBe(canonical(join(repo, ".git")));
+    expect(canonical(await explorer.watchTarget(worktree, ["src"]))).toMatch(/\.git[\\/]worktrees[\\/]/);
+  });
+
+  it("refuses directories outside the worktree, and a root that is not one", async () => {
+    await expect(explorer.watchTarget(repo, ["src", ".."])).rejects.toThrow(/outside/);
+    await expect(explorer.watchTarget(repo, ["C:/Windows"])).rejects.toThrow(/outside/);
+    await expect(explorer.watchTarget(join(repo, "src"), [""])).rejects.toThrow(/not a worktree/);
   });
 });
 
@@ -118,6 +124,13 @@ describe("reading a file", () => {
     expect(await small.readFile(repo, "big.txt")).toEqual({ kind: "text", text: "x".repeat(10), truncated: true });
   });
 
+  it("cuts a large file between characters, never inside one", async () => {
+    write(repo, "accents.txt", "ééé");
+    const small = createExplorer(nodeProcessRunner, repo, { maxFileBytes: 3 });
+
+    expect(await small.readFile(repo, "accents.txt")).toEqual({ kind: "text", text: "é", truncated: true });
+  });
+
   it("does not show a binary file as text", async () => {
     write(repo, "logo.bin", Buffer.from([0x89, 0x50, 0x00, 0x01]));
 
@@ -158,12 +171,47 @@ describe("changes and diffs", () => {
   it("diffs a modified file against the base", async () => {
     const diff = await explorer.diff(worktree, "src/a.ts");
 
-    expect(diff).toContain("-export const a = 1;");
-    expect(diff).toContain("+export const a = 2;");
+    expect(diff).toMatchObject({ kind: "text", truncated: false });
+    const text = diff.kind === "text" ? diff.text : "";
+    expect(text).toContain("-export const a = 1;");
+    expect(text).toContain("+export const a = 2;");
   });
 
   it("diffs an untracked file as all added", async () => {
-    expect(await explorer.diff(worktree, "notes.txt")).toContain("@@ -0,0 +1,1 @@\n+hello");
+    expect(await explorer.diff(worktree, "notes.txt")).toEqual({
+      kind: "text",
+      text: "@@ -0,0 +1,1 @@\n+hello",
+      truncated: false,
+    });
+  });
+
+  it("notes an untracked file's missing final newline, as git does", async () => {
+    write(worktree, "no-newline.txt", "hello");
+
+    expect(await explorer.diff(worktree, "no-newline.txt")).toEqual({
+      kind: "text",
+      text: "@@ -0,0 +1,1 @@\n+hello\n\\ No newline at end of file",
+      truncated: false,
+    });
+  });
+
+  it("says when an untracked file is only partly shown", async () => {
+    write(worktree, "long.txt", "abcdefghij\n");
+    const small = createExplorer(nodeProcessRunner, repo, { maxFileBytes: 4 });
+
+    expect(await small.diff(worktree, "long.txt")).toEqual({
+      kind: "text",
+      text: "@@ -0,0 +1,1 @@\n+abcd",
+      truncated: true,
+    });
+  });
+
+  it("does not call a changed binary file unchanged, tracked or not", async () => {
+    write(repo, "logo.bin", Buffer.from([0x89, 0x50, 0x00, 0x02]));
+    write(repo, "new.bin", Buffer.from([0x00, 0x01]));
+
+    expect(await explorer.diff(repo, "logo.bin")).toEqual({ kind: "binary" });
+    expect(await explorer.diff(repo, "new.bin")).toEqual({ kind: "binary" });
   });
 
   it("shows only uncommitted changes in the main checkout", async () => {

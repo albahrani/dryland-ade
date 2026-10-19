@@ -7,7 +7,7 @@ import type {
   TicketRef,
   TicketsTree,
 } from "@dryland/core";
-import type { ChangedFile, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
+import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
 import type { NextUp } from "./next-up.ts";
 import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
@@ -146,7 +146,7 @@ export interface DrylandApi {
   /** The files changed in a worktree since its base, uncommitted and untracked ones included. */
   explorerChanges(root: string): Promise<ChangedFile[]>;
   /** `git diff` of one changed file against the worktree's base. */
-  explorerDiff(root: string, path: string): Promise<string>;
+  explorerDiff(root: string, path: string): Promise<DiffContent>;
   /** Watches exactly these directories of a worktree (`""` is its top); `onExplorerChanged` fires when they change. */
   explorerWatch(root: string, dirs: string[]): Promise<void>;
   /** Called after files change in the watched directories. Returns an unsubscribe function. */

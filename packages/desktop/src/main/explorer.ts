@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { open, readdir } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   defaultBranch,
   DrylandError,
@@ -12,17 +12,30 @@ import {
 import type {
   ChangedFile,
   ChangeStatus,
+  DiffContent,
   DirectoryListing,
   ExplorerRoot,
   FileContent,
   RootHint,
 } from "../shared/explorer.ts";
+import { isRelativeInside } from "../shared/paths.ts";
 
 const MAX_ENTRIES = 2000;
 const MAX_FILE_BYTES = 1024 * 1024;
 const BINARY_SNIFF_BYTES = 8000;
 
 const STATUS: Record<string, ChangeStatus> = { A: "added", M: "modified", D: "deleted", T: "modified" };
+
+/** What `git diff` prints for a binary file, in place of hunks. */
+const BINARY_DIFF = /^Binary files .* differ$/m;
+
+/** The latest index at or before `limit` that does not fall inside a multi-byte UTF-8 character. */
+function utf8Boundary(bytes: Uint8Array, limit: number): number {
+  let end = limit;
+  // Continuation bytes are 10xxxxxx; step back to the lead byte of the character the limit cuts.
+  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) end--;
+  return end;
+}
 
 /** The path as the file system names it: no 8.3 short names, no symlinks, no case difference on Windows. */
 const canonical = (path: string): string => {
@@ -93,7 +106,7 @@ export function createExplorer(
   /** The absolute path of `path` inside `root`, refusing anything that leaves it, symlinks included. */
   async function inside(root: string, path: string): Promise<string> {
     const refuse = () => new DrylandError(`${path} is outside the worktree.`, "picking a file inside it");
-    if (isAbsolute(path) || path.split(/[\\/]/).includes("..")) throw refuse();
+    if (!isRelativeInside(path)) throw refuse();
     const absolute = join(root, path);
     const from = relative(canonical(root), canonical(absolute));
     if (from.startsWith("..") || isAbsolute(from)) throw refuse();
@@ -158,7 +171,11 @@ export function createExplorer(
       const bytes = buffer.subarray(0, bytesRead);
       if (bytes.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return { kind: "binary" };
       const truncated = bytes.length > maxFileBytes;
-      return { kind: "text", text: bytes.subarray(0, maxFileBytes).toString("utf8"), truncated };
+      return {
+        kind: "text",
+        text: bytes.subarray(0, truncated ? utf8Boundary(bytes, maxFileBytes) : bytes.length).toString("utf8"),
+        truncated,
+      };
     } catch {
       return { kind: "missing" };
     } finally {
@@ -177,7 +194,7 @@ export function createExplorer(
     return [...changed].map(([path, status]) => ({ path, status })).sort((a, b) => a.path.localeCompare(b.path));
   }
 
-  async function diff(root: string, path: string): Promise<string> {
+  async function diff(root: string, path: string): Promise<DiffContent> {
     const { base } = await knownRoot(root);
     await inside(root, path);
     const tracked = await git(root, [
@@ -189,11 +206,31 @@ export function createExplorer(
       "--",
       path,
     ]);
-    if (tracked.ok && tracked.stdout !== "") return tracked.stdout;
+    if (tracked.ok && tracked.stdout !== "") {
+      return BINARY_DIFF.test(tracked.stdout)
+        ? { kind: "binary" }
+        : { kind: "text", text: tracked.stdout, truncated: false };
+    }
+    // Git has no diff for a file it does not track yet: show all of it as added.
     const content = await readFile(root, path);
-    if (content.kind !== "text" || content.text === "") return "";
+    if (content.kind === "binary") return { kind: "binary" };
+    if (content.kind !== "text" || content.text === "") return { kind: "text", text: "", truncated: false };
     const lines = content.text.replace(/\n$/, "").split("\n");
-    return [`@@ -0,0 +1,${lines.length} @@`, ...lines.map((line) => `+${line}`)].join("\n");
+    const noFinalNewline = !content.truncated && !content.text.endsWith("\n");
+    const rows = [`@@ -0,0 +1,${lines.length} @@`, ...lines.map((line) => `+${line}`)];
+    if (noFinalNewline) rows.push("\\ No newline at end of file");
+    return { kind: "text", text: rows.join("\n"), truncated: content.truncated };
+  }
+
+  /**
+   * Checks what the renderer asks to watch (a worktree of the project, directories inside it) and returns the
+   * worktree's git directory, whose HEAD and index change on a commit.
+   */
+  async function watchTarget(root: string, dirs: readonly string[]): Promise<string | null> {
+    if (!dirs.every(isRelativeInside)) {
+      throw new DrylandError("A directory to watch is outside the worktree.", "watching directories inside it");
+    }
+    return gitDir(root);
   }
 
   /** The directory git keeps this worktree's HEAD and index in; a linked worktree has its own. */
@@ -203,15 +240,7 @@ export function createExplorer(
     return ok ? stdout.trim() : null;
   }
 
-  return { resolveRoot, gitDir, listDirectory, readFile, changes, diff };
+  return { resolveRoot, watchTarget, listDirectory, readFile, changes, diff };
 }
 
 const ticketRef = (ticket: TicketRef): string => `${ticket.map}/${ticket.id}`;
-
-export type Explorer = ReturnType<typeof createExplorer>;
-
-/** Whether `child` is `parent` or inside it; for the watcher's directories. */
-export const isInside = (parent: string, child: string): boolean => {
-  const from = relative(resolve(parent), resolve(child));
-  return from === "" || (!from.startsWith("..") && !isAbsolute(from) && !from.startsWith(sep + sep));
-};

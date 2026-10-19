@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FileContent } from "../../shared/explorer.ts";
+import type { DiffContent, FileContent } from "../../shared/explorer.ts";
 import { type DiffRow, parseUnifiedDiff } from "../../shared/diff.ts";
+import { baseName } from "../../shared/paths.ts";
 import type { DiffRef, FileRef } from "../../shared/tabs.ts";
 import { highlightCode } from "./highlight.ts";
 
@@ -20,8 +21,6 @@ function useLoaded<T>(load: () => Promise<T>, key: string, revision: number): T 
   }, [key, revision]);
   return value;
 }
-
-const label = (path: string) => path.split("/").at(-1) ?? path;
 
 /** A file of a worktree, read-only, highlighted when its language is known. */
 export function FileTab({ item, revision }: { item: FileRef; revision: number }) {
@@ -43,10 +42,10 @@ export function FileTab({ item, revision }: { item: FileRef; revision: number })
       {content === null && <p className="empty">Loading...</p>}
       {content === "error" && <p className="notice">Could not read {item.path}.</p>}
       {content !== null && content !== "error" && content.kind === "missing" && (
-        <p className="empty">{label(item.path)} is gone from this worktree.</p>
+        <p className="empty">{baseName(item.path)} is gone from this worktree.</p>
       )}
       {content !== null && content !== "error" && content.kind === "binary" && (
-        <p className="empty">{label(item.path)} is a binary file.</p>
+        <p className="empty">{baseName(item.path)} is a binary file.</p>
       )}
       {content !== null && content !== "error" && content.kind === "text" && (
         <>
@@ -83,19 +82,28 @@ function DiffLine({ row }: { row: DiffRow }) {
 
 /** A changed file's diff against its worktree's base. */
 export function DiffTab({ item, revision }: { item: DiffRef; revision: number }) {
-  const diff = useLoaded<string>(
+  const diff = useLoaded<DiffContent>(
     () => window.dryland.explorerDiff(item.root, item.path),
     `${item.root}|${item.path}`,
     revision,
   );
-  const rows = useMemo(() => (diff === null || diff === "error" ? [] : parseUnifiedDiff(diff)), [diff]);
+  const rows = useMemo(
+    () => (diff === null || diff === "error" || diff.kind === "binary" ? [] : parseUnifiedDiff(diff.text)),
+    [diff],
+  );
   return (
     <section className="file-tab" aria-label={`Diff ${item.path}`}>
       <h2 title={item.path}>{item.path} (changes)</h2>
       {diff === null && <p className="empty">Loading...</p>}
       {diff === "error" && <p className="notice">Could not diff {item.path}.</p>}
-      {diff !== null && diff !== "error" && rows.length === 0 && (
-        <p className="empty">No changes in {label(item.path)} against the base.</p>
+      {diff !== null && diff !== "error" && diff.kind === "binary" && (
+        <p className="empty">{baseName(item.path)} is a binary file that changed; there is no text diff to show.</p>
+      )}
+      {diff !== null && diff !== "error" && diff.kind === "text" && diff.truncated && (
+        <p className="notice">Only the start of this large file is shown.</p>
+      )}
+      {diff !== null && diff !== "error" && diff.kind === "text" && rows.length === 0 && (
+        <p className="empty">No changes in {baseName(item.path)} against the base.</p>
       )}
       <div className="diff" role="table" aria-label="Diff">
         {rows.map((row, i) => (
