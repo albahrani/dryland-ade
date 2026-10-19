@@ -69,6 +69,23 @@ describe("where a missing header field is added", () => {
     expect(repo.read(CART)).toBe(ticket.replace("needs-info", "ready-for-agent"));
   });
 
+  it("leaves a created ticket reading the same, and triage slots Status between Type and Blocked by", async () => {
+    const repo = repoWith(SPEC_TICKET);
+
+    await repo.run(["ticket", "create", "--map", "shop", "--title", "Ship it", "--type", "task", "--blocked-by", "01"]);
+    const path = ".scratch/shop/issues/04-ship-it.md";
+    const created = "# Ship it\n\nType: task\nBlocked by: 01\n";
+    expect(repo.read(path)).toBe(created);
+    const before = JSON.parse((await repo.run(["ticket", "show", "shop/04", "--json"])).stdout);
+    expect(before).toMatchObject({ id: "04", type: "task", state: "open", blockers: ["01"] });
+
+    await repo.run(["ticket", "triage", "shop/04", "--role", "ready-for-agent"]);
+
+    expect(repo.read(path)).toBe("# Ship it\n\nType: task\nStatus: ready-for-agent\nBlocked by: 01\n");
+    const after = JSON.parse((await repo.run(["ticket", "show", "shop/04", "--json"])).stdout);
+    expect(after).toMatchObject({ id: "04", type: "task", blockers: ["01"] });
+  });
+
   it("still rewrites a Blocked by line in place when a later paragraph holds it", async () => {
     const ticket = "# Cart\n\nType: task\nStatus: ready-for-agent\n\nBlocked by: 03\n\n## Question\n\nGo.\n";
     const repo = repoWith(ticket);
