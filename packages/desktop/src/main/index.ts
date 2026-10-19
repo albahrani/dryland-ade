@@ -263,8 +263,10 @@ async function applyLiveEvent(event: LiveEvent): Promise<void> {
 }
 
 async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: string | null }> {
+  // Kept when only the tracker read fails (e.g. `gh` logged out), so the project is still watched and polled.
+  let found: string | null = null;
   try {
-    const mainCheckout = await findMainCheckout(nodeProcessRunner, path);
+    const mainCheckout = (found = await findMainCheckout(nodeProcessRunner, path));
     // One pass over the tracker files feeds both the tree and the rule engine, so markers and rows never disagree.
     const { tree, snapshot, skillSetup } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions(path));
     const steps = nextSteps(snapshot);
@@ -305,7 +307,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
     return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims, skillSetup }, mainCheckout };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
-    return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: null };
+    return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: found };
   }
 }
 
