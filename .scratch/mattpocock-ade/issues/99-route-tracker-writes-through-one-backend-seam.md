@@ -1,7 +1,8 @@
-# Route tracker writes through one backend seam
+# Share the code the GitHub and GitLab backends duplicate
 
 Type: task
+Status: ready-for-agent
 
 ## Question
 
-Every write function in claim.ts, ticket-write.ts, ticket-edit.ts and map-write.ts repeats 'githubCheckout(...); if (github !== null) return ...Github...'. Pick the backend once (local markdown, GitHub, later GitLab) behind one interface so ticket 47 adds a backend instead of editing eight functions. Also share the triage-role resolution and the blocker validation that github-write.ts copies from ticket-edit.ts. Raised in review of ticket 46.
+Ticket 47 added the `RemoteBackend` seam (`tracker-backend.ts`) and moved the triage-role and blocker checks to `tracker-rules.ts`, which was most of what this ticket first asked for. What remains is the code `github-write.ts` / `github-backend.ts` and `gitlab-write.ts` / `gitlab-backend.ts` still copy from each other: `ticketNamed` and `nameOf`, `afterCreate`, the `## Answer` stub fill in resolve, the `explainFailure` probe (`--version`, `auth status`, last stderr lines) with its two error messages, the create-input type declared in three places, and the claim and release state checks. Share what has one shape and leave per-tracker calls apart. Raised in review of ticket 46, narrowed after ticket 47.
