@@ -297,7 +297,9 @@ const COMMANDS: Record<
         autoCommit: autoCommit(flags),
       });
       const name = `${ticket.map}/${ticket.id}`;
-      const text = alreadyHeld ? `${holder} already holds ${name}.\n` : `Claimed ${name} for ${holder}.\n`;
+      // On GitHub the claimant is the `gh` login, not the branch.
+      const claimant = ticket.claimant ?? holder;
+      const text = alreadyHeld ? `${claimant} already holds ${name}.\n` : `Claimed ${name} for ${claimant}.\n`;
       return { value: ticket, text, warnings };
     },
   },

@@ -1,4 +1,6 @@
 import { DrylandError, requireOneLine } from "./errors.ts";
+import { githubCheckout } from "./github-backend.ts";
+import { createGithubTicket, resolveGithubTicket } from "./github-write.ts";
 import { issuesDir, lineEnding, parseTicketFile, rewriteStatus, ticketNumbers } from "./local-markdown.ts";
 import { assertMapName, readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
@@ -49,6 +51,8 @@ export async function createTicket(
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
   const { type, title } = validate(input);
+  const github = await githubCheckout(runner, cwd);
+  if (github !== null) return createGithubTicket(runner, github, { ...input, type, title });
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     await readMapFile(mainCheckout, input.map); // fails with the next action when the map is unknown
 
@@ -97,6 +101,8 @@ export async function resolveTicket(
   if (text === "") {
     throw new DrylandError("A resolution needs an answer.", 'Pass it as --answer "<what was decided or done>".');
   }
+  const github = await githubCheckout(runner, cwd);
+  if (github !== null) return resolveGithubTicket(runner, github, reference, text);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text: file } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;

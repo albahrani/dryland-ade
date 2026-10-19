@@ -1,4 +1,6 @@
 import { DrylandError } from "./errors.ts";
+import { githubCheckout } from "./github-backend.ts";
+import { claimGithubTicket, releaseGithubTicket } from "./github-write.ts";
 import { readClaim, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
@@ -34,6 +36,9 @@ export async function claimTicket(
   options: ClaimOptions,
 ): Promise<ClaimResult> {
   const wanted = parseTicketReference(reference);
+  // On GitHub the claim is the assignee, which is the user's `gh` login rather than the branch holder.
+  const github = await githubCheckout(runner, cwd);
+  if (github !== null) return claimGithubTicket(runner, github, reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
@@ -72,6 +77,8 @@ export async function releaseTicket(
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
+  const github = await githubCheckout(runner, cwd);
+  if (github !== null) return releaseGithubTicket(runner, github, reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;

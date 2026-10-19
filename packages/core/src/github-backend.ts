@@ -1,8 +1,10 @@
 import { DrylandError } from "./errors.ts";
 import { findSection, splitSections, stripAnnotations } from "./local-markdown.ts";
+import { findMainCheckout } from "./main-checkout.ts";
 import { type MapModel, parseMap } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { byTicketNumber, TICKET_TYPES, type Ticket, type TicketType } from "./ticket.ts";
+import { readTrackerKind } from "./tracker.ts";
 import { defaultTriageVocabulary, type TriageVocabulary } from "./triage-labels.ts";
 
 /** The label that marks an issue as a map; its body is the map index and its sub-issues are the map's tickets. */
@@ -14,7 +16,9 @@ export const GITHUB_TYPE_LABEL_PREFIX = "type:";
 const CONCURRENCY = 8;
 
 /** The fields of a GitHub issue that both `gh issue list --json` and the REST API return. */
-interface GithubIssue {
+export interface GithubIssue {
+  /** The database id the dependency and sub-issue APIs take; `number` is what users see. */
+  id?: number;
   number: number;
   title: string;
   body?: string | null;
@@ -49,8 +53,23 @@ async function explainFailure(
   const reason = stderr.trim().split("\n").slice(-3).join(" ") || "no error message";
   return new DrylandError(
     `\`gh ${args.slice(0, 2).join(" ")}\` failed: ${reason}`,
-    "Check that this repo has a GitHub remote and that your `gh` login can read its issues.",
+    "Check that this repo has a GitHub remote and that your `gh` login can read and edit its issues.",
   );
+}
+
+/** Runs a `gh` call that must succeed and returns its trimmed output; a failure says what to do next. */
+export async function ghRun(runner: ProcessRunner, cwd: string, args: string[]): Promise<string> {
+  const result = await runner.run("gh", args, { cwd });
+  if (result.exitCode !== 0) throw await explainFailure(runner, cwd, args, result.stderr);
+  return result.stdout.trim();
+}
+
+/** The main checkout when the repo's tracker is GitHub; `null` for any other tracker. */
+export async function githubCheckout(runner: ProcessRunner, cwd: string): Promise<string | null> {
+  const mainCheckout = await findMainCheckout(runner, cwd);
+  // A repo whose tracker doc is missing keeps being treated as local markdown.
+  const kind = await readTrackerKind(mainCheckout).catch(() => "local-markdown" as const);
+  return kind === "github" ? mainCheckout : null;
 }
 
 type GhResult = { ok: true; json: unknown } | { ok: false; stderr: string };
@@ -66,7 +85,7 @@ async function ghJson(runner: ProcessRunner, cwd: string, args: string[]): Promi
 }
 
 /** The JSON of a `gh` call that must succeed; a failure says what to do next. */
-async function ghRequired(runner: ProcessRunner, cwd: string, args: string[]): Promise<unknown> {
+export async function ghRequired(runner: ProcessRunner, cwd: string, args: string[]): Promise<unknown> {
   const result = await ghJson(runner, cwd, args);
   if (result.ok) return result.json;
   throw await explainFailure(runner, cwd, args, result.stderr);
