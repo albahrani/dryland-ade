@@ -1,7 +1,7 @@
 # In-app quit dialog with stop progress
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 
 Spec: [spec](../spec.md), user stories 55, 56. "Lifecycle, packaging and release". ADRs 0002, 0004, 0010. Follows mattpocock-ade/41 (bc47448).
 
@@ -21,11 +21,15 @@ Amend ADR 0004's Shutdown decision and the spec's "Lifecycle, packaging and rele
 
 ## Acceptance criteria
 
-- [ ] Quitting with running sessions shows an in-app dialog listing each with agent, item, branch and state, waiting ones first; Cancel keeps everything running
-- [ ] Quitting with no running session asks nothing and quits
-- [ ] After confirming, the dialog shows each shutdown step's progress and the app quits when they are done
-- [ ] "Quit now" during a slow step abandons the rest and quits at once (lifecycle unit test with a slow step, and an e2e test)
-- [ ] A system shutdown or log-off still asks nothing and finishes within the 2-second budget (existing lifecycle tests stay)
-- [ ] When the renderer does not answer the quit request in time, the native message box asks instead (unit test of the fallback decision)
-- [ ] No tracker write and no network call on either path; every claim is as it was before quitting
-- [ ] ADR 0004 and the spec say the 2-second budget is for OS-forced shutdown only
+- [x] Quitting with running sessions shows an in-app dialog listing each with agent, item, branch and state, waiting ones first; Cancel keeps everything running
+- [x] Quitting with no running session asks nothing and quits
+- [x] After confirming, the dialog shows each shutdown step's progress and the app quits when they are done
+- [x] "Quit now" during a slow step abandons the rest and quits at once (lifecycle unit test with a slow step, and an e2e test)
+- [x] A system shutdown or log-off still asks nothing and finishes within the 2-second budget (existing lifecycle tests stay)
+- [x] When the renderer does not answer the quit request in time, the native message box asks instead (unit test of the fallback decision)
+- [x] No tracker write and no network call on either path; every claim is as it was before quitting
+- [x] ADR 0004 and the spec say the 2-second budget is for OS-forced shutdown only
+
+## Answer
+
+Built in e8e625e and 8f83e96. A user quit with running sessions opens an in-app QuitDialog listing each session (agent, item, branch, state, waiting first); Cancel keeps everything. After Quit it shows each shutdown step's progress with no deadline, and Quit now abandons the rest. runShutdown takes a null budget plus onStep/abandon hooks; OS-forced shutdown keeps the 2-second budget. A window that does not acknowledge the request within 2 seconds (whoAsks) falls back to the native message box. ADR 0004 and the spec are amended. Tests: lifecycle unit tests and three e2e tests (dialog, Quit now, fallback); Windows and Linux runs pass. Known limits: the acknowledgement is sent when the request arrives, before React renders; a renderer that reloads while the dialog is open leaves the quit in the asking state; DRYLAND_TEST_SLOW_SHUTDOWN_MS is a test-only hook in main.
