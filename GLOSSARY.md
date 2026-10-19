@@ -32,7 +32,7 @@ Where a map's item sits in the skill workflow: Fog (not yet specified on the map
 _Avoid_: Phase, stage, category
 
 **Ticket status**:
-What a ticket's icon shows: ready (open, unblocked, unclaimed), in progress (claimed), blocked (open with an unresolved or unknown blocker) or done (resolved). Derived from state and blockers, never stored.
+What a ticket's icon shows: ready (open, unblocked, unclaimed), in progress (claimed), blocked (open with an unresolved or unknown blocker) or done (resolved). Derived from state and blockers, never stored. A blocker is unknown when its tracker cannot say, e.g. a GitLab issue without Premium whose body has no `Blocked by:` line; it stays blocked rather than ready, because a ticket is never offered on a guess. `dryland ticket create` writes `Blocked by: none` on GitLab, so only tickets made by hand are unknown.
 _Avoid_: Ticket state (that is open, claimed, resolved)
 
 **Frontier**:

@@ -4,9 +4,9 @@ import { appendDecision } from "./local-markdown.ts";
 import { type MapModel, parseMap } from "./map.ts";
 import type { MapIndexEntry } from "./map-write.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import type { Ticket, TicketType, TriageRole } from "./ticket.ts";
-import { TRIAGE_ROLES } from "./ticket.ts";
+import type { Ticket, TicketType } from "./ticket.ts";
 import { findTicket, parseTicketReference, readTickets, type TicketWriteResult } from "./tickets.ts";
+import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
 import { readTriageLabels, readTriageVocabulary } from "./triage-labels.ts";
 
 /**
@@ -265,32 +265,7 @@ export async function blockGithubTicket(
   const remove = change.remove.map((r) => parseTicketReference(r).number);
   const current = ticket.blockers.map(Number);
   const known = new Set(tickets.filter((t) => t.map === ticket.map).map((t) => Number(t.id)));
-
-  for (const number of add) {
-    if (!known.has(number)) {
-      throw new DrylandError(
-        `Ticket ${ticket.map}/${number} does not exist, so it cannot block ${name}.`,
-        `Run \`dryland ticket list\` and pass existing numbers of ${ticket.map} to --add.`,
-      );
-    }
-    if (number === Number(ticket.id)) {
-      throw new DrylandError(`Ticket ${name} cannot block itself.`, "Pass a different ticket number to --add.");
-    }
-    if (current.includes(number)) {
-      throw new DrylandError(
-        `Ticket ${name} is already blocked by ${ticket.map}/${number}.`,
-        `Run \`dryland ticket show ${name}\` to see its blockers.`,
-      );
-    }
-  }
-  for (const number of remove) {
-    if (!current.includes(number)) {
-      throw new DrylandError(
-        `Ticket ${name} is not blocked by ${ticket.map}/${number}, so there is nothing to remove.`,
-        `Run \`dryland ticket show ${name}\` to see its blockers.`,
-      );
-    }
-  }
+  assertBlockChange(ticket, current, known, add, remove);
 
   const path = `${issuePath(ticket.id)}/dependencies/blocked_by`;
   for (const number of add) {
@@ -324,28 +299,10 @@ export async function triageGithubTicket(
   reference: string,
   role: string,
 ): Promise<TicketWriteResult> {
-  // A role may be given as the canonical role or as the repo's own label for it.
-  const given = role.trim().toLowerCase();
   const labels = await readTriageLabels(cwd);
-  const resolved: TriageRole | undefined =
-    TRIAGE_ROLES.find((known) => known === given) ??
-    TRIAGE_ROLES.find((known) => labels.get(known)?.toLowerCase() === given);
-  if (resolved === undefined) {
-    const valid = TRIAGE_ROLES.map((known) => {
-      const label = labels.get(known) ?? known;
-      return label === known ? known : `${known} (${label})`;
-    });
-    throw new DrylandError(`"${role}" is not a triage role.`, `Use --role with one of: ${valid.join(", ")}.`);
-  }
+  const resolved = resolveTriageRole(labels, role);
   const ticket = await ticketNamed(runner, cwd, reference);
-  if (ticket.state !== "open") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is ${ticket.state}, so it cannot be re-triaged.`,
-      ticket.state === "claimed"
-        ? `Release it first with \`dryland ticket release ${nameOf(ticket)}\`.`
-        : "Create a new ticket for the follow-up work.",
-    );
-  }
+  assertCanTriage(ticket);
   const label = labels.get(resolved) ?? resolved;
   const vocabulary = await readTriageVocabulary(cwd);
   const issue = await fetchIssue(runner, cwd, ticket.id);

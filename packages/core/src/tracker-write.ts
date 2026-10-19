@@ -224,12 +224,13 @@ export async function writeTracker<T>(
   produce: (mainCheckout: string) => Promise<TrackerWrite<T>>,
 ): Promise<TrackerWriteResult<T>> {
   const mainCheckout = await findMainCheckout(runner, cwd);
-  // A repo whose tracker doc is missing or unreadable keeps writing locally; only a named remote tracker is refused.
+  // A repo whose tracker doc is missing or unreadable keeps writing locally. A remote tracker is written through its
+  // backend (`remoteBackend`), never here, so reaching this with one is a bug in the caller.
   const kind = await readTrackerKind(mainCheckout).catch(() => "local-markdown" as const);
   if (kind !== "local-markdown") {
     throw new DrylandError(
-      `Writing tickets is not supported on the ${kind} tracker by this version of dryland yet.`,
-      "Change the ticket on the tracker itself for now; `dryland` writes only to a local-markdown tracker.",
+      `Writing tickets to the ${kind} tracker must go through its backend, not the lock and commit of local markdown.`,
+      "This is a bug in dryland; please report it.",
     );
   }
   const git = (args: string[]) => runner.run("git", args, { cwd: mainCheckout });

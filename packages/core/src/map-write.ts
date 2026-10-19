@@ -1,9 +1,8 @@
 import { DrylandError, requireOneLine } from "./errors.ts";
-import { githubCheckout } from "./github-backend.ts";
-import { indexGithubMap } from "./github-write.ts";
 import { appendDecision } from "./local-markdown.ts";
 import { assertMapName, type MapModel, parseMap, readMapText } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import { remoteBackend } from "./tracker-backend.ts";
 import { writeTracker, type TrackerWriteOptions, type TrackerWriteResult } from "./tracker-write.ts";
 
 export interface MapIndexEntry {
@@ -39,8 +38,8 @@ export async function indexMap(
       "Pass a path without spaces or parentheses, e.g. issues/01-cart.md.",
     );
   }
-  const github = await githubCheckout(runner, cwd);
-  if (github !== null) return indexGithubMap(runner, github, name, { title, link, gist });
+  const remote = await remoteBackend(runner, cwd);
+  if (remote !== null) return remote.backend.indexMap(runner, remote.checkout, name, { title, link, gist });
   return writeTracker(runner, cwd, options, async (mainCheckout) => {
     const markdown = await readMapText(mainCheckout, name); // fails with the next action when the map is unknown
     const path = `.scratch/${name}/map.md`;

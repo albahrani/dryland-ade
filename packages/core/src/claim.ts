@@ -1,9 +1,8 @@
 import { DrylandError } from "./errors.ts";
-import { githubCheckout } from "./github-backend.ts";
-import { claimGithubTicket, releaseGithubTicket } from "./github-write.ts";
 import { readClaim, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
+import { remoteBackend } from "./tracker-backend.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 
 export interface ClaimOptions extends TrackerWriteOptions {
@@ -36,9 +35,9 @@ export async function claimTicket(
   options: ClaimOptions,
 ): Promise<ClaimResult> {
   const wanted = parseTicketReference(reference);
-  // On GitHub the claim is the assignee, which is the user's `gh` login rather than the branch holder.
-  const github = await githubCheckout(runner, cwd);
-  if (github !== null) return claimGithubTicket(runner, github, reference);
+  // On a remote tracker the claim is the assignee, which is the user's own login rather than the branch holder.
+  const remote = await remoteBackend(runner, cwd);
+  if (remote !== null) return remote.backend.claim(runner, remote.checkout, reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
@@ -77,8 +76,8 @@ export async function releaseTicket(
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
-  const github = await githubCheckout(runner, cwd);
-  if (github !== null) return releaseGithubTicket(runner, github, reference);
+  const remote = await remoteBackend(runner, cwd);
+  if (remote !== null) return remote.backend.release(runner, remote.checkout, reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;

@@ -235,8 +235,7 @@ describe("GitHub backend failures", () => {
     expect(calls.join("\n")).not.toMatch(/token|auth login|GH_TOKEN|GITHUB_TOKEN/i);
   });
 
-  it("still refuses GitLab, and reads local markdown without gh", async () => {
-    await expect(readTickets(repo("GitLab"), ghRunner())).rejects.toThrow(/not supported/);
+  it("reads local markdown without gh", async () => {
     expect(await readTickets(repo("Local Markdown"), ghRunner({}))).toEqual([]);
   });
 });

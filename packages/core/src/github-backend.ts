@@ -1,19 +1,15 @@
 import { DrylandError } from "./errors.ts";
 import { findSection, splitSections, stripAnnotations } from "./local-markdown.ts";
-import { findMainCheckout } from "./main-checkout.ts";
 import { type MapModel, parseMap } from "./map.ts";
+import { mapLimit } from "./map-limit.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { byTicketNumber, TICKET_TYPES, type Ticket, type TicketType } from "./ticket.ts";
-import { readTrackerKind } from "./tracker.ts";
 import { defaultTriageVocabulary, type TriageVocabulary } from "./triage-labels.ts";
 
 /** The label that marks an issue as a map; its body is the map index and its sub-issues are the map's tickets. */
 export const GITHUB_MAP_LABEL = "map";
 /** A ticket's type is the label `type:<type>`, e.g. `type:task`. */
 export const GITHUB_TYPE_LABEL_PREFIX = "type:";
-
-/** How many `gh` processes run at once. */
-const CONCURRENCY = 8;
 
 /** The fields of a GitHub issue that both `gh issue list --json` and the REST API return. */
 export interface GithubIssue {
@@ -64,14 +60,6 @@ export async function ghRun(runner: ProcessRunner, cwd: string, args: string[]):
   return result.stdout.trim();
 }
 
-/** The main checkout when the repo's tracker is GitHub; `null` for any other tracker. */
-export async function githubCheckout(runner: ProcessRunner, cwd: string): Promise<string | null> {
-  const mainCheckout = await findMainCheckout(runner, cwd);
-  // A repo whose tracker doc is missing keeps being treated as local markdown.
-  const kind = await readTrackerKind(mainCheckout).catch(() => "local-markdown" as const);
-  return kind === "github" ? mainCheckout : null;
-}
-
 type GhResult = { ok: true; json: unknown } | { ok: false; stderr: string };
 
 async function ghJson(runner: ProcessRunner, cwd: string, args: string[]): Promise<GhResult> {
@@ -96,16 +84,6 @@ const restList = (runner: ProcessRunner, cwd: string, path: string): Promise<GhR
   ghJson(runner, cwd, ["api", "--paginate", "--slurp", path]).then((result) =>
     result.ok ? { ok: true, json: (result.json as unknown[]).flat() } : result,
   );
-
-async function mapLimit<T, R>(items: T[], run: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    for (let i = next++; i < items.length; i = next++) results[i] = await run(items[i] as T);
-  };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
-  return results;
-}
 
 const labelNames = (issue: GithubIssue): string[] => (issue.labels ?? []).map((label) => label.name);
 

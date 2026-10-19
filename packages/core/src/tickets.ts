@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DrylandError } from "./errors.ts";
 import { GITHUB_MAP_LABEL, readGithubTracker } from "./github-backend.ts";
+import { readGitlabTracker } from "./gitlab-backend.ts";
 import { readLocalMarkdownTickets, ticketFile } from "./local-markdown.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import { findSpecsWithoutTickets, frontierOf, type MapModel, readMapFile } from "./map.ts";
@@ -20,14 +21,9 @@ interface LoadedTracker {
 /** Every ticket (and, for a remote tracker, every map) of the main checkout, from the tracker its docs name. */
 async function loadTracker(runner: ProcessRunner, mainCheckout: string): Promise<LoadedTracker> {
   const kind = await readTrackerKind(mainCheckout);
-  if (kind === "gitlab") {
-    throw new DrylandError(
-      `The ${kind} tracker is not supported by this version of dryland yet.`,
-      "Use a local-markdown or GitHub tracker for now (/setup-matt-pocock-skills).",
-    );
-  }
   const vocabulary = await readTriageVocabulary(mainCheckout);
   if (kind === "github") return { kind, ...(await readGithubTracker(runner, mainCheckout, vocabulary)) };
+  if (kind === "gitlab") return { kind, ...(await readGitlabTracker(runner, mainCheckout, vocabulary)) };
   return { kind, tickets: await readLocalMarkdownTickets(mainCheckout, vocabulary), maps: null };
 }
 

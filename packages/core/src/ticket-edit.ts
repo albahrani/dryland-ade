@@ -1,10 +1,9 @@
 import { DrylandError } from "./errors.ts";
-import { githubCheckout } from "./github-backend.ts";
-import { blockGithubTicket, commentOnGithubTicket, triageGithubTicket } from "./github-write.ts";
 import { appendComment, rewriteBlockedBy, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import { TRIAGE_ROLES, type TriageRole } from "./ticket.ts";
 import { currentTicket, parseTicketReference, readTickets, type TicketWriteResult } from "./tickets.ts";
+import { remoteBackend } from "./tracker-backend.ts";
+import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 import { readTriageLabels } from "./triage-labels.ts";
 
@@ -34,9 +33,9 @@ export async function blockTicket(
       "Pass --add <number>[,<number>...] and/or --remove <number>[,<number>...].",
     );
   }
-  const github = await githubCheckout(runner, cwd);
-  if (github !== null) {
-    return blockGithubTicket(runner, github, reference, { add: change.add ?? [], remove: change.remove ?? [] });
+  const remote = await remoteBackend(runner, cwd);
+  if (remote !== null) {
+    return remote.backend.block(runner, remote.checkout, reference, { add: change.add ?? [], remove: change.remove ?? [] });
   }
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
@@ -48,34 +47,7 @@ export async function blockTicket(
       );
     }
     const siblings = (await readTickets(mainCheckout)).filter((t) => t.map === ticket.map);
-    const known = new Set(siblings.map((t) => Number(t.id)));
-    const current = ticket.blockers.map(Number);
-
-    for (const number of add) {
-      if (!known.has(number)) {
-        throw new DrylandError(
-          `Ticket ${ticket.map}/${number} does not exist, so it cannot block ${name}.`,
-          `Run \`dryland ticket list\` and pass existing numbers of ${ticket.map} to --add.`,
-        );
-      }
-      if (number === Number(ticket.id)) {
-        throw new DrylandError(`Ticket ${name} cannot block itself.`, "Pass a different ticket number to --add.");
-      }
-      if (current.includes(number)) {
-        throw new DrylandError(
-          `Ticket ${name} is already blocked by ${ticket.map}/${number}.`,
-          `Run \`dryland ticket show ${name}\` to see its blockers.`,
-        );
-      }
-    }
-    for (const number of remove) {
-      if (!current.includes(number)) {
-        throw new DrylandError(
-          `Ticket ${name} is not blocked by ${ticket.map}/${number}, so there is nothing to remove.`,
-          `Run \`dryland ticket show ${name}\` to see its blockers.`,
-        );
-      }
-    }
+    assertBlockChange(ticket, ticket.blockers.map(Number), new Set(siblings.map((t) => Number(t.id))), add, remove);
 
     const width = ticket.id.length;
     const pad = (numbers: number[]) => numbers.map((number) => String(number).padStart(width, "0"));
@@ -107,8 +79,8 @@ export async function commentOnTicket(
   if (text === "") {
     throw new DrylandError("A comment needs text.", 'Pass it as --text "<comment>".');
   }
-  const github = await githubCheckout(runner, cwd);
-  if (github !== null) return commentOnGithubTicket(runner, github, reference, text);
+  const remote = await remoteBackend(runner, cwd);
+  if (remote !== null) return remote.backend.comment(runner, remote.checkout, reference, text);
   if (/^## /m.test(text)) {
     throw new DrylandError(
       'A comment cannot contain a line starting with "## ", because that would open a new section.',
@@ -136,32 +108,14 @@ export async function triageTicket(
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
-  const github = await githubCheckout(runner, cwd);
-  if (github !== null) return triageGithubTicket(runner, github, reference, role);
+  const remote = await remoteBackend(runner, cwd);
+  if (remote !== null) return remote.backend.triage(runner, remote.checkout, reference, role);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
-    // A role may be given as the canonical role or as the repo's own label for it.
-    const given = role.trim().toLowerCase();
     const labels = await readTriageLabels(mainCheckout);
-    const resolved: TriageRole | undefined =
-      TRIAGE_ROLES.find((known) => known === given) ??
-      TRIAGE_ROLES.find((known) => labels.get(known)?.toLowerCase() === given);
-    if (resolved === undefined) {
-      const valid = TRIAGE_ROLES.map((known) => {
-        const label = labels.get(known) ?? known;
-        return label === known ? known : `${known} (${label})`;
-      });
-      throw new DrylandError(`"${role}" is not a triage role.`, `Use --role with one of: ${valid.join(", ")}.`);
-    }
+    const resolved = resolveTriageRole(labels, role);
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
-    if (ticket.state !== "open") {
-      throw new DrylandError(
-        `Ticket ${name} is ${ticket.state}, so it cannot be re-triaged.`,
-        ticket.state === "claimed"
-          ? `Release it first with \`dryland ticket release ${name}\`.`
-          : "Create a new ticket for the follow-up work.",
-      );
-    }
+    assertCanTriage(ticket);
     const label = labels.get(resolved) ?? resolved;
     return {
       changes: [{ path, content: rewriteStatus(text, { set: label }) }],
