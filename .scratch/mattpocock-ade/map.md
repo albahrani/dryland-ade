@@ -166,6 +166,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [GitHub backend: writes](issues/46-github-backend-writes.md): Every mutating ticket and map command works on a GitHub tracker through gh, with no local commit.
 
+- [GitLab backend](issues/47-gitlab-backend.md): GitLab read and write through glab, behind a shared RemoteBackend seam; unknown blockers stay blocked.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
