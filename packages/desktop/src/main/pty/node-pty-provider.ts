@@ -21,8 +21,13 @@ export const nodePtyProvider: PtyProvider = {
         if (!exited) pty.write(data);
       },
       resize: (newCols, newRows) => {
-        // node-pty throws when resizing a process that has already gone.
-        if (!exited) pty.resize(newCols, newRows);
+        // node-pty throws when resizing a process that has gone, including one whose exit it has not reported yet.
+        if (exited) return;
+        try {
+          pty.resize(newCols, newRows);
+        } catch {
+          // Exited between the check and the resize; nothing left to resize.
+        }
       },
       kill: () => {
         if (exited) return;
