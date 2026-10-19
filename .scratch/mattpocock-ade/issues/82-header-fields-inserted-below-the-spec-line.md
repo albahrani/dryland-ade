@@ -24,8 +24,8 @@ Fix: the header block ends at the first blank line after it has started. A missi
 - [x] `ticket block --add` on such a ticket adds `Blocked by:` in the header block, after `Status:` when there is one
 - [x] A `Status:` or `Blocked by:` line already present is still rewritten in place, wherever it is
 - [x] CRLF and mixed line endings are kept, as the current tests check
-- [ ] Tickets created by `dryland ticket create` read the same through `ticket show` before and after the fix
+- [x] Tickets created by `dryland ticket create` read the same through `ticket show` before and after the fix
 
 ## Answer
 
-Fixed in ed58898 and 1698913. rewriteHeaderField now treats the header block as the run of fields up to the first blank line and adds a missing Status after Type, a missing Blocked by after Status and its annotation. A field already present anywhere is still rewritten in place. Tests in packages/cli/test/ticket-header-placement.test.ts cover triage, claim, block, CRLF and in-place rewrites. Known limit: no test compares ticket show output for created tickets; createTicket is untouched and its existing tests pass. Edge: a Status below a blank line is not seen as the anchor for a new Blocked by.
+Fixed in ed58898 and 1698913. rewriteHeaderField now treats the header block as the run of fields up to the first blank line and adds a missing Status after Type, a missing Blocked by after Status and its annotation. A field already present anywhere is still rewritten in place. Tests in packages/cli/test/ticket-header-placement.test.ts cover triage, claim, block, CRLF and in-place rewrites. A created ticket is checked against its literal text and ticket show output in ticket-header-placement.test.ts. Edge: a Status below a blank line is not seen as the anchor for a new Blocked by.
