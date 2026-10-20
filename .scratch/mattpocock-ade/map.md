@@ -180,6 +180,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Compatibility check and verdict](issues/54-compatibility-check-and-verdict.md): A modified skill setup gets a Run check, Skip or Accept dialog; a fingerprint-tied verdict disables broken rules, which the user can override.
 
+- [Share the GitHub and GitLab write helpers](issues/99-route-tracker-writes-through-one-backend-seam.md): The code the two remote backends copied now lives in tracker-rules.ts and tracker-cli.ts.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
