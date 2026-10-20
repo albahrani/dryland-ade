@@ -1,7 +1,8 @@
 # PR/MR via `gh` and `glab`
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T11:29:44.666Z","was":"ready-for-agent"}} -->
 Blocked by: 46, 47, 51
 
 Spec: [spec](../spec.md), user stories 37, 76. "Next-step rule engine" (housekeeping). Layout detail: `prototype/views-and-ux/` (Merge/PR).
