@@ -188,6 +188,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Test the tracker widget actions](issues/105-test-the-tracker-widget-actions-and-stop-loading-t.md): The widget actions live in a tested module that looks up the checkout with findMainCheckout, and readTrackerInfo reads the doc once.
 
+- [Settings: Agent CLIs and Skills tabs](issues/56-settings-agent-clis-and-skills-tabs.md): The Settings dialog's Agent CLIs tab (tiers, auto-submit, Copilot hook Install/Inspect/Remove) and Skills tab (state, verdicts, overrides, revoke, Run check) are built.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
