@@ -76,6 +76,7 @@ import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
 import { TrackerPoller } from "./tracker-poller.ts";
+import { runTrackerWidgetAction } from "./tracker-widget-action.ts";
 import { pausedTickets } from "../shared/paused-session.ts";
 import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
@@ -595,18 +596,13 @@ ipcMain.handle("sessions-layout:save", (_event, layout: unknown) => {
   const saved = store.read().sessionsLayout;
   store.update({ sessionsLayout: { ...saved, [project.path]: parseSessionsLayout(layout) } });
 });
-ipcMain.handle("tracker:widget-action", async (_event, kind: unknown): Promise<string | null> => {
-  const loaded = await projectView();
-  if (loaded === null || loaded.mainCheckout === null) return null;
-  if (kind === "reveal-issues") {
-    const error = await shell.openPath(join(loaded.mainCheckout, ".scratch"));
-    return error === "" ? null : error;
-  }
-  if (kind !== "open-issues" || loaded.view.tracker === null) return null;
-  const cli = loaded.view.tracker.kind === "github" ? "gh" : "glab";
-  const result = await nodeProcessRunner.run(cli, ["issue", "list", "--web"], { cwd: loaded.mainCheckout });
-  return result.exitCode === 0 ? null : `${cli} issue list --web failed: ${result.stderr.trim()}`;
-});
+ipcMain.handle("tracker:widget-action", (_event, kind: unknown): Promise<string | null> =>
+  runTrackerWidgetAction(kind, {
+    runner: nodeProcessRunner,
+    projectPath: project?.path ?? null,
+    openPath: (path) => shell.openPath(path),
+  }),
+);
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 /** The Explorer reads the open project's worktrees; nothing without a project. */
 const explorerFor = () => {

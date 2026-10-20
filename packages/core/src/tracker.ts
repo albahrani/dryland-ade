@@ -26,13 +26,16 @@ export interface TrackerInfo {
 
 /** Reads which tracker the repo uses, and whether it is the ADE tracker, from `docs/agents/issue-tracker.md`. */
 export async function readTrackerInfo(mainCheckout: string): Promise<TrackerInfo> {
-  const kind = await readTrackerKind(mainCheckout);
-  const doc = await readFile(join(mainCheckout, TRACKER_DOC), "utf8");
-  return { kind, lens: !isAdeTrackerDoc(doc) };
+  const doc = await readTrackerDoc(mainCheckout);
+  return { kind: trackerKindOf(doc), lens: !isAdeTrackerDoc(doc) };
 }
 
 /** Reads which tracker the repo uses from the title of `docs/agents/issue-tracker.md`. */
 export async function readTrackerKind(mainCheckout: string): Promise<TrackerKind> {
+  return trackerKindOf(await readTrackerDoc(mainCheckout));
+}
+
+async function readTrackerDoc(mainCheckout: string): Promise<string> {
   const doc = await readFile(join(mainCheckout, TRACKER_DOC), "utf8").catch(() => null);
   if (doc === null) {
     throw new DrylandError(
@@ -40,6 +43,10 @@ export async function readTrackerKind(mainCheckout: string): Promise<TrackerKind
       "Run /setup-matt-pocock-skills to create it.",
     );
   }
+  return doc;
+}
+
+function trackerKindOf(doc: string): TrackerKind {
   const title = /^# Issue tracker:\s*(.+?)\s*$/m.exec(doc)?.[1] ?? "unrecognised";
   const kind = HEADINGS[title.toLowerCase()];
   if (kind === undefined) {
