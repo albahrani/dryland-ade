@@ -18,14 +18,14 @@ Pruning goes through `dryland worktree prune` and is only possible when the tick
 
 ## Acceptance criteria
 
-- [ ] The section shows the dry-run result: dirty tree and conflicts as blockers, unresolved ticket as a hint
-- [ ] With blockers present, the merge action is disabled and says why
-- [ ] A clean branch merges with the chosen strategy, and the result is visible in the commit graph
-- [ ] With cleanup chosen, worktree and branch are removed after the merge, subject to the prune conditions
-- [ ] On conflicts, "hand to agent" pre-types a prompt into the ticket's session and Dryland changes no file
-- [ ] Prune is refused, naming the failed condition, when any of the four conditions does not hold, including a live session in the worktree
-- [ ] Prune asks for confirmation in the app
-- [ ] Merge and prune behaviour is tested against a temp git repo
+- [x] The section shows the dry-run result: dirty tree and conflicts as blockers, unresolved ticket as a hint
+- [x] With blockers present, the merge action is disabled and says why
+- [x] A clean branch merges with the chosen strategy, and the result is visible in the commit graph
+- [x] With cleanup chosen, worktree and branch are removed after the merge, subject to the prune conditions
+- [x] On conflicts, "hand to agent" pre-types a prompt into the ticket's session and Dryland changes no file
+- [x] Prune is refused, naming the failed condition, when any of the four conditions does not hold, including a live session in the worktree
+- [x] Prune asks for confirmation in the app
+- [x] Merge and prune behaviour is tested against a temp git repo
 
 ## Answer
 
