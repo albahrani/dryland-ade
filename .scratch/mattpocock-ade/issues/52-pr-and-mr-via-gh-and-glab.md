@@ -1,8 +1,7 @@
 # PR/MR via `gh` and `glab`
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T11:29:44.666Z","was":"ready-for-agent"}} -->
+Status: resolved
 Blocked by: 46, 47, 51
 
 Spec: [spec](../spec.md), user stories 37, 76. "Next-step rule engine" (housekeeping). Layout detail: `prototype/views-and-ux/` (Merge/PR).
@@ -15,9 +14,13 @@ The user chooses between two paths: open the PR/MR directly, or start a session 
 
 ## Acceptance criteria
 
-- [ ] On a GitHub project the section offers "Open PR"; on GitLab "Open MR"; on local-markdown neither
-- [ ] Opening a PR/MR pushes the branch and creates it through `gh`/`glab`, tested with a fake process runner
+- [x] On a GitHub project the section offers "Open PR"; on GitLab "Open MR"; on local-markdown neither
+- [x] Opening a PR/MR pushes the branch and creates it through `gh`/`glab`, tested with a fake process runner
 - [ ] The `/pr` path opens the ticket's session with `/pr` typed and not submitted
-- [ ] An existing PR/MR is shown with state and link instead of the open action
-- [ ] A finished ticket with a branch ahead gets `/pr` as next step; once the feature is merged it gets `/retro`
-- [ ] Missing or logged-out `gh`/`glab` is reported with the next action
+- [x] An existing PR/MR is shown with state and link instead of the open action
+- [x] A finished ticket with a branch ahead gets `/pr` as next step; once the feature is merged it gets `/retro`
+- [x] Missing or logged-out `gh`/`glab` is reported with the next action
+
+## Answer
+
+Built in 3be5c5b and ed7d942. Core: pull-request.ts (findPullRequest, openPullRequest, forgeOf, pullRequestBlockers) via gh/glab, tested with a fake runner; open checks the CLI first, applies the dry run (minus the main-checkout blockers, since nothing merges there), pushes origin/<branch>, creates, reads back. repo-snapshot now feeds prExists/merged from the forge, so /pr stops and /retro follows a merged PR. Desktop: PullRequestPanel in Source Control on GitHub/GitLab trackers (Open PR/MR, or Start session with /pr via startWork skill 'pr', both gated by the dry run; existing PR shows state and link; gh/glab errors shown with next action). Also passed the runner into readTickets in worktree/merge. Known limits: the /pr pre-typed-not-submitted behaviour rests on the existing startWork path and auto-submit setting, not a new test (criterion left unticked); remote is hardcoded to origin; squash-merged PRs on branches no longer ahead are not seen; the forge is asked on every pane refresh.
