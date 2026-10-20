@@ -29,5 +29,11 @@ test("shows the banner for a repo without skills, then the setup state as the fi
   await expect(status).toContainText("Core skill triage is not installed.");
   await expect(status).not.toContainText("Additional skills");
 
+  // A modified setup nobody has judged asks what to do; accepting the deviations silences it.
+  const dialog = window.getByRole("dialog", { name: "Modified skill setup" });
+  await expect(dialog).toContainText("Core skill triage is not installed.");
+  await dialog.getByRole("button", { name: "Accept deviations" }).click();
+  await expect(dialog).toBeHidden();
+
   await app.close();
 });

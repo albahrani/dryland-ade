@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileS
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron as electron, expect, test } from "@playwright/test";
+import { _electron as electron, expect, type Page, test } from "@playwright/test";
 
 const windows = process.platform === "win32";
 const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
@@ -22,6 +22,12 @@ function fixtureRepo(): string {
       "Blocked by: 02",
     ),
     ".claude/skills/grilling/SKILL.md": "---\nname: grilling\n---\n",
+    // The skills the next steps recommend: a setup that differs from the default only pre-types installed ones.
+    ...Object.fromEntries(
+      ["implement", "wayfinder", "to-spec", "to-tickets", "implement-spec", "triage", "code-review", "pr", "retro"].map(
+        (name) => [`.claude/skills/${name}/SKILL.md`, `---\nname: ${name}\n---\n`],
+      ),
+    ),
   };
   for (const [file, content] of Object.entries(files)) {
     mkdirSync(dirname(join(repo, file)), { recursive: true });
@@ -123,6 +129,11 @@ async function launchApp(env: Record<string, string>, userData: string) {
   return app;
 }
 
+/** Answers the modified-setup question the fixture repo raises each time the window loads it. */
+async function skipCompatDialog(window: Page) {
+  await window.getByRole("dialog", { name: "Modified skill setup" }).getByRole("button", { name: "Skip" }).click();
+}
+
 async function openTicket(env: Record<string, string>) {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
@@ -136,6 +147,8 @@ async function openProjectAt(env: Record<string, string>, repo: string, userData
   }, repo);
   const window = await app.firstWindow();
   await window.getByRole("button", { name: "Open project..." }).click();
+  // The fixture repo's skill setup is not the default, which asks what to do about it.
+  await window.getByRole("dialog", { name: "Modified skill setup" }).getByRole("button", { name: "Skip" }).click();
   await window.getByRole("button", { name: "Grill the cart" }).click();
   return { app, window, repo };
 }
@@ -503,6 +516,7 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   await window.getByRole("radio", { name: "Group by none" }).check();
   await openPane.getByRole("button", { name: /Open/ }).click();
   await window.reload();
+  await skipCompatDialog(window);
   await window.getByRole("button", { name: "Sessions", exact: true }).click();
   await expect(hiddenPane.getByRole("button", { name: /Shop/ })).toHaveCount(0);
   await expect(openPane.getByRole("button", { name: /Open/ })).toHaveAttribute("aria-expanded", "false");
@@ -519,6 +533,7 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   const share = await sash.getAttribute("aria-valuenow");
   expect(Number(share)).toBeLessThan(before);
   await window.reload();
+  await skipCompatDialog(window);
   await window.getByRole("button", { name: "Sessions", exact: true }).click();
   await expect(sash).toHaveAttribute("aria-valuenow", share!);
 
@@ -583,7 +598,9 @@ test("stops a session and resumes it from the paused box, in its worktree with t
 /** Starts the app again on the same project and settings, which it opens by itself. */
 async function relaunch(env: Record<string, string>, userData: string) {
   const app = await launchApp(env, userData);
-  return { app, window: await app.firstWindow() };
+  const window = await app.firstWindow();
+  await skipCompatDialog(window);
+  return { app, window };
 }
 
 /** Clicks an item of the application menu, as the user would. */
@@ -644,7 +661,7 @@ test("Resume all resumes paused sessions hidden, on a map or everywhere, and a s
 
   // On the map: its paused session resumes and no tab opens for it.
   const second = await relaunch(env, userData);
-  await expect(second.window.getByRole("tab")).toHaveCount(0);
+  await expect(second.window.getByRole("tab", { name: /Claude Code/ })).toHaveCount(0);
   await second.window.getByRole("button", { name: "Maps" }).click();
   await second.window.getByRole("button", { name: /^Shop/ }).click();
   await expect(second.window.getByRole("region", { name: "Map sessions" })).toContainText("1 paused");
