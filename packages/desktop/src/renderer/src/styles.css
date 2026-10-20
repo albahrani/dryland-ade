@@ -1369,3 +1369,18 @@ ul {
   color: var(--warn, #d9a441);
   font-size: 12px;
 }
+
+.merge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.merge-blocker {
+  color: var(--danger, #d44);
+}
+
+.merge-hint {
+  color: var(--fg-dim);
+}

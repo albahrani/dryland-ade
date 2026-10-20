@@ -53,7 +53,7 @@ export function slugify(text: string): string {
   return slug.slice(0, SLUG_MAX).replace(/-+$/, "");
 }
 
-async function gitIn(runner: ProcessRunner, cwd: string, args: string[], what: string): Promise<string> {
+export async function gitIn(runner: ProcessRunner, cwd: string, args: string[], what: string): Promise<string> {
   const result = await runner.run("git", args, { cwd });
   if (result.exitCode !== 0) {
     throw new DrylandError(

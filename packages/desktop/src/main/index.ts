@@ -1,5 +1,7 @@
 import { basename, join } from "node:path";
 import {
+  MERGE_STRATEGIES,
+  type MergeStrategy,
   AGENT_ADAPTERS,
   hasStatusHooks,
   DrylandError,
@@ -624,7 +626,15 @@ ipcMain.handle("explorer:watch", async (_event, root: unknown, dirs: unknown) =>
 });
 const sourceControlFor = () => {
   const explorer = explorerFor();
-  return createSourceControl(nodeProcessRunner, project!.path, explorer);
+  return createSourceControl(nodeProcessRunner, project!.path, explorer, {
+    attached: (path) => work.liveSessionIn(path) !== undefined,
+    handToAgent: (path, text) => work.typeIntoSession(path, text),
+    onPruned: async (path) => {
+      const warning = await work.forgetWorktree(path);
+      if (warning !== null) console.warn(warning);
+      void refresh();
+    },
+  });
 };
 const paths = (value: unknown): string[] => {
   if (!Array.isArray(value) || !value.every((path) => typeof path === "string")) {
@@ -643,6 +653,21 @@ ipcMain.handle("source-control:unstage", (_event, root: unknown, files: unknown)
 );
 ipcMain.handle("source-control:commit", (_event, root: unknown, message: unknown) =>
   sourceControlFor().commit(text(root, "root"), text(message, "message")),
+);
+ipcMain.handle("source-control:merge-check", (_event, root: unknown) =>
+  sourceControlFor().mergeCheck(text(root, "root")),
+);
+ipcMain.handle("source-control:merge", async (_event, root: unknown, strategy: unknown, cleanup: unknown) => {
+  if (typeof strategy !== "string" || !(MERGE_STRATEGIES as readonly string[]).includes(strategy)) {
+    throw new TypeError("not a merge strategy");
+  }
+  const result = await sourceControlFor().merge(text(root, "root"), strategy as MergeStrategy, cleanup === true);
+  if (result.ok) void refresh();
+  return result;
+});
+ipcMain.handle("source-control:prune", (_event, root: unknown) => sourceControlFor().prune(text(root, "root")));
+ipcMain.handle("source-control:hand-to-agent", (_event, root: unknown) =>
+  sourceControlFor().handConflictsToAgent(text(root, "root")),
 );
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
 ipcMain.handle("live-events:mode", (_event, mode: unknown) => {

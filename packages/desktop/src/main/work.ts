@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { delimiter } from "node:path";
+import { delimiter, resolve } from "node:path";
 import {
   AGENT_ADAPTERS,
   type AgentAdapter,
@@ -28,6 +28,7 @@ import {
   sessionExists,
   sessionIdArgs,
   trustFolders,
+  untrustFolders,
   sessionsOf,
   type TicketRef,
   skillCommand,
@@ -121,8 +122,23 @@ export interface WorkStarter {
    * to the CLI's queries, which travel the same way, are not keys.
    */
   userTyped(terminalId: string, data: string): void;
+  /** The live session whose worktree is the directory `path`, if one is still running. */
+  liveSessionIn(path: string): SessionInfo | undefined;
+  /**
+   * Types `text` into the terminal of the live session in the worktree at `path`, once its output has paused,
+   * and never submits it. The user's first key stands it down. `false` when no session runs there.
+   */
+  typeIntoSession(path: string, text: string): boolean;
+  /** Drops what Dryland keeps in the user's CLI config for a worktree that was removed; `null` or a warning. */
+  forgetWorktree(path: string): Promise<string | null>;
   /** The sessions started so far, as recorded at spawn. */
   sessions(): SessionInfo[];
+}
+
+/** Whether two directory paths name the same place; Windows paths differ only by case and separators. */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+  return norm(a) === norm(b);
 }
 
 /** The user's home as the CLIs read it: `USERPROFILE` on Windows, `HOME` elsewhere; `null` when unset. */
@@ -435,6 +451,34 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
 
     userTyped(terminalId, data) {
       if (isKeystroke(data)) pretypers.get(terminalId)?.cancel();
+    },
+
+    liveSessionIn(path) {
+      const live = terminals.liveIds();
+      return started.find((s) => live.includes(s.terminalId) && samePath(s.worktree.path, path));
+    },
+
+    typeIntoSession(path, text) {
+      const session = this.liveSessionIn(path);
+      if (session === undefined) return false;
+      const { terminalId } = session;
+      pretypers.get(terminalId)?.cancel();
+      const adapter = AGENT_ADAPTERS.find((a) => a.id === session.agent.id);
+      const typer = createPretyper({
+        text,
+        write: (key) => terminals.write(terminalId, key),
+        blocks: (output) => adapter !== undefined && blocksInput(adapter, output),
+        submit: false,
+        timing: pretype,
+      });
+      pretypers.set(terminalId, typer);
+      // Its CLI is already drawn: an empty chunk starts the pause the typer waits for.
+      typer("");
+      return true;
+    },
+
+    async forgetWorktree(path) {
+      return (await untrustFolders(copilotPaths(env, homeOf(env) ?? undefined), [path])).warning ?? null;
     },
 
     sessions: () => [...started],

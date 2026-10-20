@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ChangedFile, type ExplorerRoot, type RootHint, rootLabel } from "../../shared/explorer.ts";
-import type { CommitGraph, SourceControlStatus, UnlinkedBranch } from "../../shared/source-control.ts";
+import type { CommitGraph, MergeCheckView, SourceControlStatus, UnlinkedBranch } from "../../shared/source-control.ts";
+import { MergePanel } from "./MergePanel.tsx";
 
 /** How often git is asked again, for changes the watched directories do not report. */
 const POLL_MS = 2000;
@@ -11,6 +12,8 @@ interface Loaded {
   status: SourceControlStatus;
   graph: CommitGraph;
   unlinked: UnlinkedBranch[];
+  /** The dry run for a linked worktree of a local-markdown project; `null` elsewhere or when git cannot say. */
+  merge: MergeCheckView | null;
 }
 
 const LINK_NOTE: Record<ExplorerRoot["link"], string | null> = {
@@ -27,6 +30,7 @@ const LINK_NOTE: Record<ExplorerRoot["link"], string | null> = {
 export function SourceControl({
   hint,
   projectView,
+  localTracker,
   revision,
   onOpenDiff,
   onShowWorktree,
@@ -34,6 +38,8 @@ export function SourceControl({
   hint: RootHint;
   /** The project as last read; a new one may mean a worktree was made or removed, so the root is resolved again. */
   projectView: unknown;
+  /** Whether the project's tracker is local markdown, the only one the Merge section serves. */
+  localTracker: boolean;
   revision: number;
   onOpenDiff: (root: string, path: string) => void;
   /** Shows another worktree in this pane and the Explorer, until the selection changes. */
@@ -71,6 +77,7 @@ export function SourceControl({
   }, [hintKey, projectView]);
 
   const rootPath = root?.path;
+  const mergeable = localTracker && root !== null && !root.main && root.branch !== null;
   const load = useCallback(async () => {
     if (rootPath === undefined) return;
     try {
@@ -80,12 +87,13 @@ export function SourceControl({
         window.dryland.sourceControlUnlinked(),
       ]);
       if (shownRoot.current !== rootPath) return;
-      const next = { status, graph, unlinked };
+      const merge = mergeable ? await window.dryland.sourceControlMergeCheck(rootPath).catch(() => null) : null;
+      const next = { status, graph, unlinked, merge };
       setLoaded((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
-  }, [rootPath]);
+  }, [rootPath, mergeable]);
 
   useEffect(() => {
     void load();
@@ -117,7 +125,7 @@ export function SourceControl({
       else setCommitError(result.message);
     });
 
-  const { status, graph, unlinked } = loaded;
+  const { status, graph, unlinked, merge: mergeCheck } = loaded;
   const fileRow = (file: ChangedFile, staged: boolean) => (
     <li key={`${staged ? "s" : "c"}:${file.path}`} className="tree-row">
       <button
@@ -197,6 +205,8 @@ export function SourceControl({
           ))}
         </ol>
       </section>
+
+      {mergeCheck !== null && <MergePanel root={root.path} check={mergeCheck} onChanged={() => void load()} />}
 
       {unlinked.length > 0 && (
         <section aria-label="Unlinked branches">

@@ -765,6 +765,7 @@ export function App() {
             <SourceControl
               hint={worktreeHint}
               projectView={project}
+              localTracker={project.tracker?.kind === "local-markdown"}
               revision={explorerRevision}
               onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
               onShowWorktree={(path) => setPinned({ tab: tabs.active, path })}

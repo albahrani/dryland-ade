@@ -1,4 +1,5 @@
 import type {
+  MergeStrategy,
   LiveEvent,
   MapDetail,
   SessionState,
@@ -13,7 +14,15 @@ import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileCont
 import type { OpenProject, ProjectSummary } from "./projects.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "./quit.ts";
 import type { NextUp } from "./next-up.ts";
-import type { CommitGraph, CommitResult, SourceControlStatus, UnlinkedBranch } from "./source-control.ts";
+import type {
+  ActionResult,
+  CommitGraph,
+  CommitResult,
+  MergeActionResult,
+  MergeCheckView,
+  SourceControlStatus,
+  UnlinkedBranch,
+} from "./source-control.ts";
 import type { PausedSession } from "./paused-session.ts";
 import type { SessionsLayout } from "./sessions-view.ts";
 import type { SettingsChange } from "./settings-change.ts";
@@ -198,6 +207,14 @@ export interface DrylandApi {
   sourceControlUnstage(root: string, paths: string[]): Promise<void>;
   /** Commits what is staged in that worktree with `message`. */
   sourceControlCommit(root: string, message: string): Promise<CommitResult>;
+  /** The dry run for merging the worktree's branch into the default branch: blockers and hints. */
+  sourceControlMergeCheck(root: string): Promise<MergeCheckView>;
+  /** Merges the worktree's branch with a strategy, then, with `cleanup`, prunes it when the prune conditions hold. */
+  sourceControlMerge(root: string, strategy: MergeStrategy, cleanup: boolean): Promise<MergeActionResult>;
+  /** Removes the worktree and branch; the caller has confirmed. Refused, naming the failed condition, unless safe. */
+  sourceControlPrune(root: string): Promise<ActionResult>;
+  /** Pre-types a prompt about the branch's merge conflicts into the worktree's live session; changes no file. */
+  sourceControlHandToAgent(root: string): Promise<ActionResult>;
   /** Called after files change in the watched directories. Returns an unsubscribe function. */
   onExplorerChanged(callback: () => void): () => void;
   /** Starts a shell in the open project's main checkout; resolves with its id, or `null` without a project. */

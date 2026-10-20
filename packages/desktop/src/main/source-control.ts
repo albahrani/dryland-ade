@@ -1,10 +1,24 @@
-import { defaultBranch, DrylandError, type ProcessRunner, type WorktreeEntry } from "@dryland/core";
+import {
+  checkMerge,
+  defaultBranch,
+  describeBlocker,
+  DrylandError,
+  mergeWorktree,
+  pruneWorktree,
+  type MergeStrategy,
+  type ProcessRunner,
+  type WorktreeEntry,
+} from "@dryland/core";
 import type { ChangedFile, ChangeStatus, ExplorerRoot } from "../shared/explorer.ts";
 import { isRelativeInside } from "../shared/paths.ts";
 import type {
   CommitGraph,
+  ActionResult,
   CommitResult,
   GraphCommit,
+  MergeActionResult,
+  MergeCheckView,
+  SessionLinks,
   SourceControlStatus,
   UnlinkedBranch,
 } from "../shared/source-control.ts";
@@ -24,7 +38,12 @@ interface Worktrees {
  * Git state and writes of a project's worktrees for the Source Control pane. A root must be a worktree git lists
  * and a path must stay inside it; every command runs in that worktree, so a commit lands there and nowhere else.
  */
-export function createSourceControl(runner: ProcessRunner, projectPath: string, explorer: Worktrees) {
+export function createSourceControl(
+  runner: ProcessRunner,
+  projectPath: string,
+  explorer: Worktrees,
+  sessions: SessionLinks = { attached: () => false, handToAgent: () => false },
+) {
   // Reads skip optional locks so they never touch the index, which the pane watches; writes below do not.
   const run = async (cwd: string, args: string[], flags: string[] = ["--no-optional-locks"]) => {
     const result = await runner.run("git", [...flags, ...args], { cwd });
@@ -133,5 +152,68 @@ export function createSourceControl(runner: ProcessRunner, projectPath: string, 
       .map((entry) => ({ branch: entry.branch, path: entry.path }));
   }
 
-  return { status, stage, unstage, commit, graph, unlinked };
+  /** The branch of the linked worktree at `root`; merging and pruning are for those only. */
+  async function branchOf(root: string): Promise<string> {
+    const known = await explorer.knownRoot(root);
+    if (known.main || known.branch === null) {
+      throw new DrylandError("Only a linked worktree on a branch can be merged.", "selecting a ticket's worktree");
+    }
+    return known.branch;
+  }
+
+  /** Runs a core action, turning its refusal into a message for the pane. */
+  async function guarded<T>(
+    action: () => Promise<T>,
+  ): Promise<{ ok: true; value: T } | { ok: false; message: string }> {
+    try {
+      return { ok: true, value: await action() };
+    } catch (error) {
+      if (error instanceof DrylandError) return { ok: false, message: error.message };
+      throw error;
+    }
+  }
+
+  async function mergeCheck(root: string): Promise<MergeCheckView> {
+    const check = await checkMerge(runner, projectPath, await branchOf(root));
+    return { ...check, blockerMessages: check.blockers.map((b) => describeBlocker(b, check.base)) };
+  }
+
+  async function merge(root: string, strategy: MergeStrategy, cleanup: boolean): Promise<MergeActionResult> {
+    const branch = await branchOf(root);
+    const done = await guarded(() =>
+      mergeWorktree(runner, projectPath, branch, { strategy, cleanup, sessionAttached: sessions.attached(root) }),
+    );
+    if (!done.ok) return done;
+    if (done.value.cleanup?.removed === true) await sessions.onPruned?.(root);
+    return { ok: true, result: done.value };
+  }
+
+  async function prune(root: string): Promise<ActionResult> {
+    const branch = await branchOf(root);
+    // The pane asks the user to confirm before calling this, so `yes` is theirs.
+    const done = await guarded(() =>
+      pruneWorktree(runner, projectPath, branch, { yes: true, sessionAttached: sessions.attached(root) }),
+    );
+    if (!done.ok) return done;
+    await sessions.onPruned?.(root);
+    return { ok: true };
+  }
+
+  /** Pre-types a prompt about the branch's conflicts into its session; Dryland resolves nothing itself. */
+  async function handConflictsToAgent(root: string): Promise<ActionResult> {
+    const check = await mergeCheck(root);
+    const conflicts = check.blockers.find((b) => b.kind === "conflicts");
+    if (conflicts === undefined) {
+      return { ok: false, message: `Merging ${check.branch} into ${check.base} has no conflicts.` };
+    }
+    const prompt =
+      `Merge ${check.base} into this branch and resolve the conflicts in ${conflicts.files.join(", ")}, ` +
+      "then commit the merge. Do not discard either side's changes.";
+    if (!sessions.handToAgent(root, prompt)) {
+      return { ok: false, message: "No session is running in this worktree. Start work on the ticket to open one." };
+    }
+    return { ok: true };
+  }
+
+  return { status, stage, unstage, commit, graph, unlinked, mergeCheck, merge, prune, handConflictsToAgent };
 }

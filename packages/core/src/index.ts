@@ -13,6 +13,7 @@ export * from "./live-reporting.ts";
 export * from "./local-markdown.ts";
 export * from "./main-checkout.ts";
 export * from "./map-write.ts";
+export * from "./merge.ts";
 export * from "./map.ts";
 export * from "./next-step.ts";
 export * from "./process-runner.ts";
