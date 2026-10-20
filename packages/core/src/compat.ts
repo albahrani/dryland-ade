@@ -9,8 +9,6 @@ export const COMPAT_VERDICT_FILE = ".dryland/compat.md";
 /** What the "Run check" session has typed for it: the agent reads the prompt from Dryland and follows it. */
 export const COMPAT_RUN_COMMAND = "Run `dryland doctor --compat-prompt` and follow the instructions it prints.";
 
-const VERDICTS: readonly FeatureVerdict[] = ["ok", "degraded", "broken"];
-
 /** The user's decisions about a modified setup, stored per project by the app. */
 export interface CompatConfig {
   /** The deviation fingerprint the user accepted; `null` when they accepted none. */
