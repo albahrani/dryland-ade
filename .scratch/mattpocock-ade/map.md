@@ -176,6 +176,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Local merge and prune](issues/51-local-merge-and-prune.md): Source Control's Merge section dry-runs, merges with a chosen strategy, hands conflicts to the agent and prunes behind a confirmation.
 
+- [PR/MR via gh and glab](issues/52-pr-and-mr-via-gh-and-glab.md): Source Control opens a PR/MR through gh/glab after the dry run, or starts a /pr session, and feeds PR state to the next-step rules.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
