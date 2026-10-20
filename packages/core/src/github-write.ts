@@ -50,6 +50,19 @@ const me = (runner: ProcessRunner, cwd: string) => ghRun(runner, cwd, ["api", "u
 const afterCreate = <T>(number: number, step: string, run: () => Promise<T>) =>
   afterCreateOn("GitHub", number, step, run);
 
+/** Runs a write after earlier ones were applied; a failure names what is already in place and how to finish. */
+async function partlyApplied<T>(applied: string[], step: string, finish: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof DrylandError) || applied.length === 0) throw error;
+    throw new DrylandError(
+      `${step} failed: ${error.message} Already applied: ${applied.join(", ")}.`,
+      `${finish} ${error.nextAction}`,
+    );
+  }
+}
+
 /** Fetches the issue of a map, which must carry the map label. */
 async function mapIssue(runner: ProcessRunner, cwd: string, map: string): Promise<GithubIssue> {
   if (!/^\d+$/.test(map)) {
@@ -229,13 +242,22 @@ export async function blockGithubTicket(
   assertBlockChange(ticket, current, known, add, remove);
 
   const path = `${issuePath(ticket.id)}/dependencies/blocked_by`;
-  for (const number of add) {
-    const blocker = await fetchIssue(runner, cwd, number);
-    await ghRun(runner, cwd, ["api", path, ...integer("issue_id", idOf(blocker))]);
+  // Read every blocker before the first write, so only a write can leave the change half-applied.
+  const addIssues = await Promise.all(add.map((number) => fetchIssue(runner, cwd, number)));
+  const removeIssues = await Promise.all(remove.map((number) => fetchIssue(runner, cwd, number)));
+  const applied: string[] = [];
+  const retry = `Finish with \`dryland ticket block ${nameOf(ticket)}\`.`;
+  for (const blocker of addIssues) {
+    await partlyApplied(applied, `blocking it by #${blocker.number}`, retry, () =>
+      ghRun(runner, cwd, ["api", path, ...integer("issue_id", idOf(blocker))]),
+    );
+    applied.push(`blocked by #${blocker.number}`);
   }
-  for (const number of remove) {
-    const blocker = await fetchIssue(runner, cwd, number);
-    await ghRun(runner, cwd, ["api", "-X", "DELETE", `${path}/${idOf(blocker)}`]);
+  for (const blocker of removeIssues) {
+    await partlyApplied(applied, `removing the block by #${blocker.number}`, retry, () =>
+      ghRun(runner, cwd, ["api", "-X", "DELETE", `${path}/${idOf(blocker)}`]),
+    );
+    applied.push(`no longer blocked by #${blocker.number}`);
   }
   const blockers = [...ticket.blockers.filter((id) => !remove.includes(Number(id))), ...add.map(String)];
   return { ticket: { ...ticket, blockers }, warnings: [] };
@@ -272,8 +294,12 @@ export async function triageGithubTicket(
     .filter((name) => vocabulary.has(name.toLowerCase()) && name !== label);
 
   await ghRun(runner, cwd, ["api", `${issuePath(ticket.id)}/labels`, ...text("labels[]", label)]);
+  const applied = [`added the label "${label}"`];
   for (const name of stale) {
-    await ghRun(runner, cwd, ["api", "-X", "DELETE", `${issuePath(ticket.id)}/labels/${encodeURIComponent(name)}`]);
+    await partlyApplied(applied, `removing the label "${name}"`, `Remove the label "${name}" by hand.`, () =>
+      ghRun(runner, cwd, ["api", "-X", "DELETE", `${issuePath(ticket.id)}/labels/${encodeURIComponent(name)}`]),
+    );
+    applied.push(`removed the label "${name}"`);
   }
   return { ticket: { ...ticket, triageRole: resolved }, warnings: [] };
 }

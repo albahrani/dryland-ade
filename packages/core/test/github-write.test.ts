@@ -168,7 +168,9 @@ describe("GitHub backend writes", () => {
   it("refuses to release another user's claim, naming the holder, and changes nothing", async () => {
     const calls: string[] = [];
 
-    await expect(releaseTicket(fakeGh(baseWorld(), calls), repo(), "1/4")).rejects.toThrow(/claimed by ada, not by you/);
+    await expect(releaseTicket(fakeGh(baseWorld(), calls), repo(), "1/4")).rejects.toThrow(
+      /claimed by ada, not by you/,
+    );
     expect(writes(calls)).toEqual([]);
   });
 
@@ -235,6 +237,42 @@ describe("GitHub backend writes", () => {
       `api ${API}/issues/3/labels -f labels[]=needs-info`,
       `api -X DELETE ${API}/issues/3/labels/triage`,
     ]);
+  });
+
+  it("names the dependencies already added when a later block call fails", async () => {
+    const world = {
+      ...baseWorld(),
+      failing: [`api ${API}/issues/3/dependencies/blocked_by -F issue_id=4000`],
+    };
+
+    const error = await blockTicket(fakeGh(world, []), repo(), "1/3", { add: ["2", "4"] }).catch((e: unknown) => e);
+
+    expect(error).toMatchObject({
+      name: "DrylandError",
+      message: expect.stringContaining("blocked by #2"),
+      nextAction: expect.stringContaining("dryland ticket block 1/3"),
+    });
+    expect((error as Error).message).toContain("blocking it by #4 failed");
+  });
+
+  it("reports nothing as applied when the first block call fails", async () => {
+    const world = { ...baseWorld(), failing: [`api ${API}/issues/3/dependencies/blocked_by -F issue_id=2000`] };
+
+    const error = await blockTicket(fakeGh(world, []), repo(), "1/3", { add: ["2"] }).catch((e: unknown) => e);
+
+    expect((error as Error).message).not.toContain("already");
+  });
+
+  it("says the new label is on when removing a stale triage label fails", async () => {
+    const world = { ...baseWorld(), failing: [`api -X DELETE ${API}/issues/3/labels/triage`] };
+
+    const error = await triageTicket(fakeGh(world, []), repo(), "1/3", "needs-info").catch((e: unknown) => e);
+
+    expect(error).toMatchObject({
+      name: "DrylandError",
+      message: expect.stringContaining('added the label "needs-info"'),
+      nextAction: expect.stringContaining('Remove the label "triage"'),
+    });
   });
 
   it("creates an issue under a map as a sub-issue, blocked as asked, labelled by type", async () => {
