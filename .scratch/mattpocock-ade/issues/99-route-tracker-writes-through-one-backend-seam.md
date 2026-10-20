@@ -1,7 +1,8 @@
 # Share the code the GitHub and GitLab backends duplicate
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T16:26:38.066Z","was":"ready-for-agent"}} -->
 
 ## Question
 
