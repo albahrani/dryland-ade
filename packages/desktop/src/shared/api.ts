@@ -1,4 +1,5 @@
 import type {
+  AgentHooks,
   MergeStrategy,
   LiveEvent,
   MapDetail,
@@ -10,6 +11,7 @@ import type {
   TicketsTree,
   TrackerWidgetInfo,
 } from "@dryland/core";
+import type { AgentHooksAction, AgentHooksChange } from "./agent-hooks.ts";
 import type { TrackerWidgetAction } from "./tracker-widget.ts";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
 import type { OpenProject, ProjectSummary } from "./projects.ts";
@@ -115,6 +117,8 @@ export type ItemContent =
 export interface AgentAvailability {
   id: string;
   name: string;
+  /** First-class CLIs have verified launch and status; best-effort ones get launch and pre-typing only. */
+  tier: "first-class" | "best-effort";
   available: boolean;
   /** Why it is unavailable; `null` when it is available. */
   reason: string | null;
@@ -258,6 +262,12 @@ export interface DrylandApi {
   dontAskAgain(type: ConfirmationType): Promise<void>;
   /** Accepts the deviations of the project's modified skill setup; the dialog stays away until the setup changes. */
   acceptDeviations(): Promise<void>;
+  /** Forgets the accepted deviations, so the modified-setup dialog asks again (unless a valid verdict exists). */
+  revokeDeviations(): Promise<void>;
+  /** What Dryland keeps in the user's own config for the CLI; `null` when the CLI keeps none there. */
+  agentHooks(agentId: string): Promise<AgentHooks | null>;
+  /** Installs or removes that config, as `dryland doctor --install-hooks`/`--remove-hooks` would; the caller has confirmed. */
+  changeAgentHooks(agentId: string, action: AgentHooksAction): Promise<AgentHooksChange | null>;
   /** Turns a rule the Compatibility verdict calls broken back on (`true`) or off again. */
   overrideRule(ruleId: string, enabled: boolean): Promise<void>;
   /** Applies a change made in the Settings dialog; the new settings reach `onSettingsChanged`. */

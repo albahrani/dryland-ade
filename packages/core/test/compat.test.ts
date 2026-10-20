@@ -129,10 +129,13 @@ describe("readCompatibility", () => {
     const { root, mirror, report } = await modifiedRepo();
     const accepted: CompatConfig = { acceptedDeviations: report.deviationFingerprint, overrides: [] };
     expect((await readCompatibility(root, report, accepted)).needsDialog).toBe(false);
+    expect((await readCompatibility(root, report, accepted)).accepted).toBe(true);
+    expect((await readCompatibility(root, report, NO_CONFIG)).accepted).toBe(false);
 
     write(root, { ".agents/skills/tdd/SKILL.md": "# tdd changed\n" });
     const changed = await readSkillSetup(root, mirror);
     expect((await readCompatibility(root, changed, accepted)).needsDialog).toBe(true);
+    expect((await readCompatibility(root, changed, accepted)).accepted).toBe(false);
   });
 
   it("treats a malformed verdict file as no verdict, with a note", async () => {

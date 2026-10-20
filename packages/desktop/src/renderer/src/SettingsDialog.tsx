@@ -1,4 +1,9 @@
+import type { Compatibility, SkillSetupReport } from "@dryland/core";
 import { useState } from "react";
+import type { AgentHooksAction } from "../../shared/agent-hooks.ts";
+import { AgentClisTab } from "./AgentClisTab.tsx";
+import { SkillsTab } from "./SkillsTab.tsx";
+import type { StartHandler } from "./StartWork.tsx";
 import { LIVE_EVENTS_PANEL_MODES, type AppSettings, type LiveEventsPanelMode } from "../../shared/api.ts";
 import type { SettingsChange } from "../../shared/settings-change.ts";
 import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../../shared/stop-session.ts";
@@ -9,8 +14,6 @@ type SettingsTab = (typeof TABS)[number];
 
 /** The ticket that fills each tab still to come. */
 const COMING: Partial<Record<SettingsTab, string>> = {
-  "Agent CLIs": "The Agent CLIs tab arrives with ticket 56.",
-  Skills: "The Skills tab arrives with ticket 56.",
   Updates: "The Updates tab arrives with ticket 58.",
 };
 
@@ -26,8 +29,13 @@ export function SettingsDialog({
   projectName,
   liveEventsPanel,
   legendDismissed,
+  skillSetup,
+  hooksRevision,
   onChange,
   onLiveEventsPanel,
+  onHooks,
+  onRunCheck,
+  onRevokeDeviations,
   onClose,
 }: {
   settings: AppSettings;
@@ -35,8 +43,14 @@ export function SettingsDialog({
   projectName: string | null;
   liveEventsPanel: LiveEventsPanelMode;
   legendDismissed: boolean;
+  /** The open project's Skill setup and Compatibility verdict; `null` when none is open or it cannot be read. */
+  skillSetup: { report: SkillSetupReport; compatibility: Compatibility } | null;
+  hooksRevision: number;
   onChange: (change: SettingsChange) => void;
   onLiveEventsPanel: (mode: LiveEventsPanelMode) => void;
+  onHooks: (agentId: string, action: AgentHooksAction) => void;
+  onRunCheck: StartHandler;
+  onRevokeDeviations: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("General");
@@ -103,32 +117,6 @@ export function SettingsDialog({
                 Resume sessions on start
               </label>
               <label>
-                <input
-                  type="checkbox"
-                  checked={settings.globalAutoSubmit}
-                  onChange={(event) => onChange({ kind: "auto-submit", value: event.target.checked })}
-                />
-                Submit the pre-typed command (auto-submit)
-              </label>
-              {projectName !== null && (
-                <label>
-                  Auto-submit in {projectName}{" "}
-                  <select
-                    value={settings.projectAutoSubmit === null ? "global" : settings.projectAutoSubmit ? "on" : "off"}
-                    onChange={(event) =>
-                      onChange({
-                        kind: "project-auto-submit",
-                        value: event.target.value === "global" ? null : event.target.value === "on",
-                      })
-                    }
-                  >
-                    <option value="global">Follow the global setting</option>
-                    <option value="on">On</option>
-                    <option value="off">Off</option>
-                  </select>
-                </label>
-              )}
-              <label>
                 Keep sessions for{" "}
                 <input
                   type="number"
@@ -148,6 +136,18 @@ export function SettingsDialog({
                 </button>
               </div>
             </>
+          )}
+          {tab === "Agent CLIs" && (
+            <AgentClisTab
+              settings={settings}
+              projectName={projectName}
+              hooksRevision={hooksRevision}
+              onChange={onChange}
+              onHooks={onHooks}
+            />
+          )}
+          {tab === "Skills" && (
+            <SkillsTab skillSetup={skillSetup} onRunCheck={onRunCheck} onRevoke={onRevokeDeviations} />
           )}
           {tab === "Tracker" && (
             <>

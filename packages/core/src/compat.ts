@@ -97,6 +97,8 @@ export interface FeatureStatus {
 export interface Compatibility {
   /** Whether the app asks what to do about the deviations: modified, no valid verdict, nothing accepted. */
   needsDialog: boolean;
+  /** Whether the user accepted the setup's current deviations; revoking it asks again unless a verdict is valid. */
+  accepted: boolean;
   /** The valid verdict for the current setup, or `null`. */
   verdict: Verdict | null;
   /** Why a verdict file is not used (malformed), shown to the user; `null` otherwise. */
@@ -110,7 +112,9 @@ export interface Compatibility {
  * modified setup and only while its fingerprint is the setup's; an older one is ignored, as if absent.
  */
 export function judgeCompatibility(report: SkillSetupReport, read: VerdictRead, config: CompatConfig): Compatibility {
-  if (report.state !== "modified") return { needsDialog: false, verdict: null, note: null, features: [] };
+  if (report.state !== "modified") {
+    return { needsDialog: false, accepted: false, verdict: null, note: null, features: [] };
+  }
   const verdict = read.kind === "found" && read.verdict.fingerprint === report.fingerprint ? read.verdict : null;
   const accepted = config.acceptedDeviations === report.deviationFingerprint;
   const features = Object.entries(verdict?.features ?? {}).flatMap(([id, finding]): FeatureStatus[] => {
@@ -128,6 +132,7 @@ export function judgeCompatibility(report: SkillSetupReport, read: VerdictRead, 
   });
   return {
     needsDialog: verdict === null && !accepted,
+    accepted,
     verdict,
     note: read.kind === "malformed" ? read.note : null,
     features,

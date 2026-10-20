@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   installAgentHooks,
   nodeProcessRunner,
+  readAgentHooks,
   removeAgentHooks,
   runDoctor,
   type ProcessResult,
@@ -172,5 +173,44 @@ describe("runDoctor hooks check", () => {
 
     expect(readFileSync(config, "utf8").replace(/\s/g, "")).toBe('{"trustedFolders":[]}');
     expect((await runDoctor(nodeProcessRunner, root, options)).checks.find((c) => c.id === "hooks")?.ok).toBe(false);
+  });
+});
+
+describe("readAgentHooks", () => {
+  it("reports what Dryland wrote: the hook file's text and the trusted worktrees", async () => {
+    const home = mkdtempSync(join(tmpdir(), "dryland-copilot-home-"));
+    const options = { env: { PATH: "" }, home };
+    const root = repo("Local Markdown");
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "i", "-q"], {
+      cwd: root,
+    });
+    const worktree = join(root, "..", `${basename(root)}-wt2`);
+    execFileSync("git", ["worktree", "add", "-q", "-b", "shop/02-x", worktree], { cwd: root });
+    mkdirSync(join(home, ".copilot"), { recursive: true });
+    writeFileSync(join(home, ".copilot", "config.json"), '{\n  "trustedFolders": []\n}\n');
+
+    const before = await readAgentHooks(nodeProcessRunner, root, options);
+    expect(before).toMatchObject({ status: "missing", hookFileText: null, trusted: [] });
+    expect(before.worktrees).toHaveLength(1);
+
+    await installAgentHooks(nodeProcessRunner, root, options);
+    const after = await readAgentHooks(nodeProcessRunner, root, options);
+
+    expect(after.status).toBe("installed");
+    expect(after.hookFileText).toBe(readFileSync(after.hookFile, "utf8"));
+    expect(after.trusted).toHaveLength(1);
+    expect(after.config).toBe(join(home, ".copilot", "config.json"));
+  });
+
+  it("installs the hook file alone when no project is open, and removes it again", async () => {
+    const home = mkdtempSync(join(tmpdir(), "dryland-copilot-home-"));
+    const options = { env: { PATH: "" }, home };
+
+    const installed = await installAgentHooks(nodeProcessRunner, null, options);
+    expect((await readAgentHooks(nodeProcessRunner, null, options)).status).toBe("installed");
+    expect(installed.lines[0]).toContain("Installed");
+
+    await removeAgentHooks(nodeProcessRunner, null, options);
+    expect((await readAgentHooks(nodeProcessRunner, null, options)).status).toBe("missing");
   });
 });

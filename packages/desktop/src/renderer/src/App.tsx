@@ -21,6 +21,7 @@ import {
   type StateSince,
   trackStateSince,
 } from "../../shared/sessions-view.ts";
+import type { AgentHooksAction } from "../../shared/agent-hooks.ts";
 import { stateLabel } from "../../shared/session-meta.ts";
 import { AllProjectsDialog, ProjectWidget, TrackerWidget } from "./ProjectsUi.tsx";
 import { projectSessions } from "../../shared/projects.ts";
@@ -237,6 +238,8 @@ export function App() {
   const [dialog, setDialog] = useState<MenuCommand | "all-projects" | null>(null);
   // The setup (by project and fingerprint) whose Compatibility dialog was skipped; skipping asks again once it changes.
   const [skippedSetup, setSkippedSetup] = useState<string | null>(null);
+  /** Counts installs and removals of the CLI hooks, so the Agent CLIs tab reads them again. */
+  const [hooksRevision, setHooksRevision] = useState(0);
   // The tabs each project had when the user left it, terminals included, so coming back finds them as they were.
   const projectTabs = useRef(new Map<string, TabsState>());
   // A session waiting for the user to confirm it should stop.
@@ -412,6 +415,22 @@ export function App() {
       }
     }
     await launchWork(target, agentId, skill);
+  };
+  /** Installs or removes what Dryland keeps in the user's CLI config; the first install asks like a first start does. */
+  const changeHooks = async (agentId: string, action: AgentHooksAction) => {
+    const run = async () => {
+      const change = await window.dryland.changeAgentHooks(agentId, action);
+      if (change !== null && change.warnings.length > 0) setNotice(change.warnings.join(" "));
+      setHooksRevision((revision) => revision + 1);
+    };
+    if (action === "install" && !settings.dontAsk["user-config"]) {
+      const text = await window.dryland.pendingUserConfigWrite(agentId);
+      if (text !== null) {
+        setPendingStart({ type: "user-config", text, command: commandLine(["doctor", "--install-hooks"]), start: run });
+        return;
+      }
+    }
+    await run();
   };
   const launchWork: StartWorkHandler = async (target, agentId, skill) => {
     setTerminalError(null);
@@ -841,6 +860,21 @@ export function App() {
           projectName={project?.name ?? null}
           liveEventsPanel={liveEventsPanel}
           legendDismissed={legendDismissed}
+          skillSetup={
+            project?.tree.ok ? { report: project.tree.skillSetup, compatibility: project.tree.compatibility } : null
+          }
+          hooksRevision={hooksRevision}
+          onHooks={(agentId, action) => void changeHooks(agentId, action)}
+          onRunCheck={async (agentId, skill) => {
+            setSkippedSetup(setupKey);
+            setDialog(null);
+            await startWork({ kind: "compat-check" }, agentId, skill);
+          }}
+          onRevokeDeviations={() => {
+            // The dialog asks again at once, even if it was skipped earlier in this session.
+            setSkippedSetup(null);
+            void window.dryland.revokeDeviations();
+          }}
           onChange={(change) => {
             if (change.kind === "reset-legend") setState({ ...state, legendDismissed: false });
             void window.dryland.changeSetting(change);

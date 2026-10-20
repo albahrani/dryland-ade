@@ -89,7 +89,9 @@ import { createExplorer } from "./explorer.ts";
 import { createExplorerWatcher } from "./explorer-watch.ts";
 import { createSourceControl } from "./source-control.ts";
 import { watchProject } from "./watch-project.ts";
-import { createWorkStarter } from "./work.ts";
+import { createWorkStarter, homeOf } from "./work.ts";
+import { createAgentHooksControl } from "./agent-hooks.ts";
+import { isAgentHooksAction } from "../shared/agent-hooks.ts";
 import { isRootHint } from "../shared/explorer.ts";
 import { isSkillChoice, isWorkTarget } from "../shared/work-target.ts";
 
@@ -138,6 +140,11 @@ const work = createWorkStarter({
   autoCommit,
   autoSubmit,
   compatConfig,
+});
+const agentHooks = createAgentHooksControl({
+  runner: nodeProcessRunner,
+  env: ptyEnv,
+  home: homeOf(ptyEnv) ?? undefined,
 });
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
@@ -762,6 +769,19 @@ ipcMain.handle("compat:accept", async (): Promise<void> => {
     acceptedDeviations: report.deviationFingerprint,
   });
 });
+/** Forgets the accepted deviations: the dialog asks again for a setup without a valid verdict. */
+ipcMain.handle("compat:revoke", (): void => {
+  if (project === null) return;
+  changeCompat(project.path, { ...compatConfig(project.path), acceptedDeviations: null });
+});
+ipcMain.handle("agent-hooks:read", (_event, agentId: unknown) =>
+  typeof agentId === "string" ? agentHooks.read(agentId, project?.path ?? null) : null,
+);
+ipcMain.handle("agent-hooks:change", (_event, agentId: unknown, action: unknown) =>
+  typeof agentId === "string" && isAgentHooksAction(action)
+    ? agentHooks.change(agentId, project?.path ?? null, action)
+    : null,
+);
 /** Turns a rule the verdict calls broken back on, or off again. */
 ipcMain.handle("compat:override", (_event, ruleId: unknown, enabled: unknown): void => {
   if (project === null || typeof ruleId !== "string" || typeof enabled !== "boolean") return;

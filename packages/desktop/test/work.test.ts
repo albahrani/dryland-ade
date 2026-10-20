@@ -240,10 +240,28 @@ describe("starting work on a ticket", () => {
     const { provider, starter } = setup(mkdtempSync(join(tmpdir(), "dryland-work-empty-")));
 
     expect(await starter.listAgents()).toEqual([
-      { id: "claude-code", name: "Claude Code", available: false, reason: "`claude` is not on PATH." },
-      { id: "copilot-cli", name: "GitHub Copilot CLI", available: false, reason: "`copilot` is not on PATH." },
-      { id: "codex-cli", name: "Codex CLI", available: false, reason: "`codex` is not on PATH." },
-      { id: "gemini-cli", name: "Gemini CLI", available: false, reason: "`gemini` is not on PATH." },
+      {
+        id: "claude-code",
+        name: "Claude Code",
+        tier: "first-class",
+        available: false,
+        reason: "`claude` is not on PATH.",
+      },
+      {
+        id: "copilot-cli",
+        name: "GitHub Copilot CLI",
+        tier: "first-class",
+        available: false,
+        reason: "`copilot` is not on PATH.",
+      },
+      { id: "codex-cli", name: "Codex CLI", tier: "best-effort", available: false, reason: "`codex` is not on PATH." },
+      {
+        id: "gemini-cli",
+        name: "Gemini CLI",
+        tier: "best-effort",
+        available: false,
+        reason: "`gemini` is not on PATH.",
+      },
     ]);
     await expect(starter.startWork(repo, onTicket("02"), "claude-code")).rejects.toThrow(DrylandError);
     expect(provider.spawned).toEqual([]);
@@ -306,10 +324,22 @@ describe("starting work on a ticket", () => {
   it("lists an installed Agent CLI as available", async () => {
     const { starter } = setup();
     expect(await starter.listAgents()).toEqual([
-      { id: "claude-code", name: "Claude Code", available: true, reason: null },
-      { id: "copilot-cli", name: "GitHub Copilot CLI", available: false, reason: "`copilot` is not on PATH." },
-      { id: "codex-cli", name: "Codex CLI", available: false, reason: "`codex` is not on PATH." },
-      { id: "gemini-cli", name: "Gemini CLI", available: false, reason: "`gemini` is not on PATH." },
+      { id: "claude-code", name: "Claude Code", tier: "first-class", available: true, reason: null },
+      {
+        id: "copilot-cli",
+        name: "GitHub Copilot CLI",
+        tier: "first-class",
+        available: false,
+        reason: "`copilot` is not on PATH.",
+      },
+      { id: "codex-cli", name: "Codex CLI", tier: "best-effort", available: false, reason: "`codex` is not on PATH." },
+      {
+        id: "gemini-cli",
+        name: "Gemini CLI",
+        tier: "best-effort",
+        available: false,
+        reason: "`gemini` is not on PATH.",
+      },
     ]);
   });
 });

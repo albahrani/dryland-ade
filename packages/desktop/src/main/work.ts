@@ -151,7 +151,7 @@ function samePath(a: string, b: string): boolean {
 }
 
 /** The user's home as the CLIs read it: `USERPROFILE` on Windows, `HOME` elsewhere; `null` when unset. */
-function homeOf(env: Record<string, string | undefined>): string | null {
+export function homeOf(env: Record<string, string | undefined>): string | null {
   const names = process.platform === "win32" ? ["USERPROFILE", "HOME"] : ["HOME"];
   for (const name of names) {
     const value = env[envKey(env, name)];
@@ -246,9 +246,9 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
 
     async listAgents() {
       return Promise.all(
-        AGENT_ADAPTERS.map(async ({ id, name, binary }) => {
+        AGENT_ADAPTERS.map(async ({ id, name, binary, tier }) => {
           const available = (await findExecutable(binary, env)) !== null;
-          return { id, name, available, reason: available ? null : `\`${binary}\` is not on PATH.` };
+          return { id, name, tier, available, reason: available ? null : `\`${binary}\` is not on PATH.` };
         }),
       );
     },

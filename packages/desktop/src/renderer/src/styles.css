@@ -708,6 +708,23 @@ ul {
   flex-direction: column;
   gap: 8px;
   min-height: 180px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.settings .agent-clis {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings .hooks-inspection pre {
+  max-height: 160px;
+  overflow: auto;
+  margin: 0;
 }
 
 .settings .confirmations {
