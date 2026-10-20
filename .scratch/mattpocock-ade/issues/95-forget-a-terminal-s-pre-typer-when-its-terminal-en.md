@@ -1,6 +1,8 @@
 # Forget a terminal's pre-typer when its terminal ends
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T11:02:47.462Z","was":""}} -->
 
 ## Question
 
