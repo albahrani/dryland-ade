@@ -70,7 +70,7 @@ export function PullRequestPanel({
           <button disabled={blocked || busy} title={blocked ? blockerMessages.join("; ") : undefined} onClick={open}>
             Open {name}
           </button>
-          {ticket !== null && (
+          {ticket !== null && !blocked && (
             <StartWork label={() => `Start session with /pr`} onStart={(agentId) => onStartPr(ticket, agentId)} />
           )}
         </>

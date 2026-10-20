@@ -81,7 +81,7 @@ describe("findPullRequest", () => {
       state: "merged",
       url: "https://x/pull/7",
     });
-    expect(calls[0]).toBe("gh pr list --head b --state all --json number,state,url --limit 1");
+    expect(calls[0]).toBe("gh pr list --head b --state all --json number,state,url --limit 10");
   });
 
   it("reads a GitLab MR for the branch", async () => {
@@ -91,6 +91,11 @@ describe("findPullRequest", () => {
       state: "open",
       url: "https://x/mr/3",
     });
+  });
+
+  it("ignores a closed PR, so a new one can be opened", async () => {
+    const { runner } = fakeRunner(() => ok(JSON.stringify([{ number: 2, state: "CLOSED", url: "u" }])));
+    expect(await findPullRequest(runner, "/repo", "github", "b")).toBeNull();
   });
 
   it("is null when the branch has none", async () => {

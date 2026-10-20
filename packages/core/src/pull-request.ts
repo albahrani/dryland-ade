@@ -41,7 +41,7 @@ interface GitlabMr {
   web_url: string;
 }
 
-/** The newest PR or MR whose source is `branch`, in any state; `null` when there is none. */
+/** The newest open or merged PR or MR whose source is `branch`; a closed one does not count. `null` when none. */
 export async function findPullRequest(
   runner: ProcessRunner,
   cwd: string,
@@ -59,15 +59,17 @@ export async function findPullRequest(
       "--json",
       "number,state,url",
       "--limit",
-      "1",
+      "10",
     ]);
-    const found = (JSON.parse(out) as GithubPr[])[0];
+    const found = (JSON.parse(out) as GithubPr[]).find((pr) => GITHUB_STATE[pr.state] !== "closed");
     return found === undefined
       ? null
       : { number: found.number, state: GITHUB_STATE[found.state] ?? "open", url: found.url };
   }
-  const path = `${PROJECT}/merge_requests?source_branch=${encodeURIComponent(branch)}&state=all&per_page=1`;
-  const found = ((await glabRequired(runner, cwd, ["api", path])) as GitlabMr[])[0];
+  const path = `${PROJECT}/merge_requests?source_branch=${encodeURIComponent(branch)}&state=all&per_page=20`;
+  const found = ((await glabRequired(runner, cwd, ["api", path])) as GitlabMr[]).find(
+    (mr) => GITLAB_STATE[mr.state] !== "closed",
+  );
   return found === undefined
     ? null
     : { number: found.iid, state: GITLAB_STATE[found.state] ?? "open", url: found.web_url };
