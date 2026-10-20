@@ -178,6 +178,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [PR/MR via gh and glab](issues/52-pr-and-mr-via-gh-and-glab.md): Source Control opens a PR/MR through gh/glab after the dry run, or starts a /pr session, and feeds PR state to the next-step rules.
 
+- [Compatibility check and verdict](issues/54-compatibility-check-and-verdict.md): A modified skill setup gets a Run check, Skip or Accept dialog; a fingerprint-tied verdict disables broken rules, which the user can override.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
