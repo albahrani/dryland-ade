@@ -33,8 +33,6 @@ export interface Verdict {
   features: Record<string, FeatureFinding>;
 }
 
-const HEADER = "dryland-compat: 1";
-
 /**
  * Parses a verdict file: a header block between `---` lines holding `dryland-compat: 1` and `fingerprint: <hex>`,
  * then one `- <rule id>: ok|degraded|broken` line per feature, a reason after ` - ` for degraded and broken ones.
@@ -48,10 +46,11 @@ export function parseVerdict(text: string): Verdict | string {
   const header = new Map(
     lines.slice(1, end).map((line) => {
       const colon = line.indexOf(":");
+      if (colon === -1) return [line.trim(), ""] as const;
       return [line.slice(0, colon).trim(), line.slice(colon + 1).trim()] as const;
     }),
   );
-  if (`dryland-compat: ${header.get("dryland-compat")}` !== HEADER) return "its format version is not 1";
+  if (header.get("dryland-compat") !== "1") return "its format version is not 1";
   const fingerprint = header.get("fingerprint");
   if (fingerprint === undefined || !/^[0-9a-f]{64}$/.test(fingerprint)) return "its fingerprint is missing or invalid";
 
@@ -61,6 +60,7 @@ export function parseVerdict(text: string): Verdict | string {
     const match = /^[-*]\s+([a-z-]+):\s*(ok|degraded|broken)\s*(?:[-—–]\s*(.*))?$/.exec(line.trim());
     if (match === null) return `the line "${line.trim()}" is not a feature verdict`;
     const [, id, verdict, reason] = match;
+    if (!(RULE_IDS as readonly string[]).includes(id as string)) return `"${id}" is not a Dryland feature`;
     features[id as string] = { verdict: verdict as FeatureVerdict, reason: reason?.trim() || null };
   }
   if (Object.keys(features).length === 0) return "it judges no feature";

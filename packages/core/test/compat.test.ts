@@ -68,6 +68,7 @@ describe("parseVerdict", () => {
     ["a wrong version", verdictFile("a".repeat(64), ["- retro: ok"]).replace(": 1", ": 2")],
     ["a bad fingerprint", verdictFile("abc", ["- retro: ok"])],
     ["a line that is no verdict", verdictFile(fingerprint, ["- retro: maybe"])],
+    ["an unknown feature", verdictFile(fingerprint, ["- implement-tiket: broken"])],
     ["no features", verdictFile(fingerprint, [])],
   ])("rejects %s", (_name, text) => {
     expect(typeof parseVerdict(text)).toBe("string");

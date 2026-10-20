@@ -395,8 +395,9 @@ export function App() {
         },
     );
   };
+  /** The setup the skipped dialog was for: skipping asks again once the project or its setup changes. */
+  const setupKey = project?.tree.ok ? `${project.path}|${project.tree.skillSetup.fingerprint}` : null;
   /** Starts work; the first start with a CLI that keeps its hooks in the user's own config asks before it writes there. */
-  const setupKey = project?.tree.ok ? `${project.path} ${project.tree.skillSetup.fingerprint}` : null;
   const startWork: StartWorkHandler = async (target, agentId, skill) => {
     if (!settings.dontAsk["user-config"]) {
       const text = await window.dryland.pendingUserConfigWrite(agentId);
