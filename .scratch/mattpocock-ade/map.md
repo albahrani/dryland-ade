@@ -172,6 +172,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Remote trackers in the app](issues/48-remote-trackers-in-the-app.md): Remote trackers poll on a timer and focus, and a menu-bar tracker widget shows the tracker, lens mode and the off-default-branch warning.
 
+- [Forget a terminal's pre-typer when its terminal ends](issues/95-forget-a-terminal-s-pre-typer-when-its-terminal-en.md): Terminals report their end via onEnd, and the work starter drops the pre-typer then.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
