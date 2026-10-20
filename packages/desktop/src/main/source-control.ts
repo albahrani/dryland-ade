@@ -3,7 +3,7 @@ import {
   defaultBranch,
   describeBlocker,
   DrylandError,
-  findPullRequest,
+  findPullRequestCached,
   forgeOf,
   mergeWorktree,
   openPullRequest,
@@ -239,7 +239,7 @@ export function createSourceControl(
       error: null,
     };
     try {
-      section.request = await findPullRequest(runner, projectPath, kind, branch);
+      section.request = await findPullRequestCached(runner, projectPath, kind, branch);
       if (section.request === null) {
         const check = await checkMerge(runner, projectPath, branch);
         section.blockerMessages = pullRequestBlockers(check).map((b) => describeBlocker(b, check.base));

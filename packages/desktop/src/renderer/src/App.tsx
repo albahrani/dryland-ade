@@ -33,6 +33,7 @@ import {
   focusTab,
   type ItemRef,
   openTab,
+  parseTicketKey,
   replaceTab,
   savedTabs,
   type SessionRef,
@@ -769,9 +770,9 @@ export function App() {
               revision={explorerRevision}
               onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
               onShowWorktree={(path) => setPinned({ tab: tabs.active, path })}
-              onStartPr={(ticket, agentId) => {
-                const [map = "", id = ""] = ticket.split("/");
-                return startWork({ kind: "ticket", ticket: { map, id } }, agentId, "pr");
+              onStartPr={(key, agentId) => {
+                const ticket = parseTicketKey(key);
+                return ticket === null ? Promise.resolve() : startWork({ kind: "ticket", ticket }, agentId, "pr");
               }}
             />
           </>

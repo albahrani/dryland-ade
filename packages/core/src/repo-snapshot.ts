@@ -13,7 +13,7 @@ import {
   type WorktreeGitState,
 } from "./next-step.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import { findPullRequest, type Forge, forgeOf, type PullRequest } from "./pull-request.ts";
+import { findPullRequestCached, type Forge, forgeOf, type PullRequest } from "./pull-request.ts";
 import { readSessionIndex, sessionsOf } from "./session-index.ts";
 import type { Ticket } from "./ticket.ts";
 import { readTrackerKind, TRACKER_DOC } from "./tracker.ts";
@@ -104,7 +104,7 @@ async function withPullRequests(
     let found: PullRequest[] = [];
     try {
       for (const branch of state.branches) {
-        const pr = await findPullRequest(runner, mainCheckout, forge, branch);
+        const pr = await findPullRequestCached(runner, mainCheckout, forge, branch);
         if (pr !== null && pr.state !== "closed") found = [...found, pr];
       }
     } catch (error) {

@@ -5,9 +5,11 @@ import {
   focusTab,
   openTab,
   parseTabs,
+  parseTicketKey,
   replaceTab,
   savedTabs,
   tabKey,
+  ticketKey,
   type ItemRef,
 } from "../src/shared/tabs.ts";
 
@@ -165,5 +167,12 @@ describe("file and diff tabs", () => {
 
     expect(savedTabs(state, () => null)).toEqual({ open: [ticket("01")], active: tabKey(ticket("01")) });
     expect(parseTabs({ open: [file, diff], active: tabKey(file) })).toEqual(EMPTY_TABS);
+  });
+});
+
+describe("parseTicketKey", () => {
+  it("reads back what ticketKey wrote, and refuses anything else", () => {
+    expect(parseTicketKey(ticketKey({ map: "shop", id: "02" }))).toEqual({ map: "shop", id: "02" });
+    for (const bad of ["", "shop", "shop/", "/02", "a/b/c"]) expect(parseTicketKey(bad)).toBeNull();
   });
 });

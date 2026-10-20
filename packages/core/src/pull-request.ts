@@ -75,6 +75,35 @@ export async function findPullRequest(
     : { number: found.iid, state: GITLAB_STATE[found.state] ?? "open", url: found.web_url };
 }
 
+/** How long a lookup stands: the panes ask on every refresh, and a PR changes on human timescales. */
+const LOOKUP_TTL_MS = 30_000;
+
+const lookupKey = (cwd: string, forge: Forge, branch: string): string => `${cwd}|${forge}|${branch}`;
+
+const lookups = new Map<string, { at: number; request: PullRequest | null }>();
+
+/**
+ * `findPullRequest`, remembered per branch for a short while so a polling pane does not call the forge every few
+ * seconds. A failure is never remembered. `now` is the clock, injectable for tests.
+ */
+export async function findPullRequestCached(
+  runner: ProcessRunner,
+  cwd: string,
+  forge: Forge,
+  branch: string,
+  now: () => number = Date.now,
+): Promise<PullRequest | null> {
+  const key = lookupKey(cwd, forge, branch);
+  const hit = lookups.get(key);
+  if (hit !== undefined && now() - hit.at < LOOKUP_TTL_MS) return hit.request;
+  const request = await findPullRequest(runner, cwd, forge, branch);
+  lookups.set(key, { at: now(), request });
+  return request;
+}
+
+/** Drops every remembered lookup, after an action that changes what the forge would say. */
+export const forgetPullRequests = (): void => lookups.clear();
+
 /** The dry-run blockers that stop a PR or MR: the main checkout's state does not count, since nothing merges there. */
 export const pullRequestBlockers = (check: MergeCheck): MergeBlocker[] =>
   check.blockers.filter((b) => b.kind !== "dirty-main" && b.kind !== "main-off-default");
@@ -116,6 +145,7 @@ export async function openPullRequest(
       "--yes",
     ]);
   }
+  forgetPullRequests();
   const created = await findPullRequest(runner, cwd, forge, branch);
   if (created === null) {
     throw new DrylandError(
@@ -123,5 +153,6 @@ export async function openPullRequest(
       `Check the ${forge === "github" ? "GitHub" : "GitLab"} page of the repo.`,
     );
   }
+  lookups.set(lookupKey(cwd, forge, branch), { at: Date.now(), request: created });
   return created;
 }

@@ -7,6 +7,8 @@ import {
   createWorktree,
   DrylandError,
   findPullRequest,
+  findPullRequestCached,
+  forgetPullRequests,
   forgeOf,
   nodeProcessRunner,
   openPullRequest,
@@ -112,6 +114,41 @@ describe("findPullRequest", () => {
     const error = await findPullRequest(loggedOut.runner, "/repo", "github", "b").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(DrylandError);
     expect((error as DrylandError).nextAction).toMatch(/gh auth login/);
+  });
+});
+
+describe("findPullRequestCached", () => {
+  const some = () => ok(JSON.stringify([{ number: 1, state: "OPEN", url: "u" }]));
+
+  it("asks the forge once per branch within the window, and again after it", async () => {
+    forgetPullRequests();
+    const { runner, calls } = fakeRunner(some);
+    let clock = 1_000;
+    const now = () => clock;
+    await findPullRequestCached(runner, "/cache-repo", "github", "b", now);
+    clock += 10_000;
+    await findPullRequestCached(runner, "/cache-repo", "github", "b", now);
+    expect(calls).toHaveLength(1);
+    await findPullRequestCached(runner, "/cache-repo", "github", "other", now);
+    expect(calls).toHaveLength(2);
+    clock += 60_000;
+    await findPullRequestCached(runner, "/cache-repo", "github", "b", now);
+    expect(calls).toHaveLength(3);
+  });
+
+  it("does not remember a failure, and forgets everything on request", async () => {
+    forgetPullRequests();
+    const broken = fakeRunner(() => fail());
+    await findPullRequestCached(broken.runner, "/cache-repo", "github", "b").catch(() => undefined);
+    const first = broken.calls.length;
+    await findPullRequestCached(broken.runner, "/cache-repo", "github", "b").catch(() => undefined);
+    expect(broken.calls.length).toBeGreaterThan(first);
+
+    const { runner, calls } = fakeRunner(some);
+    await findPullRequestCached(runner, "/cache-repo", "github", "b");
+    forgetPullRequests();
+    await findPullRequestCached(runner, "/cache-repo", "github", "b");
+    expect(calls).toHaveLength(2);
   });
 });
 

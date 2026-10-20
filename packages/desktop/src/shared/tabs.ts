@@ -52,6 +52,12 @@ export function tabKey(ref: ItemRef): string {
 /** A ticket's `map/id`, as the CLI and the tracker write it. */
 export const ticketKey = (ref: { map: string; id: string }): string => `${ref.map}/${ref.id}`;
 
+/** The ticket a `map/id` key names; `null` when it is not one. The inverse of `ticketKey`. */
+export function parseTicketKey(key: string): { map: string; id: string } | null {
+  const [map, id, ...rest] = key.split("/");
+  return map === undefined || map === "" || id === undefined || id === "" || rest.length > 0 ? null : { map, id };
+}
+
 /** Opens `ref` in a new tab, or focuses its tab when it is already open. */
 export function openTab(state: TabsState, ref: ItemRef): TabsState {
   const key = tabKey(ref);
