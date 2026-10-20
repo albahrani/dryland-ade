@@ -184,6 +184,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Report half-applied GitHub block and triage writes](issues/100-report-half-applied-github-block-and-triage-writes.md): GitHub block and triage errors now name what was already applied and the next action.
 
+- [Report half-applied GitLab block writes](issues/107-report-half-applied-gitlab-block-writes.md): GitLab native-link block writes name what was applied and the next action, sharing partlyApplied with GitHub.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
