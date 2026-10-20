@@ -1,6 +1,8 @@
 # Test the tracker widget actions and stop loading the whole project for them
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T21:06:56.825Z","was":""}} -->
 Blocked by: 048
 
 ## Question
