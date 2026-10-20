@@ -18,6 +18,7 @@ export * from "./map.ts";
 export * from "./next-step.ts";
 export * from "./process-runner.ts";
 export * from "./project-state.ts";
+export * from "./pull-request.ts";
 export * from "./repo-snapshot.ts";
 export * from "./session-index.ts";
 export * from "./session-reconcile.ts";

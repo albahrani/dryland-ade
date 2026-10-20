@@ -769,6 +769,10 @@ export function App() {
               revision={explorerRevision}
               onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
               onShowWorktree={(path) => setPinned({ tab: tabs.active, path })}
+              onStartPr={(ticket, agentId) => {
+                const [map = "", id = ""] = ticket.split("/");
+                return startWork({ kind: "ticket", ticket: { map, id } }, agentId, "pr");
+              }}
             />
           </>
         )}

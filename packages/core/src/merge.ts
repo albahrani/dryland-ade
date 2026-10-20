@@ -96,7 +96,7 @@ export async function checkMerge(runner: ProcessRunner, cwd: string, branch: str
   }
 
   if (entry.link.ticket !== null) {
-    const ticket = findTicket(await readTickets(mainCheckout), parseTicketReference(entry.link.ticket));
+    const ticket = findTicket(await readTickets(mainCheckout, runner), parseTicketReference(entry.link.ticket));
     if (ticket.state !== "resolved") hints.push(`ticket ${entry.link.ticket} is not resolved (it is ${ticket.state})`);
   }
   return { branch, base, ahead, blockers, hints };

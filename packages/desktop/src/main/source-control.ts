@@ -3,8 +3,14 @@ import {
   defaultBranch,
   describeBlocker,
   DrylandError,
+  findPullRequest,
+  forgeOf,
   mergeWorktree,
+  openPullRequest,
   pruneWorktree,
+  pullRequestBlockers,
+  readTrackerKind,
+  requestName,
   type MergeStrategy,
   type ProcessRunner,
   type WorktreeEntry,
@@ -18,6 +24,8 @@ import type {
   GraphCommit,
   MergeActionResult,
   MergeCheckView,
+  PullRequestActionResult,
+  PullRequestSection,
   SessionLinks,
   SourceControlStatus,
   UnlinkedBranch,
@@ -161,6 +169,9 @@ export function createSourceControl(
     return known.branch;
   }
 
+  /** The forge of the project's tracker; `null` for local markdown, which has no PR or MR. */
+  const forge = async () => forgeOf(await readTrackerKind(projectPath));
+
   /** Runs a core action, turning its refusal into a message for the pane. */
   async function guarded<T>(
     action: () => Promise<T>,
@@ -215,5 +226,55 @@ export function createSourceControl(
     return { ok: true };
   }
 
-  return { status, stage, unstage, commit, graph, unlinked, mergeCheck, merge, prune, handConflictsToAgent };
+  /** The PR/MR section for the worktree at `root`; `null` on a project with no forge. */
+  async function pullRequest(root: string): Promise<PullRequestSection | null> {
+    const kind = await forge();
+    if (kind === null) return null;
+    const branch = await branchOf(root);
+    const section: PullRequestSection = {
+      forge: kind,
+      name: requestName(kind),
+      request: null,
+      blockerMessages: [],
+      error: null,
+    };
+    try {
+      section.request = await findPullRequest(runner, projectPath, kind, branch);
+      if (section.request === null) {
+        const check = await checkMerge(runner, projectPath, branch);
+        section.blockerMessages = pullRequestBlockers(check).map((b) => describeBlocker(b, check.base));
+      }
+    } catch (error) {
+      if (!(error instanceof DrylandError)) throw error;
+      section.error = `${error.message} ${error.nextAction}`;
+    }
+    return section;
+  }
+
+  async function openRequest(root: string): Promise<PullRequestActionResult> {
+    const kind = await forge();
+    if (kind === null) return { ok: false, message: "This project's tracker has no forge to open a PR or MR on." };
+    const branch = await branchOf(root);
+    try {
+      return { ok: true, request: await openPullRequest(runner, projectPath, kind, branch) };
+    } catch (error) {
+      if (error instanceof DrylandError) return { ok: false, message: `${error.message} ${error.nextAction}` };
+      throw error;
+    }
+  }
+
+  return {
+    pullRequest,
+    openRequest,
+    status,
+    stage,
+    unstage,
+    commit,
+    graph,
+    unlinked,
+    mergeCheck,
+    merge,
+    prune,
+    handConflictsToAgent,
+  };
 }

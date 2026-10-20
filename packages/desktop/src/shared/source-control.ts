@@ -1,4 +1,4 @@
-import type { MergeCheck, MergeResult, MergeStrategy } from "@dryland/core";
+import type { Forge, MergeCheck, MergeResult, MergeStrategy, PullRequest } from "@dryland/core";
 import type { ChangedFile } from "./explorer.ts";
 
 /** What a worktree's index and working tree hold, against HEAD. */
@@ -38,6 +38,20 @@ export type CommitResult = { ok: true; hash: string } | { ok: false; message: st
 export interface MergeCheckView extends MergeCheck {
   blockerMessages: string[];
 }
+
+/** The PR/MR section of a GitHub or GitLab project's worktree: the request if there is one, else what stops opening it. */
+export interface PullRequestSection {
+  forge: Forge;
+  /** "PR" on GitHub, "MR" on GitLab. */
+  name: "PR" | "MR";
+  request: PullRequest | null;
+  /** Dry-run blockers, worded; empty when the request can be opened. */
+  blockerMessages: string[];
+  /** Why the forge could not be asked (`gh`/`glab` missing or logged out) with the next action; `null` otherwise. */
+  error: string | null;
+}
+
+export type PullRequestActionResult = { ok: true; request: PullRequest } | { ok: false; message: string };
 
 /** What a merge, prune or hand-off did; `message` says why not when it did not. */
 export type ActionResult = { ok: true } | { ok: false; message: string };

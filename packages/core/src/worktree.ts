@@ -254,7 +254,7 @@ async function snapshotWorktrees(
 ): Promise<WorktreeSnapshot> {
   const [raw, tickets, defaultName] = await Promise.all([
     gitWorktrees(runner, mainCheckout),
-    known ?? readTickets(mainCheckout),
+    known ?? readTickets(mainCheckout, runner),
     defaultBranch(runner, mainCheckout),
   ]);
   const base = defaultName ?? "HEAD";

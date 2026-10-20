@@ -20,6 +20,8 @@ import type {
   CommitResult,
   MergeActionResult,
   MergeCheckView,
+  PullRequestActionResult,
+  PullRequestSection,
   SourceControlStatus,
   UnlinkedBranch,
 } from "./source-control.ts";
@@ -215,6 +217,10 @@ export interface DrylandApi {
   sourceControlPrune(root: string): Promise<ActionResult>;
   /** Pre-types a prompt about the branch's merge conflicts into the worktree's live session; changes no file. */
   sourceControlHandToAgent(root: string): Promise<ActionResult>;
+  /** The PR/MR section of the worktree: the existing request or what stops opening one; `null` without a forge. */
+  sourceControlPullRequest(root: string): Promise<PullRequestSection | null>;
+  /** Pushes the branch and opens a PR/MR through `gh`/`glab` after the dry-run checks. */
+  sourceControlOpenPullRequest(root: string): Promise<PullRequestActionResult>;
   /** Called after files change in the watched directories. Returns an unsubscribe function. */
   onExplorerChanged(callback: () => void): () => void;
   /** Starts a shell in the open project's main checkout; resolves with its id, or `null` without a project. */

@@ -665,6 +665,14 @@ ipcMain.handle("source-control:merge", async (_event, root: unknown, strategy: u
   if (result.ok) void refresh();
   return result;
 });
+ipcMain.handle("source-control:pull-request", (_event, root: unknown) =>
+  sourceControlFor().pullRequest(text(root, "root")),
+);
+ipcMain.handle("source-control:open-pull-request", async (_event, root: unknown) => {
+  const result = await sourceControlFor().openRequest(text(root, "root"));
+  if (result.ok) void refresh();
+  return result;
+});
 ipcMain.handle("source-control:prune", (_event, root: unknown) => sourceControlFor().prune(text(root, "root")));
 ipcMain.handle("source-control:hand-to-agent", (_event, root: unknown) =>
   sourceControlFor().handConflictsToAgent(text(root, "root")),
