@@ -1,7 +1,8 @@
 # Local merge and prune
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T11:12:18.212Z","was":"ready-for-agent"}} -->
 Blocked by: 26, 39, 50
 
 Spec: [spec](../spec.md), user stories 74, 75, 77, 78. "CLI surface". Layout detail: `prototype/views-and-ux/` (Merge/PR).
