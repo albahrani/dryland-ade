@@ -8,8 +8,9 @@ import { findTicket, parseTicketReference, readTickets, type TicketWriteResult }
 import {
   afterCreate as afterCreateOn,
   assertBlockChange,
-  assertCanClaim,
-  assertCanRelease,
+  decideClaim,
+  assertClaimed,
+  assertClaimedBy,
   assertCanResolve,
   assertCanTriage,
   nameOf,
@@ -139,7 +140,7 @@ export async function claimGithubTicket(
   const ticket = await ticketNamed(runner, cwd, reference);
   const issue = await fetchIssue(runner, cwd, ticket.id);
   const login = await me(runner, cwd);
-  const verdict = assertCanClaim(ticket, issue.state.toLowerCase() === "closed", issue.assignees?.[0]?.login, login);
+  const verdict = decideClaim(ticket, issue.state.toLowerCase() === "closed", issue.assignees?.[0]?.login, login);
   if (verdict === "held") {
     return { ticket: { ...ticket, state: "claimed", claimant: login }, warnings: [], alreadyHeld: true };
   }
@@ -172,8 +173,9 @@ export async function releaseGithubTicket(
   reference: string,
 ): Promise<TicketWriteResult> {
   const ticket = await ticketNamed(runner, cwd, reference);
+  assertClaimed(ticket);
   const login = await me(runner, cwd);
-  assertCanRelease(ticket, login, "GitHub");
+  assertClaimedBy(ticket, login, "GitHub");
   await ghRun(runner, cwd, ["api", "-X", "DELETE", `${issuePath(ticket.id)}/assignees`, ...text("assignees[]", login)]);
   return { ticket: { ...ticket, state: "open", claimant: null }, warnings: [] };
 }

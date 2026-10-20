@@ -22,8 +22,9 @@ import { findTicket, parseTicketReference, readTickets, type TicketWriteResult }
 import {
   afterCreate as afterCreateOn,
   assertBlockChange,
-  assertCanClaim,
-  assertCanRelease,
+  decideClaim,
+  assertClaimed,
+  assertClaimedBy,
   assertCanResolve,
   assertCanTriage,
   nameOf,
@@ -161,7 +162,7 @@ export async function claimGitlabTicket(
   const ticket = await ticketNamed(runner, cwd, reference);
   const issue = await fetchIssue(runner, cwd, ticket.id);
   const user = await me(runner, cwd);
-  const verdict = assertCanClaim(ticket, issue.state === "closed", issue.assignees?.[0]?.username, user.username);
+  const verdict = decideClaim(ticket, issue.state === "closed", issue.assignees?.[0]?.username, user.username);
   if (verdict === "held") {
     return { ticket: { ...ticket, state: "claimed", claimant: user.username }, warnings: [], alreadyHeld: true };
   }
@@ -176,8 +177,9 @@ export async function releaseGitlabTicket(
   reference: string,
 ): Promise<TicketWriteResult> {
   const ticket = await ticketNamed(runner, cwd, reference);
+  assertClaimed(ticket);
   const user = await me(runner, cwd);
-  assertCanRelease(ticket, user.username, "GitLab");
+  assertClaimedBy(ticket, user.username, "GitLab");
   await put(runner, cwd, ticket.id, field("assignee_ids[]", "0"));
   return { ticket: { ...ticket, state: "open", claimant: null }, warnings: [] };
 }

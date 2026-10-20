@@ -2,8 +2,10 @@ import { DrylandError } from "./errors.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 
 /** The CLI a remote tracker is driven through, as its error messages name it. */
+export type Tracker = "GitHub" | "GitLab";
+
 export interface TrackerCli {
-  tracker: "GitHub" | "GitLab";
+  tracker: Tracker;
   command: "gh" | "glab";
   installUrl: string;
 }

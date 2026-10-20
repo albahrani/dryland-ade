@@ -1,3 +1,4 @@
+import type { Tracker } from "./tracker-cli.ts";
 import { DrylandError } from "./errors.ts";
 import { TRIAGE_ROLES, type Ticket, type TicketType, type TriageRole } from "./ticket.ts";
 import { findTicket, parseTicketReference, readTickets } from "./tickets.ts";
@@ -14,6 +15,7 @@ export interface TrackerCreateInput {
   blockedBy?: string[] | undefined;
 }
 
+
 export const nameOf = (ticket: Ticket) => `${ticket.map}/${ticket.id}`;
 
 export async function ticketNamed(runner: ProcessRunner, mainCheckout: string, reference: string): Promise<Ticket> {
@@ -22,7 +24,7 @@ export async function ticketNamed(runner: ProcessRunner, mainCheckout: string, r
 
 /** Runs the steps after an issue was created; a failure says which issue exists, so nothing is claimed as whole. */
 export async function afterCreate<T>(
-  tracker: "GitHub" | "GitLab",
+  tracker: Tracker,
   number: number,
   step: string,
   run: () => Promise<T>,
@@ -39,7 +41,7 @@ export async function afterCreate<T>(
 }
 
 /** Decides a claim from the issue's state and first assignee: `held` when the user has it already, else `free`. */
-export function assertCanClaim(ticket: Ticket, closed: boolean, holder: string | undefined, login: string): "free" | "held" {
+export function decideClaim(ticket: Ticket, closed: boolean, holder: string | undefined, login: string): "free" | "held" {
   if (closed) {
     throw new DrylandError(
       `Ticket ${nameOf(ticket)} is already resolved.`,
@@ -56,14 +58,17 @@ export function assertCanClaim(ticket: Ticket, closed: boolean, holder: string |
   return "free";
 }
 
+/** Only a claimed ticket is released; checked before the login is looked up. */
+export function assertClaimed(ticket: Ticket): void {
+  if (ticket.state === "claimed") return;
+  throw new DrylandError(
+    `Ticket ${nameOf(ticket)} is not claimed, so there is nothing to release.`,
+    `Run \`dryland ticket show ${nameOf(ticket)}\` to see its state.`,
+  );
+}
+
 /** Only the user's own claim is released. */
-export function assertCanRelease(ticket: Ticket, login: string, tracker: "GitHub" | "GitLab"): void {
-  if (ticket.state !== "claimed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is not claimed, so there is nothing to release.`,
-      `Run \`dryland ticket show ${nameOf(ticket)}\` to see its state.`,
-    );
-  }
+export function assertClaimedBy(ticket: Ticket, login: string, tracker: Tracker): void {
   if (ticket.claimant !== login) {
     throw new DrylandError(
       `Ticket ${nameOf(ticket)} is claimed by ${ticket.claimant}, not by you (${login}), so it is not released.`,
