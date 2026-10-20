@@ -14,6 +14,7 @@ import {
   assertCanResolve,
   assertCanTriage,
   nameOf,
+  partlyApplied,
   resolveTriageRole,
   type TrackerCreateInput,
   ticketNamed,
@@ -49,19 +50,6 @@ const me = (runner: ProcessRunner, cwd: string) => ghRun(runner, cwd, ["api", "u
 
 const afterCreate = <T>(number: number, step: string, run: () => Promise<T>) =>
   afterCreateOn("GitHub", number, step, run);
-
-/** Runs a write after earlier ones were applied; a failure names what is already in place and how to finish. */
-async function partlyApplied<T>(applied: string[], step: string, finish: string, run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    if (!(error instanceof DrylandError) || applied.length === 0) throw error;
-    throw new DrylandError(
-      `${step} failed: ${error.message} Already applied: ${applied.join(", ")}.`,
-      `${finish} ${error.nextAction}`,
-    );
-  }
-}
 
 /** Fetches the issue of a map, which must carry the map label. */
 async function mapIssue(runner: ProcessRunner, cwd: string, map: string): Promise<GithubIssue> {

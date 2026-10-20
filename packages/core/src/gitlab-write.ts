@@ -28,6 +28,7 @@ import {
   assertCanResolve,
   assertCanTriage,
   nameOf,
+  partlyApplied,
   resolveTriageRole,
   type TrackerCreateInput,
   ticketNamed,
@@ -241,19 +242,31 @@ export async function blockGitlabTicket(
 
   const blockers = [...current.filter((id) => !remove.includes(Number(id))), ...add.map(String)];
   if (native) {
-    for (const number of add) await linkBlocker(runner, cwd, Number(ticket.id), number);
-    if (remove.length > 0) {
-      const links = await glabList<GitlabIssueLink>(runner, cwd, linksPath(ticket.id));
-      for (const number of remove) {
-        const link = links.find((l) => l.iid === number && l.link_type === "is_blocked_by");
-        if (link?.issue_link_id === undefined) {
-          throw new DrylandError(
-            `GitLab has no "is blocked by" link from ${name} to #${number} to remove.`,
-            `Run \`dryland ticket show ${name}\` to see its blockers.`,
-          );
-        }
-        await glabRun(runner, cwd, ["api", "-X", "DELETE", `${linksPath(ticket.id)}/${link.issue_link_id}`]);
+    // Find every link to remove before the first write, so only a write can leave the change half-applied.
+    const links = remove.length > 0 ? await glabList<GitlabIssueLink>(runner, cwd, linksPath(ticket.id)) : [];
+    const removals = remove.map((number) => {
+      const link = links.find((l) => l.iid === number && l.link_type === "is_blocked_by");
+      if (link?.issue_link_id === undefined) {
+        throw new DrylandError(
+          `GitLab has no "is blocked by" link from ${name} to #${number} to remove.`,
+          `Run \`dryland ticket show ${name}\` to see its blockers.`,
+        );
       }
+      return { number, linkId: link.issue_link_id };
+    });
+    const applied: string[] = [];
+    const retry = `Finish with \`dryland ticket block ${name}\`.`;
+    for (const number of add) {
+      await partlyApplied(applied, `blocking it by #${number}`, retry, () =>
+        linkBlocker(runner, cwd, Number(ticket.id), number),
+      );
+      applied.push(`blocked by #${number}`);
+    }
+    for (const { number, linkId } of removals) {
+      await partlyApplied(applied, `removing the block by #${number}`, retry, () =>
+        glabRun(runner, cwd, ["api", "-X", "DELETE", `${linksPath(ticket.id)}/${linkId}`]),
+      );
+      applied.push(`no longer blocked by #${number}`);
     }
   } else {
     await put(runner, cwd, ticket.id, field("description", withBodyBlockers(issue.description ?? "", blockers)));

@@ -66,6 +66,8 @@ interface World {
   notes?: Record<number, { body: string; system?: boolean }[]>;
   missing?: boolean;
   loggedOut?: boolean;
+  /** Calls that fail with an HTTP 500, as `glab api` argument lines. */
+  failing?: string[];
 }
 
 const json = (value: unknown): ProcessResult => ({ stdout: JSON.stringify(value), stderr: "", exitCode: 0 });
@@ -95,6 +97,7 @@ function fakeGlab(world: World, calls: string[] = []): ProcessRunner {
       if (line === "--version") return { stdout: "glab 1.50", stderr: "", exitCode: 0 };
       if (line === "auth status") return world.loggedOut ? fail("not logged in") : { stdout: "ok", stderr: "", exitCode: 0 };
       if (world.loggedOut) return fail("401 Unauthorized");
+      if (world.failing?.includes(line)) return fail("HTTP 500");
 
       const method = args[1] === "-X" ? args[2] : "GET";
       const path = (method === "GET" ? args[1] : args[3]) ?? "";
@@ -381,6 +384,41 @@ describe("GitLab backend write", () => {
       "api -X POST projects/:id/issues/3/links -f target_project_id=7 -f target_issue_iid=4 -f link_type=is_blocked_by",
       "api -X DELETE projects/:id/issues/3/links/500",
     ]);
+  });
+
+  const link = (iid: number, blocker: number) =>
+    `api -X POST projects/:id/issues/${iid}/links -f target_project_id=7 -f target_issue_iid=${blocker} -f link_type=is_blocked_by`;
+
+  it("names the links already added when a later link call fails", async () => {
+    const world = { ...shop(), premium: true, failing: [link(3, 5)] };
+
+    const error = await blockTicket(fakeGlab(world), repo(), "1/3", { add: ["4", "5"] }).catch((e: unknown) => e);
+
+    expect(error).toMatchObject({
+      name: "DrylandError",
+      message: expect.stringContaining("blocked by #4"),
+      nextAction: expect.stringContaining("dryland ticket block 1/3"),
+    });
+    expect((error as Error).message).toContain("blocking it by #5 failed");
+  });
+
+  it("reports nothing as applied when the first link call fails", async () => {
+    const world = { ...shop(), premium: true, failing: [link(3, 4)] };
+
+    const error = await blockTicket(fakeGlab(world), repo(), "1/3", { add: ["4"] }).catch((e: unknown) => e);
+
+    expect((error as Error).message).not.toContain("Already applied");
+  });
+
+  it("names the links already changed when removing a link fails", async () => {
+    const world = { ...shop(), premium: true, links: { 3: [2] }, failing: ["api -X DELETE projects/:id/issues/3/links/500"] };
+
+    const error = await blockTicket(fakeGlab(world), repo(), "1/3", { add: ["4"], remove: ["2"] }).catch(
+      (e: unknown) => e,
+    );
+
+    expect((error as Error).message).toContain("removing the block by #2 failed");
+    expect((error as Error).message).toContain("blocked by #4");
   });
 
   it("reports a failed glab call with the next action and claims no success", async () => {

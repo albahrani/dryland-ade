@@ -40,6 +40,24 @@ export async function afterCreate<T>(
   }
 }
 
+/** Runs a write after earlier ones were applied; a failure names what is already in place and how to finish. */
+export async function partlyApplied<T>(
+  applied: string[],
+  step: string,
+  finish: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (!(error instanceof DrylandError) || applied.length === 0) throw error;
+    throw new DrylandError(
+      `${step} failed: ${error.message} Already applied: ${applied.join(", ")}.`,
+      `${finish} ${error.nextAction}`,
+    );
+  }
+}
+
 /** Decides a claim from the issue's state and first assignee: `held` when the user has it already, else `free`. */
 export function decideClaim(ticket: Ticket, closed: boolean, holder: string | undefined, login: string): "free" | "held" {
   if (closed) {
