@@ -186,6 +186,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Report half-applied GitLab block writes](issues/107-report-half-applied-gitlab-block-writes.md): GitLab native-link block writes name what was applied and the next action, sharing partlyApplied with GitHub.
 
+- [Test the tracker widget actions](issues/105-test-the-tracker-widget-actions-and-stop-loading-t.md): The widget actions live in a tested module that looks up the checkout with findMainCheckout, and readTrackerInfo reads the doc once.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
