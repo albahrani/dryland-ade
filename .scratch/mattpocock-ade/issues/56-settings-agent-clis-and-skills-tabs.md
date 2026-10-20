@@ -1,7 +1,8 @@
 # Settings: Agent CLIs and Skills tabs
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T21:11:23.134Z","was":"ready-for-agent"}} -->
 Blocked by: 43, 44, 54, 55
 
 Spec: [spec](../spec.md), user stories 43, 83, 85, 86. "UI". Layout detail: `prototype/views-and-ux/` (Settings).
