@@ -1,6 +1,8 @@
 # Report half-applied GitHub block and triage writes
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T20:51:56.253Z","was":""}} -->
 
 ## Question
 
