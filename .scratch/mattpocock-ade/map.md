@@ -182,6 +182,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Share the GitHub and GitLab write helpers](issues/99-route-tracker-writes-through-one-backend-seam.md): The code the two remote backends copied now lives in tracker-rules.ts and tracker-cli.ts.
 
+- [Report half-applied GitHub block and triage writes](issues/100-report-half-applied-github-block-and-triage-writes.md): GitHub block and triage errors now name what was already applied and the next action.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
