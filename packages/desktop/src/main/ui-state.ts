@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { DEFAULT_SESSION_RETENTION_DAYS } from "@dryland/core";
+import { type CompatConfig, DEFAULT_SESSION_RETENTION_DAYS } from "@dryland/core";
 import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
 import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
 import { isRetentionDays } from "../shared/settings-change.ts";
@@ -35,6 +35,8 @@ export interface UiState {
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
   resumeOnStart: boolean;
+  /** What the user decided about each project's modified skill setup, by project path. */
+  compat: Record<string, CompatConfig>;
   /** Days a session stays in the session index after it was last seen. */
   sessionRetentionDays: number;
 }
@@ -53,6 +55,7 @@ const DEFAULTS: UiState = {
   dontAsk: ASK_ALWAYS,
   stopConfirmation: DEFAULT_STOP_CONFIRMATION,
   resumeOnStart: false,
+  compat: {},
   sessionRetentionDays: DEFAULT_SESSION_RETENTION_DAYS,
 };
 
@@ -75,6 +78,20 @@ function parseOverrides(raw: unknown): Record<string, boolean> {
   if (raw === null || typeof raw !== "object") return {};
   return Object.fromEntries(
     Object.entries(raw).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+  );
+}
+
+function parseCompat(raw: unknown): Record<string, CompatConfig> {
+  if (raw === null || typeof raw !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(raw).map(([project, config]) => {
+      const fields = config !== null && typeof config === "object" ? (config as Record<string, unknown>) : {};
+      const overrides = Array.isArray(fields.overrides)
+        ? fields.overrides.filter((id): id is string => typeof id === "string")
+        : [];
+      const accepted = typeof fields.acceptedDeviations === "string" ? fields.acceptedDeviations : null;
+      return [project, { acceptedDeviations: accepted, overrides }];
+    }),
   );
 }
 
@@ -106,6 +123,7 @@ function parse(text: string): UiState {
     dontAsk: parseDontAsk(raw.dontAsk),
     stopConfirmation: isStopConfirmation(raw.stopConfirmation) ? raw.stopConfirmation : DEFAULTS.stopConfirmation,
     resumeOnStart: typeof raw.resumeOnStart === "boolean" ? raw.resumeOnStart : DEFAULTS.resumeOnStart,
+    compat: parseCompat(raw.compat),
     sessionRetentionDays: isRetentionDays(raw.sessionRetentionDays)
       ? raw.sessionRetentionDays
       : DEFAULTS.sessionRetentionDays,

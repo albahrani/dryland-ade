@@ -25,6 +25,7 @@ import { stateLabel } from "../../shared/session-meta.ts";
 import { AllProjectsDialog, ProjectWidget, TrackerWidget } from "./ProjectsUi.tsx";
 import { projectSessions } from "../../shared/projects.ts";
 import { SessionsView } from "./SessionsView.tsx";
+import { CompatDialog } from "./CompatDialog.tsx";
 import { SkillSetupPanel } from "./SkillSetupPanel.tsx";
 import { sessionTitle } from "../../shared/work-target.ts";
 import {
@@ -234,6 +235,8 @@ export function App() {
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
   const [dialog, setDialog] = useState<MenuCommand | "all-projects" | null>(null);
+  // The setup (by project and fingerprint) whose Compatibility dialog was skipped; skipping asks again once it changes.
+  const [skippedSetup, setSkippedSetup] = useState<string | null>(null);
   // The tabs each project had when the user left it, terminals included, so coming back finds them as they were.
   const projectTabs = useRef(new Map<string, TabsState>());
   // A session waiting for the user to confirm it should stop.
@@ -393,6 +396,7 @@ export function App() {
     );
   };
   /** Starts work; the first start with a CLI that keeps its hooks in the user's own config asks before it writes there. */
+  const setupKey = project?.tree.ok ? `${project.path} ${project.tree.skillSetup.fingerprint}` : null;
   const startWork: StartWorkHandler = async (target, agentId, skill) => {
     if (!settings.dontAsk["user-config"]) {
       const text = await window.dryland.pendingUserConfigWrite(agentId);
@@ -618,7 +622,9 @@ export function App() {
       </nav>
       <aside className="sidebar">
         {!legendDismissed && <Legend onDismiss={dismissLegend} />}
-        {project?.tree.ok && <SkillSetupPanel report={project.tree.skillSetup} />}
+        {project?.tree.ok && (
+          <SkillSetupPanel report={project.tree.skillSetup} compatibility={project.tree.compatibility} />
+        )}
         <Sidebar
           view={activity}
           project={project}
@@ -806,6 +812,17 @@ export function App() {
             setDialog(null);
             await startWork({ kind: "new-map" }, agentId, skill);
           }}
+        />
+      )}
+      {project?.tree.ok && project.tree.compatibility.needsDialog && skippedSetup !== setupKey && (
+        <CompatDialog
+          report={project.tree.skillSetup}
+          onRunCheck={async (agentId, skill) => {
+            setSkippedSetup(setupKey);
+            await startWork({ kind: "compat-check" }, agentId, skill);
+          }}
+          onSkip={() => setSkippedSetup(setupKey)}
+          onAccept={() => void window.dryland.acceptDeviations()}
         />
       )}
       {dialog === "new-scratch" && project !== null && (

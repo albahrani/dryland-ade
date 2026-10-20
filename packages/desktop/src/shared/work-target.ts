@@ -4,10 +4,15 @@ import { ticketKey } from "./tabs.ts";
 
 /**
  * What a session starts on: a ticket, a map to continue, a map the `/wayfinder` skill has yet to chart, or nothing
- * (exploratory work in a scratch worktree of its own).
+ * (exploratory work in a scratch worktree of its own), or the Compatibility check, which runs in one too.
  */
 export type WorkTarget =
-  { kind: "ticket"; ticket: TicketRef } | { kind: "map"; map: string } | { kind: "new-map" } | { kind: "scratch" };
+  | { kind: "ticket"; ticket: TicketRef }
+  | { kind: "map"; map: string }
+  | { kind: "new-map" }
+  | { kind: "scratch" }
+  /** A scratch session pre-typed to run the compatibility prompt (Run check). */
+  | { kind: "compat-check" };
 
 /** The effort a ticketless session's worktree is named after, as `scratch/scratch-session`. */
 export const SCRATCH_EFFORT = "scratch";
@@ -34,6 +39,7 @@ export function isWorkTarget(value: unknown): value is WorkTarget {
       return typeof value.map === "string" && MAP_NAME.test(value.map);
     case "new-map":
     case "scratch":
+    case "compat-check":
       return true;
     default:
       return false;
@@ -56,6 +62,7 @@ export function chosenSkillCommand(skill: string, target: WorkTarget): string {
       return `/${skill} ${target.map}`;
     case "new-map":
     case "scratch":
+    case "compat-check":
       return `/${skill} `;
   }
 }

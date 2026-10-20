@@ -3,7 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner, readSessionIndex } from "@dryland/core";
+import {
+  CLAUDE_CODE,
+  COMPAT_RUN_COMMAND,
+  DrylandError,
+  hookSettings,
+  nodeProcessRunner,
+  readSessionIndex,
+} from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
 import { createDrylandCli } from "../src/main/dryland-cli.ts";
 import { createTerminalManager } from "../src/main/terminals.ts";
@@ -404,6 +411,19 @@ describe("starting a session without a ticket", () => {
     await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/grilling "));
     const { index } = await readSessionIndex(nodeProcessRunner, repo);
     expect(index.items["scratch/scratch-session"]?.map((s) => s.sessionId)).toEqual([session.agentSessionId]);
+  });
+});
+
+describe("the Compatibility check session", () => {
+  it("opens a scratch session with the compatibility prompt command typed, not a skill", async () => {
+    const repo = fixtureRepo();
+    const { provider, starter } = setup();
+
+    const { session } = await starter.startWork(repo, { kind: "compat-check" }, "claude-code");
+
+    expect(session).toMatchObject({ ticket: null, map: null, worktree: { branch: "scratch/scratch-session" } });
+    provider.spawned[0]?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe(COMPAT_RUN_COMMAND));
   });
 });
 

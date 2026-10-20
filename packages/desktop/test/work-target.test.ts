@@ -9,6 +9,7 @@ describe("isWorkTarget", () => {
     expect(isWorkTarget({ kind: "map", map: "shop" })).toBe(true);
     expect(isWorkTarget({ kind: "new-map" })).toBe(true);
     expect(isWorkTarget({ kind: "scratch" })).toBe(true);
+    expect(isWorkTarget({ kind: "compat-check" })).toBe(true);
     expect(isWorkTarget({ kind: "map", map: "--json" })).toBe(false);
     expect(isWorkTarget({ kind: "ticket", ticket: { map: "shop" } })).toBe(false);
     expect(isWorkTarget({ map: "shop", id: "02" })).toBe(false);

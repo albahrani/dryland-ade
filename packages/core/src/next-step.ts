@@ -85,6 +85,11 @@ export interface SkillSetupSnapshot {
   verdict: Record<string, FeatureVerdict> | null;
   /** Rule ids the user re-enabled although the verdict calls them broken. */
   overrides: string[];
+  /**
+   * The skills installed, by name; `null` when unknown. A modified setup without a valid verdict is only ever
+   * recommended these.
+   */
+  installed?: string[] | null;
 }
 
 /** The artifact a step points at. */
@@ -470,10 +475,43 @@ function isDisabled(snapshot: RepoSnapshot, ruleId: string): boolean {
   return skillSetup.verdict[ruleId] === "broken" && !skillSetup.overrides.includes(ruleId);
 }
 
+/**
+ * Whether a step's skill is missing from a modified setup nobody has a verdict for: Dryland then pre-types only
+ * skills it can see are installed.
+ */
+function recommendsMissingSkill(snapshot: RepoSnapshot, step: NextStep): boolean {
+  const { skillSetup } = snapshot;
+  if (step.command === null || skillSetup === null || skillSetup.verdict !== null) return false;
+  if (skillSetup.setup !== "modified" || skillSetup.installed == null) return false;
+  const skill = step.command.slice(1).split(" ")[0] ?? "";
+  return !skillSetup.installed.includes(skill);
+}
+
 /** The ranked next steps of a repo snapshot, best first. Pure: the same snapshot gives the same list. */
 export function nextSteps(snapshot: RepoSnapshot): NextStep[] {
-  return RULES.flatMap((rule) => rule(snapshot)).filter((step) => !isDisabled(snapshot, step.ruleId));
+  return RULES.flatMap((rule) => rule(snapshot)).filter(
+    (step) => !isDisabled(snapshot, step.ruleId) && !recommendsMissingSkill(snapshot, step),
+  );
 }
+
+/** Every rule id, in priority order: the features a Compatibility verdict speaks about. */
+export const RULE_IDS = [
+  "no-setup-config",
+  "waiting-session",
+  "paused-was-waiting",
+  "stale-claim",
+  "map-frontier",
+  "implement-spec",
+  "implement-ticket",
+  "map-fog-only",
+  "map-cleared",
+  "needs-triage",
+  "spec-without-tickets",
+  "blocking-unknown",
+  "review-before-pr",
+  "open-pr",
+  "retro",
+] as const;
 
 /**
  * The skill command to pre-type when work starts on `ref`: that of the best next step pointing at the ticket.

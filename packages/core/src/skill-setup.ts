@@ -37,6 +37,8 @@ export interface SkillSetupReport {
   deviations: SkillDeviation[];
   /** Installed skills the mirror does not know, sorted. */
   extras: string[];
+  /** Every installed skill, sorted: the skills a command may be pre-typed for. */
+  installed: string[];
   /** Stable for the same setup, different once a skill or a `docs/agents` file changes. A verdict is tied to it. */
   fingerprint: string;
   /**
@@ -167,6 +169,7 @@ export async function readSkillSetup(
     state,
     deviations,
     extras,
+    installed: [...installed.keys()].sort(),
     fingerprint: fingerprint.digest("hex"),
     deviationFingerprint: deviationFingerprint.digest("hex"),
   };

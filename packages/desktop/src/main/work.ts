@@ -5,6 +5,8 @@ import {
   type AgentAdapter,
   blocksInput,
   commandForTicket,
+  COMPAT_RUN_COMMAND,
+  type CompatConfig,
   createWorktree,
   DrylandError,
   envKey,
@@ -14,9 +16,14 @@ import {
   launchArgs,
   installedSkills,
   nextSteps,
+  NO_COMPAT_CONFIG,
   programFor,
+  readCompatibility,
+  readSkillSetup,
+  skillSetupSnapshot,
   type LiveEvent,
   type ProcessRunner,
+  type Ticket,
   readRepoSnapshot,
   readSessionIndex,
   readTickets,
@@ -66,6 +73,8 @@ export interface WorkStarterOptions {
   autoCommit: (projectPath: string) => boolean;
   /** Whether the pre-typed command is submitted in the project: the project override, else the global setting. */
   autoSubmit: (projectPath: string) => boolean;
+  /** What the user decided about the project's modified skill setup; without it nothing is accepted or overridden. */
+  compatConfig?: (projectPath: string) => CompatConfig;
   pretype?: PretypeTiming;
 }
 
@@ -167,8 +176,18 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
     dryland,
     autoCommit,
     autoSubmit,
+    compatConfig = () => NO_COMPAT_CONFIG,
     pretype = PRETYPE_TIMING,
   } = options;
+
+  /** The repo snapshot with the Compatibility verdict, so a recommended command is never one a rule is off for. */
+  async function snapshotWithSetup(projectPath: string, mainCheckout: string, tickets: Ticket[]) {
+    const config = compatConfig(projectPath);
+    const report = await readSkillSetup(mainCheckout);
+    const compatibility = await readCompatibility(mainCheckout, report, config);
+    const setup = skillSetupSnapshot(report, compatibility, config);
+    return readRepoSnapshot(runner, mainCheckout, tickets, undefined, null, setup);
+  }
   const started: SessionInfo[] = [];
   /** The pre-typer of each terminal that has one, so the user's first key can stand it down. */
   const pretypers = new Map<string, Pretyper>();
@@ -265,7 +284,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         command =
           skill !== null
             ? chosenSkillCommand(skill, target)
-            : commandForTicket(nextSteps(await readRepoSnapshot(runner, mainCheckout, tickets)), ticket);
+            : commandForTicket(nextSteps(await snapshotWithSetup(projectPath, mainCheckout, tickets)), ticket);
         // After the command is chosen, which reads the ticket unclaimed, and before the agent starts, so it finds
         // the claim made. Run in the worktree, so its branch holds the claim and the claim outlives the session.
         // Never released or taken over here: a claim someone else holds stays theirs.
@@ -277,7 +296,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       } else if (target.kind === "map") {
         worktree = await worktreeForScratch(runner, mainCheckout, target.map, MAP_WORKTREE_SLUG);
         command = skill !== null ? chosenSkillCommand(skill, target) : `/wayfinder ${target.map}`;
-      } else if (target.kind === "scratch") {
+      } else if (target.kind === "scratch" || target.kind === "compat-check") {
         // Always a new worktree: each ticketless session is its own exploration.
         worktree = await createWorktree(runner, mainCheckout, { map: SCRATCH_EFFORT, slug: SCRATCH_SLUG });
         command = skill !== null ? chosenSkillCommand(skill, target) : null;
@@ -287,7 +306,9 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         command = skill !== null ? chosenSkillCommand(skill, target) : "/wayfinder ";
       }
       await prepareUserConfig(adapter, worktree.path, warnings);
-      const typed = command === null ? null : skillCommand(adapter, command);
+      // The compatibility prompt is a sentence, not a skill, so it is typed as it is.
+      const typed =
+        target.kind === "compat-check" ? COMPAT_RUN_COMMAND : command === null ? null : skillCommand(adapter, command);
       const ticket = target.kind === "ticket" ? { map: target.ticket.map, id: target.ticket.id } : null;
       const map = target.kind === "ticket" ? target.ticket.map : target.kind === "map" ? target.map : null;
       // Dryland picks the CLI's session id and records it before the spawn, so the index knows it before any hook.

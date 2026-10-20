@@ -1384,3 +1384,7 @@ ul {
 .merge-hint {
   color: var(--fg-dim);
 }
+
+.skill-setup li button {
+  margin-left: 4px;
+}

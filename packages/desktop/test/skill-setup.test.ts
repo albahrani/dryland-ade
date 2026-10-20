@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { summarizeSkillSetup } from "../src/shared/skill-setup.ts";
 
-const report = { deviations: [], extras: [], fingerprint: "f", deviationFingerprint: "d" };
+const report = { deviations: [], extras: [], installed: [], fingerprint: "f", deviationFingerprint: "d" };
 
 describe("summarizeSkillSetup", () => {
   it("makes a banner of a repo that is not set up, pointing at /setup-matt-pocock-skills", () => {

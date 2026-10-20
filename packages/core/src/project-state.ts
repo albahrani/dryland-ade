@@ -1,4 +1,11 @@
 import { join } from "node:path";
+import {
+  type Compatibility,
+  type CompatConfig,
+  NO_COMPAT_CONFIG,
+  readCompatibility,
+  skillSetupSnapshot,
+} from "./compat.ts";
 import { readEfforts } from "./efforts.ts";
 import { exists } from "./env-fs.ts";
 import type { RepoSnapshot, SessionSnapshot } from "./next-step.ts";
@@ -15,23 +22,37 @@ export interface ProjectState {
   snapshot: RepoSnapshot;
   /** How the installed skills and `docs/agents` files compare to the default setup. */
   skillSetup: SkillSetupReport;
+  /** Whether the app asks about the deviations, and what the Compatibility verdict says is degraded or broken. */
+  compatibility: Compatibility;
 }
 
 /**
  * Reads tickets and efforts once and builds both the tickets tree and the repo snapshot from them. `sessions` are the
  * live Dryland sessions; without them no claim is called stale. A repo without the tracker doc has no tickets rather
  * than an error, so that it still gets its skill setup state and the `/setup-matt-pocock-skills` next step.
+ * `compatConfig` is what the user decided about a modified setup: the deviations accepted and the rules re-enabled.
  */
 export async function readProjectState(
   runner: ProcessRunner,
   mainCheckout: string,
   sessions: SessionSnapshot[] | null = null,
+  compatConfig: CompatConfig = NO_COMPAT_CONFIG,
 ): Promise<ProjectState> {
   const tickets = (await exists(join(mainCheckout, TRACKER_DOC))) ? await readTickets(mainCheckout, runner) : [];
   const efforts = await readEfforts(mainCheckout);
+  const skillSetup = await readSkillSetup(mainCheckout);
+  const compatibility = await readCompatibility(mainCheckout, skillSetup, compatConfig);
   return {
     tree: buildTicketsTree(tickets, efforts),
-    snapshot: await readRepoSnapshot(runner, mainCheckout, tickets, efforts, sessions),
-    skillSetup: await readSkillSetup(mainCheckout),
+    snapshot: await readRepoSnapshot(
+      runner,
+      mainCheckout,
+      tickets,
+      efforts,
+      sessions,
+      skillSetupSnapshot(skillSetup, compatibility, compatConfig),
+    ),
+    skillSetup,
+    compatibility,
   };
 }

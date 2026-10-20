@@ -15,6 +15,7 @@ const SETTINGS_DEFAULTS = {
   dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
   stopConfirmation: "busy-or-unseen",
   resumeOnStart: false,
+  compat: {},
   sessionRetentionDays: 30,
   openProjects: [] as string[],
 };
@@ -27,6 +28,22 @@ describe("ui state store", () => {
 
     writeFileSync(file, JSON.stringify({ openProjects: ["/repos/shop", 4, "/repos/shop"] }));
     expect(createUiStateStore(file).read().openProjects).toEqual(["/repos/shop"]);
+  });
+
+  it("keeps the compatibility decisions per project, dropping what is not an id", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ compat: { "/repos/shop": { acceptedDeviations: "d1", overrides: ["retro"] } } });
+    expect(createUiStateStore(file).read().compat).toEqual({
+      "/repos/shop": { acceptedDeviations: "d1", overrides: ["retro"] },
+    });
+
+    writeFileSync(
+      file,
+      JSON.stringify({ compat: { "/repos/shop": { acceptedDeviations: 4, overrides: ["retro", 7] } } }),
+    );
+    expect(createUiStateStore(file).read().compat).toEqual({
+      "/repos/shop": { acceptedDeviations: null, overrides: ["retro"] },
+    });
   });
 
   it("starts with no project and the legend showing", () => {

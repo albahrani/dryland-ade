@@ -5,12 +5,14 @@ import {
   branchHolder,
   claimTicket,
   commentOnTicket,
+  compatPrompt,
   createTicket,
   copilotPaths,
   createWorktree,
   currentAgentSession,
   DrylandError,
   findExecutable,
+  findMainCheckout,
   hookStateOf,
   indexMap,
   installAgentHooks,
@@ -23,6 +25,7 @@ import {
   nodeProcessRunner,
   pruneWorktree,
   readSessionIndex,
+  readSkillSetup,
   recordSession,
   retentionDaysFromEnv,
   releaseTicket,
@@ -149,7 +152,7 @@ const USAGE = [
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
   "       dryland status <kind> [--session <id>] [--payload <json>] [--json]",
-  "       dryland doctor [--install-hooks | --remove-hooks] [--json]",
+  "       dryland doctor [--install-hooks | --remove-hooks | --compat-prompt] [--json]",
   "",
 ].join("\n");
 
@@ -445,8 +448,13 @@ const COMMANDS: Record<
   },
   doctor: {
     target: false,
-    switches: ["install-hooks", "remove-hooks"],
+    switches: ["install-hooks", "remove-hooks", "compat-prompt"],
     run: async (_target, flags) => {
+      if (flags.switches.has("compat-prompt")) {
+        const mainCheckout = await findMainCheckout(nodeProcessRunner, process.cwd());
+        const prompt = compatPrompt(await readSkillSetup(mainCheckout));
+        return { value: { prompt }, text: prompt };
+      }
       const install = flags.switches.has("install-hooks");
       if (install && flags.switches.has("remove-hooks")) {
         throw new DrylandError("--install-hooks and --remove-hooks contradict each other.", "Pass one of them.");

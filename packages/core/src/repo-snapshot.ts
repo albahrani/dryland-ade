@@ -9,6 +9,7 @@ import {
   holdsClaim,
   type PausedSessionSnapshot,
   type RepoSnapshot,
+  type SkillSetupSnapshot,
   type SessionSnapshot,
   type WorktreeGitState,
 } from "./next-step.ts";
@@ -22,7 +23,7 @@ import { readTicketWorktreeStates, type TicketWorktreeState } from "./worktree.t
 /**
  * Reads the artifacts under `mainCheckout` into the snapshot the next-step rules take. `efforts` saves a second
  * pass over `.scratch/` when the caller has read them already. `sessions` are the live Dryland sessions, which only
- * the app knows; `null` leaves them unknown.
+ * the app knows; `null` leaves them unknown. `skillSetup` carries the Compatibility verdict; `null` disables no rule.
  */
 export async function readRepoSnapshot(
   runner: ProcessRunner,
@@ -30,6 +31,7 @@ export async function readRepoSnapshot(
   tickets: Ticket[],
   efforts?: EffortSnapshot[],
   sessions: SessionSnapshot[] | null = null,
+  skillSetup: SkillSetupSnapshot | null = null,
 ): Promise<RepoSnapshot> {
   const adrs = await readdir(join(mainCheckout, "docs", "adr")).catch(() => []);
   return {
@@ -41,9 +43,7 @@ export async function readRepoSnapshot(
     git: await readGitState(runner, mainCheckout, tickets),
     sessions:
       sessions === null ? null : [...sessions, ...(await pausedSessions(runner, mainCheckout, tickets, sessions))],
-    // Not fed yet: skill setup with the Compatibility verdict is ticket 66. `null` means unknown, so no rule is
-    // disabled meanwhile.
-    skillSetup: null,
+    skillSetup,
   };
 }
 

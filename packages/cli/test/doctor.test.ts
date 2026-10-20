@@ -188,6 +188,18 @@ describe("dryland doctor", () => {
   });
 });
 
+describe("dryland doctor --compat-prompt", () => {
+  it("prints the compatibility prompt with the verdict format and the setup fingerprint", async () => {
+    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const result = await doctor(repo, withDrylandOnPath(), "--compat-prompt");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(".dryland/compat.md");
+    expect(result.stdout).toContain("dryland-compat: 1");
+    expect(result.stdout).toMatch(/fingerprint: [0-9a-f]{64}/);
+    expect(result.stdout).toContain("- map-frontier:");
+  });
+});
+
 describe("dryland doctor --install-hooks and --remove-hooks", () => {
   const CONFIG = '{\n  "model": "gpt-5",\n  "trustedFolders": [\n    "/somewhere"\n  ],\n  "banner": "never"\n}\n';
 

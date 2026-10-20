@@ -1,6 +1,9 @@
 import { basename, join } from "node:path";
 import {
+  type CompatConfig,
   MERGE_STRATEGIES,
+  NO_COMPAT_CONFIG,
+  readSkillSetup,
   type MergeStrategy,
   AGENT_ADAPTERS,
   hasStatusHooks,
@@ -123,6 +126,7 @@ const dryland = createDrylandCli({
 });
 const autoCommit = (projectPath: string) => autoCommitFor(store.read(), projectPath);
 const autoSubmit = (projectPath: string) => autoSubmitFor(store.read(), projectPath);
+const compatConfig = (projectPath: string) => store.read().compat[projectPath] ?? NO_COMPAT_CONFIG;
 const work = createWorkStarter({
   terminals,
   runner: nodeProcessRunner,
@@ -132,6 +136,7 @@ const work = createWorkStarter({
   dryland,
   autoCommit,
   autoSubmit,
+  compatConfig,
 });
 let window: BrowserWindow | null = null;
 let project: { path: string } | null = null;
@@ -270,7 +275,12 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
   try {
     const mainCheckout = (found = await findMainCheckout(nodeProcessRunner, path));
     // One pass over the tracker files feeds both the tree and the rule engine, so markers and rows never disagree.
-    const { tree, snapshot, skillSetup } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions(path));
+    const { tree, snapshot, skillSetup, compatibility } = await readProjectState(
+      nodeProcessRunner,
+      mainCheckout,
+      liveSessions(path),
+      compatConfig(path),
+    );
     const steps = nextSteps(snapshot);
     const ranked = nextUpMarkers(steps, Infinity);
     const nextUp = { markers: ranked.slice(0, NEXT_UP_COUNT), ranked };
@@ -306,7 +316,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
         ];
       }),
     );
-    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims, skillSetup }, mainCheckout };
+    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims, skillSetup, compatibility }, mainCheckout };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
     return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: found };
@@ -493,6 +503,12 @@ function createWindow(): void {
   });
   if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
+}
+
+/** Stores what the user decided about a project's skill setup and reloads the views that depend on it. */
+function changeCompat(projectPath: string, config: CompatConfig): void {
+  store.update({ compat: { ...store.read().compat, [projectPath]: config } });
+  void refresh();
 }
 
 /** Stores a settings change and sends the new settings to the window. */
@@ -739,6 +755,23 @@ ipcMain.handle("work:resume", async (_event, ticket: unknown, mode: unknown): Pr
 ipcMain.handle("work:resume-all", (_event, map: unknown): Promise<ResumedAllResult> => {
   if (map !== null && typeof map !== "string") return Promise.resolve({ resumed: 0, warnings: ["That is not a map."] });
   return resumeAllPaused(map);
+});
+/** Accepting the deviations is stored against the deviation fingerprint, so the dialog stays away until the setup changes. */
+ipcMain.handle("compat:accept", async (): Promise<void> => {
+  if (project === null) return;
+  const report = await readSkillSetup(await findMainCheckout(nodeProcessRunner, project.path));
+  const saved = store.read().compat;
+  changeCompat(project.path, {
+    ...(saved[project.path] ?? NO_COMPAT_CONFIG),
+    acceptedDeviations: report.deviationFingerprint,
+  });
+});
+/** Turns a rule the verdict calls broken back on, or off again. */
+ipcMain.handle("compat:override", (_event, ruleId: unknown, enabled: unknown): void => {
+  if (project === null || typeof ruleId !== "string" || typeof enabled !== "boolean") return;
+  const config = compatConfig(project.path);
+  const others = config.overrides.filter((id) => id !== ruleId);
+  changeCompat(project.path, { ...config, overrides: enabled ? [...others, ruleId] : others });
 });
 ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): Promise<TicketActionResult> => {
   if (!isTicketAction(action) || typeof commit !== "boolean")

@@ -1,6 +1,7 @@
 export * from "./agent-adapter.ts";
 export * from "./agent-launch.ts";
 export * from "./claim.ts";
+export * from "./compat.ts";
 export * from "./copilot-config.ts";
 export * from "./doctor.ts";
 export * from "./efforts.ts";

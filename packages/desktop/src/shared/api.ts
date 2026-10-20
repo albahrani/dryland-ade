@@ -4,6 +4,7 @@ import type {
   MapDetail,
   SessionState,
   SkillSetupReport,
+  Compatibility,
   TicketDetail,
   TicketRef,
   TicketsTree,
@@ -45,6 +46,8 @@ export type TreeLoad =
       pausedClaims: Record<string, PausedSession>;
       /** How the repo's skills and `docs/agents` files compare to the default setup. */
       skillSetup: SkillSetupReport;
+      /** Whether to ask about a modified setup, and the verdict's degraded and broken features. */
+      compatibility: Compatibility;
     }
   | { ok: false; message: string; nextAction: string };
 
@@ -253,6 +256,10 @@ export interface DrylandApi {
   runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */
   dontAskAgain(type: ConfirmationType): Promise<void>;
+  /** Accepts the deviations of the project's modified skill setup; the dialog stays away until the setup changes. */
+  acceptDeviations(): Promise<void>;
+  /** Turns a rule the Compatibility verdict calls broken back on (`true`) or off again. */
+  overrideRule(ruleId: string, enabled: boolean): Promise<void>;
   /** Applies a change made in the Settings dialog; the new settings reach `onSettingsChanged`. */
   changeSetting(change: SettingsChange): Promise<void>;
   writeTerminal(id: string, data: string): void;
