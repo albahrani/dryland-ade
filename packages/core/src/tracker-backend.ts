@@ -22,9 +22,9 @@ import { findMainCheckout } from "./main-checkout.ts";
 import type { MapIndexEntry } from "./map-write.ts";
 import type { MapModel } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import type { TicketType } from "./ticket.ts";
 import type { TicketWriteResult } from "./tickets.ts";
 import { readTrackerKind } from "./tracker.ts";
+import type { TrackerCreateInput } from "./tracker-rules.ts";
 
 /**
  * The writes of a remote tracker, made through its CLI (`gh`, `glab`); no file is written and no commit is made.
@@ -35,13 +35,7 @@ export interface RemoteBackend {
   create(
     runner: ProcessRunner,
     cwd: string,
-    input: {
-      map: string;
-      title: string;
-      type: TicketType;
-      question?: string | undefined;
-      blockedBy?: string[] | undefined;
-    },
+    input: TrackerCreateInput,
   ): Promise<TicketWriteResult>;
   claim(runner: ProcessRunner, cwd: string, reference: string): Promise<TicketWriteResult & { alreadyHeld: boolean }>;
   release(runner: ProcessRunner, cwd: string, reference: string): Promise<TicketWriteResult>;

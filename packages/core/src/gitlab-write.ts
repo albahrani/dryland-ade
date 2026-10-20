@@ -18,9 +18,20 @@ import { appendDecision } from "./local-markdown.ts";
 import { type MapModel, parseMap } from "./map.ts";
 import type { MapIndexEntry } from "./map-write.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import type { Ticket, TicketType } from "./ticket.ts";
 import { findTicket, parseTicketReference, readTickets, type TicketWriteResult } from "./tickets.ts";
-import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
+import {
+  afterCreate as afterCreateOn,
+  assertBlockChange,
+  assertCanClaim,
+  assertCanRelease,
+  assertCanResolve,
+  assertCanTriage,
+  nameOf,
+  resolveTriageRole,
+  type TrackerCreateInput,
+  ticketNamed,
+  withAnswer,
+} from "./tracker-rules.ts";
 import { readTriageLabels, readTriageVocabulary } from "./triage-labels.ts";
 
 /**
@@ -39,27 +50,11 @@ const field = (name: string, value: string) => ["-f", `${name}=${value}`];
 const put = (runner: ProcessRunner, cwd: string, iid: number | string, fields: string[]) =>
   glabRequired(runner, cwd, ["api", "-X", "PUT", issuePath(iid), ...fields]) as Promise<GitlabIssue>;
 
-async function ticketNamed(runner: ProcessRunner, mainCheckout: string, reference: string): Promise<Ticket> {
-  return findTicket(await readTickets(mainCheckout, runner), parseTicketReference(reference));
-}
-
-const nameOf = (ticket: Ticket) => `${ticket.map}/${ticket.id}`;
-
 const me = async (runner: ProcessRunner, cwd: string) =>
   (await glabRequired(runner, cwd, ["api", "user"])) as { id: number; username: string };
 
-/** Runs the steps after an issue was created; a failure says which issue exists, so nothing is claimed as whole. */
-async function afterCreate<T>(iid: number, step: string, run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    if (!(error instanceof DrylandError)) throw error;
-    throw new DrylandError(
-      `Issue #${iid} was created, but ${step} failed: ${error.message}`,
-      `Finish by hand on GitLab, or close #${iid} and retry. ${error.nextAction}`,
-    );
-  }
-}
+const afterCreate = <T>(iid: number, step: string, run: () => Promise<T>) =>
+  afterCreateOn("GitLab", iid, step, run);
 
 /** Fetches the issue of a map, which must carry the map label. */
 async function mapIssue(runner: ProcessRunner, cwd: string, map: string): Promise<GitlabIssue> {
@@ -94,19 +89,11 @@ async function linkBlocker(runner: ProcessRunner, cwd: string, iid: number, bloc
   ]);
 }
 
-export interface GitlabCreateInput {
-  map: string;
-  title: string;
-  type: TicketType;
-  question?: string | undefined;
-  blockedBy?: string[] | undefined;
-}
-
 /** Creates an issue labelled with its type and its map. */
 export async function createGitlabTicket(
   runner: ProcessRunner,
   cwd: string,
-  input: GitlabCreateInput,
+  input: TrackerCreateInput,
 ): Promise<TicketWriteResult> {
   await mapIssue(runner, cwd, input.map);
   const siblings = (await readTickets(cwd, runner)).filter((t) => t.map === input.map);
@@ -174,21 +161,9 @@ export async function claimGitlabTicket(
   const ticket = await ticketNamed(runner, cwd, reference);
   const issue = await fetchIssue(runner, cwd, ticket.id);
   const user = await me(runner, cwd);
-  const holder = issue.assignees?.[0]?.username;
-  if (issue.state === "closed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is already resolved.`,
-      `Pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
-    );
-  }
-  if (holder === user.username) {
+  const verdict = assertCanClaim(ticket, issue.state === "closed", issue.assignees?.[0]?.username, user.username);
+  if (verdict === "held") {
     return { ticket: { ...ticket, state: "claimed", claimant: user.username }, warnings: [], alreadyHeld: true };
-  }
-  if (holder !== undefined) {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is already claimed by ${holder}.`,
-      `Pick another ticket with \`dryland map frontier ${ticket.map}\`, or ask ${holder} to release it.`,
-    );
   }
   await put(runner, cwd, ticket.id, field("assignee_ids[]", String(user.id)));
   return { ticket: { ...ticket, state: "claimed", claimant: user.username }, warnings: [], alreadyHeld: false };
@@ -201,19 +176,8 @@ export async function releaseGitlabTicket(
   reference: string,
 ): Promise<TicketWriteResult> {
   const ticket = await ticketNamed(runner, cwd, reference);
-  if (ticket.state !== "claimed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is not claimed, so there is nothing to release.`,
-      `Run \`dryland ticket show ${nameOf(ticket)}\` to see its state.`,
-    );
-  }
   const user = await me(runner, cwd);
-  if (ticket.claimant !== user.username) {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is claimed by ${ticket.claimant}, not by you (${user.username}), so it is not released.`,
-      `Ask ${ticket.claimant} to release it, or unassign them on GitLab if the claim is stale.`,
-    );
-  }
+  assertCanRelease(ticket, user.username, "GitLab");
   await put(runner, cwd, ticket.id, field("assignee_ids[]", "0"));
   return { ticket: { ...ticket, state: "open", claimant: null }, warnings: [] };
 }
@@ -227,19 +191,11 @@ export async function resolveGitlabTicket(
 ): Promise<TicketWriteResult> {
   const ticket = await ticketNamed(runner, cwd, reference);
   const issue = await fetchIssue(runner, cwd, ticket.id);
-  if (issue.state === "closed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is already resolved.`,
-      `Add a comment instead, or pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
-    );
-  }
-  const body = (issue.description ?? "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
-  // A template may already carry an empty `## Answer` heading; fill that rather than adding a second one.
-  const stub = /^## Answer[ \t]*\n*(?=## |$)/m;
-  const filled = stub.test(body)
-    ? body.replace(stub, `## Answer\n\n${answer}\n\n`).replace(/\s+$/, "")
-    : `${body}\n\n## Answer\n\n${answer}`.replace(/^\n+/, "");
-  await put(runner, cwd, ticket.id, [...field("description", `${filled}\n`), ...field("state_event", "close")]);
+  assertCanResolve(ticket, issue.state === "closed");
+  await put(runner, cwd, ticket.id, [
+    ...field("description", withAnswer(issue.description, answer)),
+    ...field("state_event", "close"),
+  ]);
   return { ticket: { ...ticket, state: "resolved", claimant: null, answer }, warnings: [] };
 }
 

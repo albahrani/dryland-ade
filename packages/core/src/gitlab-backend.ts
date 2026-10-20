@@ -1,9 +1,9 @@
-import { DrylandError } from "./errors.ts";
 import { findSection, splitSections, stripAnnotations } from "./local-markdown.ts";
 import { type MapModel, parseMap } from "./map.ts";
 import { mapLimit } from "./map-limit.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { byTicketNumber, TICKET_TYPES, type Ticket, type TicketType } from "./ticket.ts";
+import { explainCliFailure, type TrackerCli } from "./tracker-cli.ts";
 import { defaultTriageVocabulary, type TriageVocabulary } from "./triage-labels.ts";
 
 /** The label that marks an issue as a map; its body is the map index. */
@@ -42,30 +42,10 @@ export interface GitlabTracker {
   maps: MapModel[];
 }
 
-const GLAB_MISSING = (): DrylandError =>
-  new DrylandError(
-    "The GitLab tracker needs `glab`, but it is not installed.",
-    "Install glab from https://gitlab.com/gitlab-org/cli, then run `glab auth login`.",
-  );
+const GLAB: TrackerCli = { tracker: "GitLab", command: "glab", installUrl: "https://gitlab.com/gitlab-org/cli" };
 
-const GLAB_LOGGED_OUT = (): DrylandError =>
-  new DrylandError("The GitLab tracker needs `glab`, but it is not logged in.", "Run `glab auth login`.");
-
-/** Says why a failed `glab` call failed: not installed, not logged in, or something else with `glab`'s own message. */
-async function explainFailure(
-  runner: ProcessRunner,
-  cwd: string,
-  args: string[],
-  stderr: string,
-): Promise<DrylandError> {
-  if ((await runner.run("glab", ["--version"], { cwd })).exitCode !== 0) return GLAB_MISSING();
-  if ((await runner.run("glab", ["auth", "status"], { cwd })).exitCode !== 0) return GLAB_LOGGED_OUT();
-  const reason = stderr.trim().split("\n").slice(-3).join(" ") || "no error message";
-  return new DrylandError(
-    `\`glab ${args.slice(0, 2).join(" ")}\` failed: ${reason}`,
-    "Check that this repo has a GitLab remote and that your `glab` login can read and edit its issues.",
-  );
-}
+const explainFailure = (runner: ProcessRunner, cwd: string, args: string[], stderr: string) =>
+  explainCliFailure(GLAB, runner, cwd, args, stderr);
 
 /** Runs a `glab` call that must succeed and returns its trimmed output; a failure says what to do next. */
 export async function glabRun(runner: ProcessRunner, cwd: string, args: string[]): Promise<string> {

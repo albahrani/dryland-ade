@@ -4,9 +4,20 @@ import { appendDecision } from "./local-markdown.ts";
 import { type MapModel, parseMap } from "./map.ts";
 import type { MapIndexEntry } from "./map-write.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import type { Ticket, TicketType } from "./ticket.ts";
 import { findTicket, parseTicketReference, readTickets, type TicketWriteResult } from "./tickets.ts";
-import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
+import {
+  afterCreate as afterCreateOn,
+  assertBlockChange,
+  assertCanClaim,
+  assertCanRelease,
+  assertCanResolve,
+  assertCanTriage,
+  nameOf,
+  resolveTriageRole,
+  type TrackerCreateInput,
+  ticketNamed,
+  withAnswer,
+} from "./tracker-rules.ts";
 import { readTriageLabels, readTriageVocabulary } from "./triage-labels.ts";
 
 /**
@@ -33,26 +44,10 @@ function idOf(issue: GithubIssue): number {
   return issue.id;
 }
 
-async function ticketNamed(runner: ProcessRunner, mainCheckout: string, reference: string): Promise<Ticket> {
-  return findTicket(await readTickets(mainCheckout, runner), parseTicketReference(reference));
-}
-
-const nameOf = (ticket: Ticket) => `${ticket.map}/${ticket.id}`;
-
 const me = (runner: ProcessRunner, cwd: string) => ghRun(runner, cwd, ["api", "user", "--jq", ".login"]);
 
-/** Runs the steps after an issue was created; a failure says which issue exists, so nothing is claimed as whole. */
-async function afterCreate<T>(number: number, step: string, run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    if (!(error instanceof DrylandError)) throw error;
-    throw new DrylandError(
-      `Issue #${number} was created, but ${step} failed: ${error.message}`,
-      `Finish by hand on GitHub, or close #${number} and retry. ${error.nextAction}`,
-    );
-  }
-}
+const afterCreate = <T>(number: number, step: string, run: () => Promise<T>) =>
+  afterCreateOn("GitHub", number, step, run);
 
 /** Fetches the issue of a map, which must carry the map label. */
 async function mapIssue(runner: ProcessRunner, cwd: string, map: string): Promise<GithubIssue> {
@@ -72,19 +67,11 @@ async function mapIssue(runner: ProcessRunner, cwd: string, map: string): Promis
   return issue;
 }
 
-export interface GithubCreateInput {
-  map: string;
-  title: string;
-  type: TicketType;
-  question?: string | undefined;
-  blockedBy?: string[] | undefined;
-}
-
 /** Creates an issue labelled with its type and makes it a sub-issue of the map's issue. */
 export async function createGithubTicket(
   runner: ProcessRunner,
   cwd: string,
-  input: GithubCreateInput,
+  input: TrackerCreateInput,
 ): Promise<TicketWriteResult> {
   await mapIssue(runner, cwd, input.map);
   const siblings = (await readTickets(cwd, runner)).filter((t) => t.map === input.map);
@@ -152,20 +139,9 @@ export async function claimGithubTicket(
   const ticket = await ticketNamed(runner, cwd, reference);
   const issue = await fetchIssue(runner, cwd, ticket.id);
   const login = await me(runner, cwd);
-  const holder = issue.assignees?.[0]?.login;
-  if (issue.state.toLowerCase() === "closed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is already resolved.`,
-      `Pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
-    );
-  }
-  if (holder === login)
+  const verdict = assertCanClaim(ticket, issue.state.toLowerCase() === "closed", issue.assignees?.[0]?.login, login);
+  if (verdict === "held") {
     return { ticket: { ...ticket, state: "claimed", claimant: login }, warnings: [], alreadyHeld: true };
-  if (holder !== undefined) {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is already claimed by ${holder}.`,
-      `Pick another ticket with \`dryland map frontier ${ticket.map}\`, or ask ${holder} to release it.`,
-    );
   }
   const assigned = (await ghRequired(runner, cwd, [
     "api",
@@ -196,19 +172,8 @@ export async function releaseGithubTicket(
   reference: string,
 ): Promise<TicketWriteResult> {
   const ticket = await ticketNamed(runner, cwd, reference);
-  if (ticket.state !== "claimed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is not claimed, so there is nothing to release.`,
-      `Run \`dryland ticket show ${nameOf(ticket)}\` to see its state.`,
-    );
-  }
   const login = await me(runner, cwd);
-  if (ticket.claimant !== login) {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is claimed by ${ticket.claimant}, not by you (${login}), so it is not released.`,
-      `Ask ${ticket.claimant} to release it, or unassign them on GitHub if the claim is stale.`,
-    );
-  }
+  assertCanRelease(ticket, login, "GitHub");
   await ghRun(runner, cwd, ["api", "-X", "DELETE", `${issuePath(ticket.id)}/assignees`, ...text("assignees[]", login)]);
   return { ticket: { ...ticket, state: "open", claimant: null }, warnings: [] };
 }
@@ -222,24 +187,13 @@ export async function resolveGithubTicket(
 ): Promise<TicketWriteResult> {
   const ticket = await ticketNamed(runner, cwd, reference);
   const issue = await fetchIssue(runner, cwd, ticket.id);
-  if (issue.state.toLowerCase() === "closed") {
-    throw new DrylandError(
-      `Ticket ${nameOf(ticket)} is already resolved.`,
-      `Add a comment instead, or pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
-    );
-  }
-  const body = (issue.body ?? "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
-  // A template may already carry an empty `## Answer` heading; fill that rather than adding a second one.
-  const stub = /^## Answer[ \t]*\n*(?=## |$)/m;
-  const filled = stub.test(body)
-    ? body.replace(stub, `## Answer\n\n${answer}\n\n`).replace(/\s+$/, "")
-    : `${body}\n\n## Answer\n\n${answer}`.replace(/^\n+/, "");
+  assertCanResolve(ticket, issue.state.toLowerCase() === "closed");
   await ghRun(runner, cwd, [
     "api",
     "-X",
     "PATCH",
     issuePath(ticket.id),
-    ...text("body", `${filled}\n`),
+    ...text("body", withAnswer(issue.body, answer)),
     ...text("state", "closed"),
   ]);
   return { ticket: { ...ticket, state: "resolved", claimant: null, answer }, warnings: [] };
