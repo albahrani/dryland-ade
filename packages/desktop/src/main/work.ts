@@ -306,6 +306,10 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         ),
         env: (id) => sessionEnv(adapter, sessionId, id),
         onOutput: pretyper,
+        onEnd: () => {
+          pretyper?.cancel();
+          pretypers.delete(terminalId);
+        },
       });
       if (pretyper !== undefined) pretypers.set(terminalId, pretyper);
       const session: SessionInfo = {

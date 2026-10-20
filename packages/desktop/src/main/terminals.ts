@@ -28,6 +28,8 @@ export interface OpenOptions {
   env?: (id: string) => Record<string, string>;
   /** Also receives the terminal's output. */
   onOutput?: (data: string) => void;
+  /** Called once when the terminal ends, whether its process exited or it was closed through the manager. */
+  onEnd?: () => void;
 }
 
 export interface TerminalManager {
@@ -55,9 +57,13 @@ const DEFAULT_ROWS = 24;
 export function createTerminalManager(options: TerminalManagerOptions): TerminalManager {
   const live = new Map<string, PtyProcess>();
   const outputs = new Map<string, OutputBuffer>();
+  const endHandlers = new Map<string, () => void>();
   const forget = (id: string) => {
     live.delete(id);
     outputs.delete(id);
+    const onEnd = endHandlers.get(id);
+    endHandlers.delete(id);
+    onEnd?.();
   };
 
   function inheritedEnv(): Record<string, string> {
@@ -67,7 +73,7 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
   }
 
   return {
-    open({ cwd, cols = DEFAULT_COLS, rows = DEFAULT_ROWS, program = options.shell, env, onOutput }) {
+    open({ cwd, cols = DEFAULT_COLS, rows = DEFAULT_ROWS, program = options.shell, env, onOutput, onEnd }) {
       const id = randomUUID();
       const pty = options.provider.spawn({
         file: program.file,
@@ -80,6 +86,7 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
       const output = createOutputBuffer(options.outputLimit ?? OUTPUT_LIMIT);
       live.set(id, pty);
       outputs.set(id, output);
+      if (onEnd !== undefined) endHandlers.set(id, onEnd);
       pty.onData((data) => {
         output.append(data);
         options.onData(id, data);
@@ -105,10 +112,9 @@ export function createTerminalManager(options: TerminalManagerOptions): Terminal
       pty.kill();
     },
     closeAll() {
-      const all = [...live.values()];
-      live.clear();
-      outputs.clear();
-      for (const pty of all) pty.kill();
+      const all = [...live.entries()];
+      for (const [id] of all) forget(id);
+      for (const [, pty] of all) pty.kill();
     },
     liveIds: () => [...live.keys()],
     output: (id) => outputs.get(id)?.text() ?? null,

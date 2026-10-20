@@ -17,6 +17,33 @@ function setup() {
 }
 
 describe("terminal manager", () => {
+  it("tells a terminal's onEnd once when its process ends on its own", () => {
+    const { provider, terminals } = setup();
+    const ended: number[] = [];
+    terminals.open({ cwd: "/repo", onEnd: () => ended.push(1) });
+    provider.spawned[0]?.exit(0);
+    provider.spawned[0]?.exit(0);
+    expect(ended).toEqual([1]);
+  });
+
+  it("tells a terminal's onEnd once when it is closed", () => {
+    const { terminals } = setup();
+    const ended: number[] = [];
+    const id = terminals.open({ cwd: "/repo", onEnd: () => ended.push(1) });
+    terminals.close(id);
+    terminals.close(id);
+    expect(ended).toEqual([1]);
+  });
+
+  it("tells every live terminal's onEnd when all are closed", () => {
+    const { terminals } = setup();
+    const ended: string[] = [];
+    terminals.open({ cwd: "/repo", onEnd: () => ended.push("a") });
+    terminals.open({ cwd: "/repo", onEnd: () => ended.push("b") });
+    terminals.closeAll();
+    expect(ended.sort()).toEqual(["a", "b"]);
+  });
+
   it("spawns the shell in the given directory with the given size", () => {
     const { provider, terminals } = setup();
     terminals.open({ cwd: "/repo", cols: 100, rows: 30 });
