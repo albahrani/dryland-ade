@@ -1,7 +1,8 @@
 # Compatibility check and verdict
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-20T11:53:34.817Z","was":"ready-for-agent"}} -->
 Blocked by: 29, 33, 53
 
 Spec: [spec](../spec.md), user stories 80 to 84. "Write policy and skill setup". ADR 0003.
