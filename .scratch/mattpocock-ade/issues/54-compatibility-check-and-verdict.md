@@ -22,7 +22,7 @@ The verdict is tied to the fingerprint and invalidated when that changes. Broken
 
 - [x] `dryland doctor --compat-prompt` prints the prompt, including the verdict format the agent must write
 - [ ] A modified setup without a valid verdict or acceptance opens the dialog with the deviations listed
-- [ ] Run check opens a session with the compatibility prompt command pre-typed
+- [x] Run check opens a session with the compatibility prompt command pre-typed
 - [x] A verdict file is parsed: broken features are disabled and show the reason, degraded features show a warning
 - [x] A rule marked broken produces no next steps; with an override stored, it does again
 - [x] A verdict for an older fingerprint is ignored and the dialog appears again
@@ -34,3 +34,7 @@ The verdict is tied to the fingerprint and invalidated when that changes. Broken
 ## Answer
 
 Built in 9a9e80f and 0b04541. core compat.ts: parseVerdict reads .dryland/compat.md (front matter with dryland-compat: 1 and the setup fingerprint, then '- <rule id>: ok|degraded|broken - reason' lines; unknown rule ids make it malformed), readCompatibility ties it to the setup fingerprint (older ones ignored), decides needsDialog (modified, no valid verdict, deviations not accepted), lists degraded and broken features, and skillSetupSnapshot feeds verdict, overrides and installed skills into the rule engine, so broken rules give no steps until overridden and a modified setup without a verdict recommends only installed skills. 'dryland doctor --compat-prompt' prints the prompt with the fingerprint. Desktop: accept-deviations and overrides are stored per project in ui-state (compat), the CompatDialog offers Run check (scratch session with COMPAT_RUN_COMMAND typed; new work-target compat-check), Skip (remembered in memory only, so it returns after restart) and Accept deviations; SkillSetupPanel lists disabled/warned features, a note for a malformed file and Turn on/off buttons for overrides. Known limits: the dialog and Run check wiring in the renderer are not covered by tests (criteria 2 and 3 left unticked); the malformed-file note shows only in the panel's collapsed details; Accept deviations also leaves the installed-skills filter on; a stale-verdict note is not shown.
+
+## Comments
+
+Update to the Answer, commit b5bee16: the Playwright run (native and Linux, 42 tests each) now covers the dialog. It opens for a modified setup with the deviations listed, and Accept deviations closes it (skill-setup.spec.ts), so criterion 2 is ticked. Skip is exercised by the start-work fixtures, which also needed the recommended skills installed. Still untested: clicking Run check in the app (the session it opens is covered by work.test.ts), so criterion 3 stays unticked. Known limits unchanged: Skip is forgotten on every window reload or restart, and the malformed-file note shows only in the panel's collapsed details.
