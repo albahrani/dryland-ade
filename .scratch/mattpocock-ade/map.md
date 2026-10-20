@@ -174,6 +174,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Forget a terminal's pre-typer when its terminal ends](issues/95-forget-a-terminal-s-pre-typer-when-its-terminal-en.md): Terminals report their end via onEnd, and the work starter drops the pre-typer then.
 
+- [Local merge and prune](issues/51-local-merge-and-prune.md): Source Control's Merge section dry-runs, merges with a chosen strategy, hands conflicts to the agent and prunes behind a confirmation.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
