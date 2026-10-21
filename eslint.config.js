@@ -5,6 +5,7 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/out/**",
+      "**/release/**",
       "**/node_modules/**",
       ".scratch/**",
       ".agents/**",

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "dev.dryland.ade",
+  "productName": "Dryland ADE",
+  "artifactName": "dryland-ade-${version}-${os}-${arch}.${ext}",
+  "directories": { "output": "release" },
+  "files": ["out/**", "package.json"],
+  "npmRebuild": false,
+  "asarUnpack": ["**/node_modules/node-pty/**"],
+  "extraResources": [
+    { "from": "installer/bin/dryland", "to": "bin/dryland" },
+    { "from": "installer/bin/dryland.cmd", "to": "bin/dryland.cmd" },
+    { "from": "../cli/dist/dryland.mjs", "to": "bin/dryland.mjs" },
+    { "from": "installer/path.ps1", "to": "path.ps1" }
+  ],
+  "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "include": "installer/installer.nsh",
+    "deleteAppDataOnUninstall": false
+  },
+  "mac": {
+    "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+    "category": "public.app-category.developer-tools"
+  },
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] },
+      { "target": "deb", "arch": ["x64"] }
+    ],
+    "executableName": "dryland-ade",
+    "category": "Development"
+  },
+  "deb": {
+    "afterInstall": "installer/deb-after-install.sh",
+    "afterRemove": "installer/deb-after-remove.sh"
+  }
+}

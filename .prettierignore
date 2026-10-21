@@ -3,3 +3,4 @@ node_modules
 .vitest
 pnpm-lock.yaml
 packages/cli/test/fixtures
+packages/desktop/release

@@ -1,0 +1,19 @@
+#!/bin/sh
+# The `dryland` launcher shipped in the install directory (ADR 0004). It runs the bundled CLI with the app's own
+# Electron in node mode, so it needs no system Node and works with the app closed. The installer replaces it on
+# every update. It finds the app relative to itself, also when it is reached through a symlink on the user's PATH.
+self=$0
+while [ -L "$self" ]; do
+  dir=$(cd "$(dirname "$self")" && pwd)
+  self=$(readlink "$self")
+  case $self in /*) ;; *) self=$dir/$self ;; esac
+done
+here=$(cd "$(dirname "$self")" && pwd)
+if [ "$(uname)" = Darwin ]; then
+  runtime=$here/../../MacOS/Dryland\ ADE
+else
+  runtime=$here/../../dryland-ade
+fi
+DRYLAND_LAUNCHER=$here/dryland
+export DRYLAND_LAUNCHER
+ELECTRON_RUN_AS_NODE=1 exec "$runtime" "$here/dryland.mjs" "$@"

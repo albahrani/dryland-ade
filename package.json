@@ -13,6 +13,7 @@
     "build": "pnpm --filter @dryland/cli build",
     "format": "prettier --write \"packages/**/*.{ts,tsx,css,html,mjs,json}\" \"*.{js,ts,json}\"",
     "format:check": "prettier --check \"packages/**/*.{ts,tsx,css,html,mjs,json}\" \"*.{js,ts,json}\"",
+    "package": "pnpm --filter @dryland/desktop package",
     "notices": "node scripts/third-party-notices.mjs",
     "notices:check": "node scripts/third-party-notices.mjs --check",
     "test:linux": "node scripts/test-linux.mjs",

@@ -11,6 +11,7 @@ const NOTICES = "THIRD_PARTY_NOTICES.md";
 const NOT_SHIPPED = new Set([
   "@playwright/test",
   "@vitejs/plugin-react",
+  "electron-builder",
   "electron-vite",
   "vite",
   "@types/react",

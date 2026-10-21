@@ -16,6 +16,7 @@ import {
   hookStateOf,
   indexMap,
   installAgentHooks,
+  linkLauncher,
   isLiveEventKind,
   launchArgs,
   LIVE_EVENT_KINDS,
@@ -39,6 +40,7 @@ import {
   showTicket,
   ticketKind,
   triageTicket,
+  unlinkLauncher,
   untrustFolders,
   withoutPathDir,
   type DoctorReport,
@@ -152,7 +154,7 @@ const USAGE = [
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
   "       dryland status <kind> [--session <id>] [--payload <json>] [--json]",
-  "       dryland doctor [--install-hooks | --remove-hooks | --compat-prompt] [--json]",
+  "       dryland doctor [--install-hooks | --remove-hooks | --link-path | --unlink-path | --compat-prompt] [--json]",
   "",
 ].join("\n");
 
@@ -448,12 +450,22 @@ const COMMANDS: Record<
   },
   doctor: {
     target: false,
-    switches: ["install-hooks", "remove-hooks", "compat-prompt"],
+    switches: ["install-hooks", "remove-hooks", "link-path", "unlink-path", "compat-prompt"],
     run: async (_target, flags) => {
       if (flags.switches.has("compat-prompt")) {
         const mainCheckout = await findMainCheckout(nodeProcessRunner, process.cwd());
         const prompt = compatPrompt(await readSkillSetup(mainCheckout));
         return { value: { prompt }, text: prompt };
+      }
+      const link = flags.switches.has("link-path");
+      if (link && flags.switches.has("unlink-path")) {
+        throw new DrylandError("--link-path and --unlink-path contradict each other.", "Pass one of them.");
+      }
+      if (link || flags.switches.has("unlink-path")) {
+        const lines = link
+          ? await linkLauncher({ launcher: process.env["DRYLAND_LAUNCHER"] })
+          : await unlinkLauncher({});
+        return { value: { lines }, text: lines.map((line) => `${line}\n`).join("") };
       }
       const install = flags.switches.has("install-hooks");
       if (install && flags.switches.has("remove-hooks")) {

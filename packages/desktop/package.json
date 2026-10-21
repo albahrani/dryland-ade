@@ -8,7 +8,8 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json",
-    "test:e2e": "electron-vite build && playwright test"
+    "test:e2e": "electron-vite build && playwright test",
+    "package": "pnpm --filter @dryland/cli build && electron-vite build && electron-builder --config electron-builder.json"
   },
   "devDependencies": {
     "@dryland/core": "workspace:*",
@@ -20,6 +21,7 @@
     "@xterm/addon-unicode11": "0.9.0",
     "@xterm/xterm": "6.0.0",
     "electron": "44.7.1",
+    "electron-builder": "26.17.0",
     "electron-vite": "5.0.0",
     "highlight.js": "11.11.1",
     "react": "19.3.0",

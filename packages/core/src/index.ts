@@ -17,6 +17,7 @@ export * from "./map-write.ts";
 export * from "./merge.ts";
 export * from "./map.ts";
 export * from "./next-step.ts";
+export * from "./path-link.ts";
 export * from "./process-runner.ts";
 export * from "./project-state.ts";
 export * from "./pull-request.ts";

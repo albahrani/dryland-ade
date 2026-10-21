@@ -68,7 +68,7 @@ function setup(
     terminals,
     runner: nodeProcessRunner,
     env,
-    launcherDir: "/opt/dryland/bin",
+    launcherDirs: ["/opt/dryland/bin"],
     hooksDir,
     dryland,
     autoCommit: () => autoCommit,

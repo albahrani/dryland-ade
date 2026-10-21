@@ -31,8 +31,22 @@ function writeAtomically(path: string, content: string, mode: number): void {
  * the app's own runtime, so sessions need no system Node, and one shim per Agent CLI that runs it through
  * `dryland agent`, so a CLI started by hand gets the status hooks. Replaces whatever an earlier version left there.
  */
-export function writeLauncher(dir: string, { runtime, cli }: LauncherTarget, shims: readonly AgentShim[] = []): void {
+export function writeLauncher(
+  dir: string,
+  { runtime, cli }: LauncherTarget,
+  shims: readonly AgentShim[] = [],
+  {
+    launcher = true,
+  }: {
+    /** `false` when the installer ships the `dryland` launcher, so only the shims are written. */ launcher?: boolean;
+  } = {},
+): void {
   mkdirSync(dir, { recursive: true });
+  if (launcher) writeDrylandLauncher(dir, runtime, cli);
+  writeShims(dir, runtime, cli, shims);
+}
+
+function writeDrylandLauncher(dir: string, runtime: string, cli: string): void {
   writeAtomically(
     join(dir, "dryland"),
     ["#!/bin/sh", `ELECTRON_RUN_AS_NODE=1 exec ${shQuote(runtime)} ${shQuote(cli)} "$@"`, ""].join("\n"),
@@ -50,6 +64,9 @@ export function writeLauncher(dir: string, { runtime, cli }: LauncherTarget, shi
     ].join("\r\n"),
     0o644,
   );
+}
+
+function writeShims(dir: string, runtime: string, cli: string, shims: readonly AgentShim[]): void {
   for (const { id, binary } of shims) {
     writeAtomically(
       join(dir, binary),

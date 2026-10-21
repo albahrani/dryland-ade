@@ -63,8 +63,8 @@ export interface WorkStarterOptions {
   runner: ProcessRunner;
   /** The environment sessions inherit and Agent CLIs are looked up in. */
   env: Record<string, string | undefined>;
-  /** The directory holding the `dryland` launcher, put first on every session's `PATH`. */
-  launcherDir: string;
+  /** The directories holding the `dryland` launcher and the Agent CLI shims, put first on every session's `PATH`. */
+  launcherDirs: string[];
   /** Dryland's own directory for the settings files that inject status hooks; never the user's CLI config. */
   hooksDir: string;
   /** Runs `dryland`, through which the ticket is claimed for its worktree branch. */
@@ -171,7 +171,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
     terminals,
     runner,
     env,
-    launcherDir,
+    launcherDirs,
     hooksDir,
     dryland,
     autoCommit,
@@ -210,7 +210,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       if (value !== undefined && !adapter.parentSessionEnv.includes(key)) result[key] = value;
     }
     const pathKey = envKey(env, "PATH");
-    result[pathKey] = [launcherDir, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
+    result[pathKey] = [...launcherDirs, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
     return { ...result, DRYLAND_SESSION_ID: sessionId, DRYLAND_PANE_KEY: paneKey };
   }
 
@@ -433,7 +433,7 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         cwd,
         env: (id) => {
           const pathKey = envKey(env, "PATH");
-          const path = [launcherDir, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
+          const path = [...launcherDirs, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
           const inherited = Object.fromEntries(
             Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
           );

@@ -60,6 +60,7 @@ import {
 } from "../shared/tracker-actions.ts";
 import { createDrylandCli } from "./dryland-cli.ts";
 import { latestOnly } from "./latest-only.ts";
+import { installLayout, removeStaleLauncher } from "./install-layout.ts";
 import { writeLauncher } from "./launcher.ts";
 import {
   quitConfirmation,
@@ -119,12 +120,18 @@ const terminals = createTerminalManager({
   },
 });
 const store = createUiStateStore(join(app.getPath("userData"), "ui-state.json"));
-// Sessions find `dryland` here; ticket 57 moves the launcher to the install directory.
-const launcherDir = join(app.getPath("userData"), "bin");
+// Sessions find `dryland` in the install directory, or in `shimDir` when the app is not installed (ADR 0004).
+const shimDir = join(app.getPath("userData"), "bin");
+const layout = installLayout({
+  packaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  builtCli: join(import.meta.dirname, "dryland.js"),
+  userDataBin: shimDir,
+});
 // Every tracker write the app makes runs this, the same CLI sessions and the user run (ADR 0003).
 const dryland = createDrylandCli({
   runtime: process.execPath,
-  cli: join(import.meta.dirname, "dryland.js"),
+  cli: layout.cli,
   env: ptyEnv,
 });
 const autoCommit = (projectPath: string) => autoCommitFor(store.read(), projectPath);
@@ -134,7 +141,7 @@ const work = createWorkStarter({
   terminals,
   runner: nodeProcessRunner,
   env: ptyEnv,
-  launcherDir,
+  launcherDirs: layout.pathDirs,
   hooksDir: join(app.getPath("userData"), "hooks"),
   dryland,
   autoCommit,
@@ -846,16 +853,18 @@ app.on("second-instance", () => {
 
 void app.whenReady().then(async () => {
   if (!primary) return;
-  // The CLI bundle is built next to this file; the launcher runs it with this very Electron binary.
+  // An installed app ships its launcher; one an earlier version wrote here would shadow it.
+  if (!layout.writeLauncher) removeStaleLauncher(shimDir);
   writeLauncher(
-    launcherDir,
-    { runtime: process.execPath, cli: join(import.meta.dirname, "dryland.js") },
+    shimDir,
+    { runtime: process.execPath, cli: layout.cli },
     // The shim adds only the status-hooks flag; a CLI with launch arguments of its own needs a richer one.
     // Only CLIs with status hooks get one: a shim for a hookless CLI would report nothing.
     AGENT_ADAPTERS.filter((a) => a.launchArgs.length === 0 && hasStatusHooks(a)).map(({ id, binary }) => ({
       id,
       binary,
     })),
+    { launcher: layout.writeLauncher },
   );
   ptyEnv[SESSION_RETENTION_ENV] = String(store.read().sessionRetentionDays);
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.

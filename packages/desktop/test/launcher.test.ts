@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { createWorktree, envKey, nodeProcessRunner } from "@dryland/core";
@@ -80,6 +80,17 @@ describe("the dryland launcher", () => {
     expect(out).toContain("AGENT=claude-code");
     // The batch shim quotes the path, the shell one does not.
     expect(out.replaceAll('"', "")).toContain(`--resume abc --settings ${join(hooksDir, "claude-code.json")}`);
+  });
+
+  it("writes only the shims when the app ships its own launcher", () => {
+    const dir = join(mkdtempSync(join(tmpdir(), "dryland-launcher-")), "bin");
+    writeLauncher(dir, { runtime: process.execPath, cli: CLI_BUNDLE }, [{ id: "claude-code", binary: "claude" }], {
+      launcher: false,
+    });
+    expect(existsSync(join(dir, "dryland"))).toBe(false);
+    expect(existsSync(join(dir, "dryland.cmd"))).toBe(false);
+    expect(existsSync(join(dir, "claude"))).toBe(true);
+    expect(existsSync(join(dir, "claude.cmd"))).toBe(true);
   });
 
   it("replaces a launcher left by an earlier version", () => {

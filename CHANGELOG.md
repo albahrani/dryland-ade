@@ -14,4 +14,5 @@ First public release is planned as `v0.1.0-beta.1` on the `beta` channel; `v1.0.
 - Local markdown, GitHub and GitLab trackers, shown in the app and written through the `dryland` CLI.
 - Multiple open projects, a Settings dialog (General, Agent CLIs, Tracker, Skills, Write confirmations), and a Compatibility check of the repo's skill setup.
 - The `dryland` CLI: `ticket`, `map`, `worktree`, `status` and `doctor` commands.
+- Installers (NSIS, DMG, AppImage, deb) built with electron-builder, with a `dryland` launcher in the install directory and an opt-in global `PATH` entry.
 - LICENSE (MIT), third-party notices, README, user manual, contributing guide, code of conduct, security policy, issue forms, a PR template, and an About dialog.
