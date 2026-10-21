@@ -1,7 +1,8 @@
 # Installers and bundled launcher
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T11:16:43.546Z","was":"ready-for-agent"}} -->
 Blocked by: 33
 
 Spec: [spec](../spec.md), user stories 68, 89, 94. "Modules", "Lifecycle, packaging and release". ADRs 0002, 0004.
