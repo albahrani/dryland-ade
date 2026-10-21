@@ -50,7 +50,7 @@ export async function linkLauncher({ launcher, home }: PathLinkOptions): Promise
 }
 
 /** Removes the link `linkLauncher` made; a regular file there is not Dryland's to remove. */
-export async function unlinkLauncher({ home }: Pick<PathLinkOptions, "home">): Promise<string[]> {
+export async function unlinkLauncher(home?: string): Promise<string[]> {
   requireSymlinkPlatform();
   const link = pathLinkFile(home);
   const existing = await lstatOrNull(link);

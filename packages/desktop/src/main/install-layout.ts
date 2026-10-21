@@ -4,7 +4,7 @@ import { join } from "node:path";
 export interface InstallLayoutInput {
   /** `app.isPackaged`: this is an installed app, not `electron-vite dev` or a bare Electron run. */
   packaged: boolean;
-  /** Electron's `process.resourcesPath`; the installer puts `bin/` there (see electron-builder.yml). */
+  /** Electron's `process.resourcesPath`; the installer puts `bin/` there (see electron-builder.json). */
   resourcesPath: string;
   /** The CLI bundle electron-vite builds beside the main process, used when the app is not installed. */
   builtCli: string;

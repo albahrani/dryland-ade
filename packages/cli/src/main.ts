@@ -462,9 +462,7 @@ const COMMANDS: Record<
         throw new DrylandError("--link-path and --unlink-path contradict each other.", "Pass one of them.");
       }
       if (link || flags.switches.has("unlink-path")) {
-        const lines = link
-          ? await linkLauncher({ launcher: process.env["DRYLAND_LAUNCHER"] })
-          : await unlinkLauncher({});
+        const lines = link ? await linkLauncher({ launcher: process.env["DRYLAND_LAUNCHER"] }) : await unlinkLauncher();
         return { value: { lines }, text: lines.map((line) => `${line}\n`).join("") };
       }
       const install = flags.switches.has("install-hooks");

@@ -39,7 +39,7 @@ Dryland's builds are not signed in version 1, so your OS warns you the first tim
 
 **Linux.** Make the AppImage executable (`chmod +x`) and run it, or install the deb with your package manager.
 
-**The `dryland` command.** Sessions started by the app always find `dryland`, and the launcher in the install directory (`resources/bin`) runs with the app closed and needs no Node. Putting it on your global `PATH` is opt-in: tick the box in the Windows installer; on macOS and Linux run `dryland doctor --link-path` through that launcher, which links `~/.local/bin/dryland` (`--unlink-path` removes it); the deb links `/usr/bin/dryland`. To build the installers yourself, run `pnpm package`; they land in `packages/desktop/release`.
+**The `dryland` command.** Sessions started by the app always find `dryland`, and the launcher in the install directory (`resources/bin`) runs with the app closed and needs no Node. Putting it on your global `PATH` is opt-in: tick the box in the Windows installer; on macOS and Linux run `dryland doctor --link-path` through that launcher, which links `~/.local/bin/dryland` (`--unlink-path` removes it); the deb links `/usr/bin/dryland`. The link points into the install, so it does not suit an AppImage (its mount is temporary), and removing the app leaves a link made by `--link-path` behind; run `--unlink-path` first. To build the installers yourself, run `pnpm package`; they land in `packages/desktop/release`.
 
 ## About this repository
 
