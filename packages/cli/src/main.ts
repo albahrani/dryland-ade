@@ -351,14 +351,15 @@ const COMMANDS: Record<
     options: ["answer"],
     switches: ["amend"],
     run: async (target, flags) => {
+      const amend = flags.switches.has("amend");
       const { ticket, warnings } = await resolveTicket(
         nodeProcessRunner,
         process.cwd(),
         target,
         required(flags, "answer"),
-        { autoCommit: autoCommit(flags), amend: flags.switches.has("amend") },
+        { autoCommit: autoCommit(flags), amend },
       );
-      const verb = flags.switches.has("amend") ? "Amended the answer of" : "Resolved";
+      const verb = amend ? "Amended the answer of" : "Resolved";
       return { value: ticket, text: `${verb} ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },

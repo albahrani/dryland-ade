@@ -218,6 +218,16 @@ describe("dryland ticket resolve --amend", () => {
     expect(shown).toMatchObject({ state: "resolved", answer: "Right.\nTwo lines." });
   });
 
+  it("fails when the resolved ticket has no Answer section to amend", async () => {
+    const repo = shopRepo({ [TICKET_PATH]: TICKET.replace("ready-for-agent", "resolved") });
+
+    const result = await repo.run(["ticket", "resolve", "shop/01", "--answer", "Late.", "--amend"]);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("no ## Answer");
+    expect(result.stderr).toContain("Next:");
+  });
+
   it("still refuses to resolve a resolved ticket without --amend, and to amend an open one", async () => {
     const repo = shopRepo();
     const open = await repo.run(["ticket", "resolve", "shop/01", "--answer", "x", "--amend"]);
