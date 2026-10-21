@@ -970,7 +970,7 @@ export function App() {
       <LiveEventsPanel events={liveEvents} mode={liveEventsPanel} onMode={setLiveEventsPanel} />
       <footer className="statusbar">
         {PANEL_SIDES.map((side) => (
-          <button key={side} aria-expanded={!panelFolded[side]} onClick={() => togglePanel(side)}>
+          <button key={side} onClick={() => togglePanel(side)}>
             {panelFolded[side] ? `Show ${side} panel` : `Hide ${side} panel`}
           </button>
         ))}
