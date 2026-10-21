@@ -35,6 +35,14 @@ _Avoid_: Phase, stage, category
 What a ticket's icon shows: ready (open, unblocked, unclaimed), in progress (claimed), blocked (open with an unresolved or unknown blocker) or done (resolved). Derived from state and blockers, never stored. A blocker is unknown when its tracker cannot say, e.g. a GitLab issue without Premium whose body has no `Blocked by:` line; it stays blocked rather than ready, because a ticket is never offered on a guess. `dryland ticket create` writes `Blocked by: none` on GitLab, so only tickets made by hand are unknown.
 _Avoid_: Ticket state (that is open, claimed, resolved)
 
+**Acceptance criterion**:
+One checkbox under a ticket's `Acceptance criteria` heading, numbered from 1 in file order whether ticked or not. Ticked by `ticket tick --criterion <n>`, never by editing the file. Local markdown only.
+_Avoid_: Checklist item, requirement
+
+**Amend**:
+Replacing the Answer of an already resolved ticket, by `ticket resolve --amend`. Without `--amend`, resolving a resolved ticket fails. Local markdown only.
+_Avoid_: Edit, re-resolve
+
 **Frontier**:
 The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
