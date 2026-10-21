@@ -1,6 +1,8 @@
 # Resize the left and right side panels
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T12:54:04.914Z","was":""}} -->
 
 ## Question
 
