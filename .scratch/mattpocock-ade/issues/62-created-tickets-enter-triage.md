@@ -1,7 +1,7 @@
 # Decide whether created tickets enter the triage flow
 
 Type: task
-Status: needs-triage
+Status: ready-for-agent
 
 Spec: [spec](../spec.md), user stories 21, 25. ADR 0008. Raised in review of [ticket 24](24-ticket-create-and-resolve.md).
 
