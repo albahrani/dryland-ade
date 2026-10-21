@@ -58,6 +58,8 @@ import { NewMapDialog, NewScratchDialog, NewTicketDialog } from "./NewDialogs.ts
 import { Legend } from "./Legend.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
+import { PanelResizer } from "./PanelResizer.tsx";
+import type { PanelSide } from "../../shared/panel-widths.ts";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
 import {
@@ -333,7 +335,7 @@ export function App() {
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel, sessionStates, unseenSessions, settings } = state;
+  const { project, legendDismissed, tabs, liveEventsPanel, panelWidths, sessionStates, unseenSessions, settings } = state;
   // Sessions of other projects keep running and reporting; the views show the current project's.
   const everySession = [...sessions.values()];
   const projectOnly = projectSessions(everySession, project?.path ?? null);
@@ -346,6 +348,9 @@ export function App() {
     setState({ ...state, liveEventsPanel: mode });
     void window.dryland.setLiveEventsPanel(mode);
   };
+  const resizePanel = (side: PanelSide, width: number) => setState({ ...state, panelWidths: { ...panelWidths, [side]: width } });
+  const savePanelWidth = (side: PanelSide, width: number) =>
+    void window.dryland.setPanelWidths({ ...panelWidths, [side]: width });
   const setTabs = (next: TabsState) => {
     setState({ ...state, tabs: next });
   };
@@ -610,7 +615,10 @@ export function App() {
   };
 
   return (
-    <div className="shell">
+    <div
+      className="shell"
+      style={{ gridTemplateColumns: `48px ${panelWidths.left}px 1fr ${panelWidths.right}px` }}
+    >
       <header className="menubar">
         <ProjectWidget
           current={project === null ? null : { path: project.path, name: project.name }}
@@ -773,6 +781,18 @@ export function App() {
           )
         )}
       </main>
+      <PanelResizer
+        side="left"
+        width={panelWidths.left}
+        onResize={(width) => resizePanel("left", width)}
+        onCommit={(width) => savePanelWidth("left", width)}
+      />
+      <PanelResizer
+        side="right"
+        width={panelWidths.right}
+        onResize={(width) => resizePanel("right", width)}
+        onCommit={(width) => savePanelWidth("right", width)}
+      />
       <aside className="right-side">
         {project === null ? (
           <p className="empty">Open a git repo to browse its files.</p>

@@ -1405,3 +1405,30 @@ ul {
 .skill-setup li button {
   margin-left: 4px;
 }
+
+.panel-resizer {
+  grid-row: 2 / 4;
+  position: relative;
+  z-index: 5;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.panel-resizer:hover,
+.panel-resizer:focus-visible {
+  background: var(--border);
+}
+
+/* Straddles the panel's inner edge without taking a grid column. */
+.panel-resizer-left {
+  grid-column: 2;
+  justify-self: end;
+  margin-right: -3px;
+}
+
+.panel-resizer-right {
+  grid-column: 4;
+  justify-self: start;
+  margin-left: -3px;
+}

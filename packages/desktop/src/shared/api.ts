@@ -1,3 +1,4 @@
+import type { PanelWidths } from "./panel-widths.ts";
 import type {
   AgentHooks,
   MergeStrategy,
@@ -97,6 +98,8 @@ export interface AppState {
   openProjects: OpenProject[];
   legendDismissed: boolean;
   liveEventsPanel: LiveEventsPanelMode;
+  /** The widths of the left and right side panels. */
+  panelWidths: PanelWidths;
   /** The sessions this app started, in the order they started. */
   sessions: SessionInfo[];
   /** The state of each session this app started, by session id. */
@@ -189,6 +192,8 @@ export interface DrylandApi {
   trackerWidgetAction(kind: TrackerWidgetAction["kind"]): Promise<string | null>;
   /** Remembers how much of the live-events panel shows. */
   setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;
+  /** Remembers the widths of the side panels. */
+  setPanelWidths(widths: PanelWidths): Promise<void>;
   /** Remembers the open tabs of the open project. */
   saveTabs(tabs: TabsState): Promise<void>;
   /** Remembers the Sessions view's layout in the open project. */

@@ -20,6 +20,7 @@ const SETTINGS_DEFAULTS = {
   updateChannel: "latest",
   lastUpdateCheck: null,
   openProjects: [] as string[],
+  panelWidths: { left: 320, right: 240 },
 };
 
 describe("ui state store", () => {
@@ -139,6 +140,15 @@ describe("ui state store", () => {
 
     writeFileSync(file, JSON.stringify({ liveEventsPanel: "sideways" }));
     expect(createUiStateStore(file).read().liveEventsPanel).toBe("expanded");
+  });
+
+  it("remembers the side panel widths and clamps a saved one that is out of range", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ panelWidths: { left: 400, right: 300 } });
+    expect(createUiStateStore(file).read().panelWidths).toEqual({ left: 400, right: 300 });
+
+    writeFileSync(file, JSON.stringify({ panelWidths: { left: 5, right: "x" } }));
+    expect(createUiStateStore(file).read().panelWidths).toEqual({ left: 200, right: 240 });
   });
 
   it("remembers each confirmation type's 'do not ask again' on its own, and its reset", () => {

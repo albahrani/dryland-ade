@@ -7,6 +7,7 @@ import { isRetentionDays } from "../shared/settings-change.ts";
 import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
 import { parseProjects } from "../shared/projects.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
+import { DEFAULT_PANEL_WIDTHS, parsePanelWidths, type PanelWidths } from "../shared/panel-widths.ts";
 import { DEFAULT_UPDATE_CHANNEL, isUpdateChannel, type UpdateChannel } from "../shared/updates.ts";
 import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
 
@@ -22,6 +23,8 @@ export interface UiState {
   /** The Sessions view's grouping, collapsed panes and sash position in each project, by project path. */
   sessionsLayout: Record<string, SessionsLayout>;
   liveEventsPanel: LiveEventsPanelMode;
+  /** The widths of the left and right side panels. */
+  panelWidths: PanelWidths;
   /** Whether the app's tracker writes are committed, unless a project overrides it. */
   autoCommit: boolean;
   /** Auto-commit overrides, by project path. */
@@ -53,6 +56,7 @@ const DEFAULTS: UiState = {
   tabs: {},
   sessionsLayout: {},
   liveEventsPanel: "expanded",
+  panelWidths: DEFAULT_PANEL_WIDTHS,
   autoCommit: true,
   projectAutoCommit: {},
   autoSubmit: false,
@@ -123,6 +127,7 @@ function parse(text: string): UiState {
     tabs: parseAllTabs(raw.tabs),
     sessionsLayout: parseAllLayouts(raw.sessionsLayout),
     liveEventsPanel: isLiveEventsPanelMode(raw.liveEventsPanel) ? raw.liveEventsPanel : DEFAULTS.liveEventsPanel,
+    panelWidths: parsePanelWidths(raw.panelWidths),
     autoCommit: typeof raw.autoCommit === "boolean" ? raw.autoCommit : DEFAULTS.autoCommit,
     projectAutoCommit: parseOverrides(raw.projectAutoCommit),
     autoSubmit: typeof raw.autoSubmit === "boolean" ? raw.autoSubmit : DEFAULTS.autoSubmit,
