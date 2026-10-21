@@ -1,7 +1,8 @@
 # Tick criteria and amend an answer from the CLI
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T16:56:44.696Z","was":"ready-for-agent"}} -->
 
 ## Question
 
