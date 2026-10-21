@@ -192,6 +192,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [OSS files, README, manual and About](issues/59-oss-files-readme-manual-and-about.md): Licence, README, manual, community files, issue forms, generated third-party notices with a CI check, and an unofficial/credit About dialog.
 
+- [Installers and bundled launcher](issues/57-installers-and-bundled-launcher.md): electron-builder installers, a single-file CLI with an install-directory launcher, and an opt-in global PATH link.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
