@@ -198,6 +198,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Resize the side panels](issues/85-resize-the-left-and-right-side-panels.md): Drag handles resize the left and right panels within min/max limits, widths kept across restarts.
 
+- [Fold the side panels](issues/86-fold-in-the-left-and-right-side-panels-and-reopen.md): Status-bar buttons fold and reopen the left and right panels, and the folded state is kept across restarts.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
