@@ -57,7 +57,8 @@ dryland ticket show <map>/<number>
 dryland ticket claim <map>/<number>
 dryland ticket release <map>/<number>
 dryland ticket create --map <map> --title <title> --type <type> [--question <text>] [--blocked-by <number>,...]
-dryland ticket resolve <map>/<number> --answer <text>
+dryland ticket resolve <map>/<number> --answer <text> [--amend]
+dryland ticket tick <map>/<number> --criterion <n>
 dryland ticket block <map>/<number> [--add <number>,...] [--remove <number>,...]
 dryland ticket comment <map>/<number> --text <text>
 dryland ticket triage <map>/<number> --role <role>

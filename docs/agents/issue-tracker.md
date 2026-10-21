@@ -32,3 +32,5 @@ Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
 - **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
 - **Claim**: `dryland ticket claim <map>/<NN>` before any work; it sets `Status: claimed`.
 - **Resolve**: `dryland ticket resolve <map>/<NN> --answer "<answer>"` appends the answer under an `## Answer` heading and sets `Status: resolved`, then `dryland map index <map> --title ... --link ... --gist ...` adds the context pointer to the map's Decisions-so-far in `map.md`.
+- **Tick**: `dryland ticket tick <map>/<NN> --criterion <n>` ticks the nth (1-based) acceptance criterion of a ticket. It fails on a number out of range, a box already ticked, or a ticket with no criteria list. Never tick a box by editing the file.
+- **Amend**: `dryland ticket resolve <map>/<NN> --answer "<answer>" --amend` replaces the `## Answer` of an already resolved ticket. Without `--amend`, resolving a resolved ticket fails.

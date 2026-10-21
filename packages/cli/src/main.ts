@@ -38,6 +38,7 @@ import {
   sessionsOf,
   showMap,
   showTicket,
+  tickTicket,
   ticketKind,
   triageTicket,
   unlinkLauncher,
@@ -142,7 +143,8 @@ const USAGE = [
   "       dryland ticket release <map>/<number> [--commit | --no-commit] [--json]",
   "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
   "                             [--blocked-by <number>[,<number>...]] [--commit | --no-commit] [--json]",
-  "       dryland ticket resolve <map>/<number> --answer <text> [--commit | --no-commit] [--json]",
+  "       dryland ticket resolve <map>/<number> --answer <text> [--amend] [--commit | --no-commit] [--json]",
+  "       dryland ticket tick <map>/<number> --criterion <n> [--commit | --no-commit] [--json]",
   "       dryland ticket block <map>/<number> [--add <number>[,<number>...]] [--remove <number>[,<number>...]]",
   "                            [--commit | --no-commit] [--json]",
   "       dryland ticket comment <map>/<number> --text <text> [--commit | --no-commit] [--json]",
@@ -347,15 +349,30 @@ const COMMANDS: Record<
     changed: changedTicket,
     recordsSession: true,
     options: ["answer"],
+    switches: ["amend"],
     run: async (target, flags) => {
       const { ticket, warnings } = await resolveTicket(
         nodeProcessRunner,
         process.cwd(),
         target,
         required(flags, "answer"),
-        { autoCommit: autoCommit(flags) },
+        { autoCommit: autoCommit(flags), amend: flags.switches.has("amend") },
       );
-      return { value: ticket, text: `Resolved ${ticket.map}/${ticket.id}.\n`, warnings };
+      const verb = flags.switches.has("amend") ? "Amended the answer of" : "Resolved";
+      return { value: ticket, text: `${verb} ${ticket.map}/${ticket.id}.\n`, warnings };
+    },
+  },
+  "ticket tick": {
+    target: true,
+    changed: changedTicket,
+    recordsSession: true,
+    options: ["criterion"],
+    run: async (target, flags) => {
+      const criterion = Number(required(flags, "criterion"));
+      const { ticket, warnings } = await tickTicket(nodeProcessRunner, process.cwd(), target, criterion, {
+        autoCommit: autoCommit(flags),
+      });
+      return { value: ticket, text: `Ticked criterion ${criterion} of ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
   "ticket block": {

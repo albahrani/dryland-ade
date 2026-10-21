@@ -1,5 +1,13 @@
 import { DrylandError, requireOneLine } from "./errors.ts";
-import { issuesDir, lineEnding, parseTicketFile, rewriteStatus, ticketNumbers } from "./local-markdown.ts";
+import {
+  issuesDir,
+  lineEnding,
+  parseTicketFile,
+  replaceAnswer,
+  rewriteStatus,
+  tickCriterion,
+  ticketNumbers,
+} from "./local-markdown.ts";
 import { assertMapName, readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { TICKET_TYPES, type TicketType } from "./ticket.ts";
@@ -93,7 +101,7 @@ export async function resolveTicket(
   cwd: string,
   reference: string,
   answer: string,
-  options: TrackerWriteOptions = {},
+  options: TrackerWriteOptions & { amend?: boolean } = {},
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
   const text = answer.trim();
@@ -101,14 +109,33 @@ export async function resolveTicket(
     throw new DrylandError("A resolution needs an answer.", 'Pass it as --answer "<what was decided or done>".');
   }
   const remote = await remoteBackend(runner, cwd);
-  if (remote !== null) return remote.backend.resolve(runner, remote.checkout, reference, text);
+  if (remote !== null) {
+    if (options.amend === true) throw remoteUnsupported("--amend");
+    return remote.backend.resolve(runner, remote.checkout, reference, text);
+  }
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text: file } = await currentTicket(mainCheckout, wanted);
     const name = `${ticket.map}/${ticket.id}`;
+    if (ticket.state === "resolved" && options.amend === true) {
+      const content = replaceAnswer(file, text);
+      if (content === null) {
+        throw new DrylandError(
+          `Ticket ${name} has no ## Answer to amend.`,
+          `Resolve it without --amend, or add a comment instead.`,
+        );
+      }
+      return { changes: [{ path, content }], message: `Amend answer of ${name}`, value: { ...ticket, answer: text } };
+    }
+    if (options.amend === true) {
+      throw new DrylandError(
+        `Ticket ${name} is not resolved, so there is no answer to amend.`,
+        `Resolve it with \`dryland ticket resolve ${name} --answer <text>\`.`,
+      );
+    }
     if (ticket.state === "resolved") {
       throw new DrylandError(
         `Ticket ${name} is already resolved.`,
-        `Add a comment instead, or pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
+        `Add --amend to replace its answer, add a comment, or pick another ticket with \`dryland map frontier ${ticket.map}\`.`,
       );
     }
     const eol = lineEnding(file);
@@ -123,6 +150,57 @@ export async function resolveTicket(
       changes: [{ path, content }],
       message: `Resolve ${name}`,
       value: { ...ticket, state: "resolved" as const, claimant: null, answer: text },
+    };
+  });
+  return { ticket: value, warnings };
+}
+
+function remoteUnsupported(what: string): DrylandError {
+  return new DrylandError(
+    `${what} is not supported on a GitHub or GitLab tracker yet.`,
+    "Edit the issue on the host, or add a comment with `dryland ticket comment`.",
+  );
+}
+
+/** Ticks the nth acceptance criterion of a local ticket, under the same lock and scoped commit as every write. */
+export async function tickTicket(
+  runner: ProcessRunner,
+  cwd: string,
+  reference: string,
+  criterion: number,
+  options: TrackerWriteOptions = {},
+): Promise<TicketWriteResult> {
+  const wanted = parseTicketReference(reference);
+  if (!Number.isInteger(criterion) || criterion < 1) {
+    throw new DrylandError(
+      `"${criterion}" is not a criterion number.`,
+      "Pass --criterion with the 1-based position of the box, e.g. --criterion 2.",
+    );
+  }
+  if ((await remoteBackend(runner, cwd)) !== null) throw remoteUnsupported("ticket tick");
+  const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
+    const { ticket, path, text: file } = await currentTicket(mainCheckout, wanted);
+    const name = `${ticket.map}/${ticket.id}`;
+    const result = tickCriterion(file, criterion);
+    if (result === null) {
+      throw new DrylandError(`Ticket ${name} has no acceptance criteria list to tick.`, "Add a comment instead.");
+    }
+    if (result.kind === "out-of-range") {
+      throw new DrylandError(
+        `Ticket ${name} has ${result.count} acceptance criteria, so ${criterion} is out of range.`,
+        `Pass --criterion between 1 and ${result.count}.`,
+      );
+    }
+    if (result.kind === "already-ticked") {
+      throw new DrylandError(
+        `Criterion ${criterion} of ${name} is already ticked.`,
+        `Tick one that is still open; run \`dryland ticket show ${name}\` to see the list.`,
+      );
+    }
+    return {
+      changes: [{ path, content: result.markdown }],
+      message: `Tick criterion ${criterion} of ${name}`,
+      value: ticket,
     };
   });
   return { ticket: value, warnings };

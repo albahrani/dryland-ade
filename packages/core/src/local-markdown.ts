@@ -229,6 +229,53 @@ function appendToSection(markdown: string, heading: string, entry: string, style
   return lines.join("");
 }
 
+/**
+ * Replaces the body of the `## Answer` section with `answer`, keeping the heading and every other section.
+ * Returns `null` when the file has no such section.
+ */
+export function replaceAnswer(markdown: string, answer: string): string | null {
+  const lines = markdown.split(/(?<=\n)/);
+  const range = findSectionRange(lines, "Answer");
+  if (range === null) return null;
+  const eol = lineEnding(markdown);
+  const heading = (lines[range.start] ?? "").replace(/\r?\n$/, "");
+  const after = range.end < lines.length ? [eol, ...lines.slice(range.end)] : [];
+  const body = answer.replace(/\r?\n/g, eol);
+  return [...lines.slice(0, range.start), `${heading}${eol}`, eol, `${body}${eol}`, ...after].join("");
+}
+
+export type TickResult =
+  { kind: "ticked"; markdown: string } | { kind: "already-ticked" } | { kind: "out-of-range"; count: number };
+
+/**
+ * Ticks the nth (1-based) checkbox under the `Acceptance criteria` heading, counting ticked and unticked boxes
+ * alike. Only that one `[ ]` changes. `null` when the file has no such list.
+ */
+export function tickCriterion(markdown: string, n: number): TickResult | null {
+  const lines = markdown.split(/(?<=\n)/);
+  let fenced = false;
+  let level = 0;
+  const boxes: number[] = [];
+  lines.forEach((line, i) => {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    if (fenced) return;
+    const heading = /^(#{1,6})\s+(.*?)\s*$/.exec(line.replace(/\r?\n$/, ""));
+    if (heading?.[1] !== undefined) {
+      if (/^acceptance criteria$/i.test(heading[2] ?? "")) level = heading[1].length;
+      else if (level > 0 && heading[1].length <= level) level = 0;
+      return;
+    }
+    if (level > 0 && /^\s*[-*+]\s+\[[ xX]\]/.test(line)) boxes.push(i);
+  });
+  if (boxes.length === 0) return null;
+  const index = boxes[n - 1];
+  if (!Number.isInteger(n) || index === undefined) return { kind: "out-of-range", count: boxes.length };
+  const line = lines[index] ?? "";
+  if (!/\[ \]/.test(line)) return { kind: "already-ticked" };
+  lines[index] = line.replace("[ ]", "[x]");
+  return { kind: "ticked", markdown: lines.join("") };
+}
+
 /** Appends a comment under `## Comments`, creating the heading when it is missing. Earlier lines are untouched. */
 export function appendComment(markdown: string, comment: string): string {
   return appendToSection(markdown, "Comments", comment, "paragraph");

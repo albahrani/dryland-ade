@@ -16,7 +16,7 @@ Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain
 
 Implementing a ticket does not close it. Once its work is committed, resolve it the way `docs/agents/issue-tracker.md` defines "Resolve":
 
-1. Tick every acceptance criterion the code and tests cover, and leave unticked any they do not.
+1. `dryland ticket tick <map>/<NN> --criterion <n>` for every acceptance criterion the code and tests cover; leave unticked any they do not.
 2. `dryland ticket resolve <map>/<NN> --answer "<what was built, the commits, decisions, known limits>"`.
 3. `dryland map index <map> --title "<title>" --link issues/<NN>-<slug>.md --gist "<one sentence>"`.
 4. Commit the ticket and map files as their own commit, separate from the code.

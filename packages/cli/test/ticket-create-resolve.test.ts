@@ -153,6 +153,85 @@ describe("dryland ticket resolve", () => {
   });
 });
 
+const CRITERIA =
+  "\n### Acceptance criteria\n\n- [ ] First\n- [x] Second\n- [ ] Third\n\n## Notes\n\n- [ ] Not a criterion\n";
+
+describe("dryland ticket tick", () => {
+  it("ticks the nth criterion, touching only that box, and commits only the ticket", async () => {
+    const repo = shopRepo({ [TICKET_PATH]: TICKET + CRITERIA });
+    repo.write("unrelated.txt", "dirty");
+
+    const result = await repo.run(["ticket", "tick", "shop/01", "--criterion", "3"]);
+
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(repo.read(TICKET_PATH)).toBe(TICKET + CRITERIA.replace("- [ ] Third", "- [x] Third"));
+    expect(repo.log()[0]).toBe("Tick criterion 3 of shop/01");
+    expect(repo.git("status", "--porcelain")).toBe("?? unrelated.txt");
+  });
+
+  it("fails clearly for a bad number, a ticked box or a ticket without criteria", async () => {
+    const repo = shopRepo({ [TICKET_PATH]: TICKET + CRITERIA, ".scratch/shop/issues/02-bare.md": TICKET });
+
+    const tick = (target: string, n: string) => repo.run(["ticket", "tick", target, "--criterion", n]);
+    const outOfRange = await tick("shop/01", "4");
+    const zero = await tick("shop/01", "0");
+    const word = await tick("shop/01", "two");
+    const ticked = await tick("shop/01", "2");
+    const none = await tick("shop/02", "1");
+
+    for (const result of [outOfRange, zero, word, ticked, none]) {
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("Next:");
+    }
+    expect(outOfRange.stderr).toContain("3 acceptance criteria");
+    expect(ticked.stderr).toContain("already ticked");
+    expect(none.stderr).toContain("no acceptance criteria");
+    expect(repo.read(TICKET_PATH)).toBe(TICKET + CRITERIA);
+  });
+
+  it("ticks N different criteria in parallel without losing any", async () => {
+    const boxes = Array.from({ length: 6 }, (_, i) => `- [ ] Box ${i + 1}`).join("\n");
+    const repo = shopRepo({ [TICKET_PATH]: `${TICKET}\n## Acceptance criteria\n\n${boxes}\n` });
+
+    const results = await Promise.all(
+      [1, 2, 3, 4, 5, 6].map((n) => repo.run(["ticket", "tick", "shop/01", "--criterion", String(n)])),
+    );
+
+    for (const [i, result] of results.entries()) expect(result.exitCode, `tick ${i + 1}: ${result.stderr}`).toBe(0);
+    expect(repo.read(TICKET_PATH)).not.toContain("[ ]");
+    expect(repo.git("status", "--porcelain")).toBe("");
+  });
+});
+
+describe("dryland ticket resolve --amend", () => {
+  it("replaces the answer of a resolved ticket and keeps the other sections", async () => {
+    const resolved = TICKET.replace("ready-for-agent", "resolved");
+    const repo = shopRepo({ [TICKET_PATH]: `${resolved}\n## Answer\n\nWrong.\n\n## Comments\n\nA note.\n` });
+
+    const result = await repo.run(["ticket", "resolve", "shop/01", "--answer", "Right.\nTwo lines.", "--amend"]);
+
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(repo.read(TICKET_PATH)).toContain("## Answer\n\nRight.\nTwo lines.\n\n## Comments\n\nA note.\n");
+    expect(repo.read(TICKET_PATH).match(/^## Answer/gm)).toHaveLength(1);
+    expect(repo.log()[0]).toBe("Amend answer of shop/01");
+    const shown = JSON.parse((await repo.run(["ticket", "show", "shop/01", "--json"])).stdout);
+    expect(shown).toMatchObject({ state: "resolved", answer: "Right.\nTwo lines." });
+  });
+
+  it("still refuses to resolve a resolved ticket without --amend, and to amend an open one", async () => {
+    const repo = shopRepo();
+    const open = await repo.run(["ticket", "resolve", "shop/01", "--answer", "x", "--amend"]);
+    await repo.run(["ticket", "resolve", "shop/01", "--answer", "Done."]);
+    const again = await repo.run(["ticket", "resolve", "shop/01", "--answer", "Again."]);
+
+    expect(open.exitCode).not.toBe(0);
+    expect(open.stderr).toContain("not resolved");
+    expect(again.exitCode).not.toBe(0);
+    expect(again.stderr).toContain("already resolved");
+    expect(repo.read(TICKET_PATH)).toContain("Done.");
+  });
+});
+
 describe("dryland option checking", () => {
   it("refuses an option the command does not take instead of ignoring it", async () => {
     const repo = shopRepo();
