@@ -10,9 +10,14 @@ import type { UpdateSource } from "./updates.ts";
 export function createElectronUpdateSource(): UpdateSource {
   // Read lazily: the autoUpdater of an app that is not packaged has no feed to read.
   const updater = () => electronUpdater.autoUpdater;
+  let listening = false;
   return {
     async check(channel: UpdateChannel) {
       const autoUpdater = updater();
+      // A failure also rejects the call that hit it, which the updater reports; an `error` event nobody listens to
+      // would throw in the main process instead.
+      if (!listening) autoUpdater.on("error", () => {});
+      listening = true;
       autoUpdater.autoDownload = false;
       autoUpdater.autoInstallOnAppQuit = true;
       autoUpdater.allowDowngrade = false;

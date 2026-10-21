@@ -16,13 +16,13 @@ The Updates tab of Settings shows the current version, the channel choice, the l
 
 ## Acceptance criteria
 
-- [ ] The Updates tab shows version, channel, last check and pending-update state, and "check now" works
+- [x] The Updates tab shows version, channel, last check and pending-update state, and "check now" works
 - [ ] Switching the channel changes which releases are considered
-- [ ] No more than one automatic check happens per day
+- [x] No more than one automatic check happens per day
 - [ ] On NSIS and AppImage, a found update downloads in the background and installs on next quit, never while the app runs
-- [ ] On macOS and deb, a found update shows a notice with a link and nothing is downloaded
-- [ ] A failed check or download is reported quietly and does not disturb running sessions
-- [ ] Update decisions (channel, daily limit, per-platform behaviour) are tested with a fake update source
+- [x] On macOS and deb, a found update shows a notice with a link and nothing is downloaded
+- [x] A failed check or download is reported quietly and does not disturb running sessions
+- [x] Update decisions (channel, daily limit, per-platform behaviour) are tested with a fake update source
 
 ## Comments
 

@@ -1,4 +1,4 @@
-/** Where releases are published; ticket 60 fills in the owner with the publish config. */
+/** Where releases are published. The owner is a placeholder, here and in `electron-builder.json`, until ticket 60. */
 export const RELEASES_URL = "https://github.com/dryland-ade/dryland-ade/releases";
 
 /** The release page of `version`, which a notify-only platform links to. */
