@@ -1,8 +1,7 @@
 # Tick criteria and amend an answer from the CLI
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T16:56:44.696Z","was":"ready-for-agent"}} -->
+Status: resolved
 
 ## Question
 
@@ -17,9 +16,13 @@ Out of scope: a general `ticket edit` for title, body or criteria (kept on mattp
 
 ### Acceptance criteria
 
-- [ ] `ticket tick` ticks the nth criterion; a bad number, an already ticked box or a missing criteria list gives a clear error
-- [ ] `ticket resolve --amend` replaces the Answer; without `--amend`, resolving a resolved ticket still fails
-- [ ] Each verb is covered by CLI tests, including concurrent writes
-- [ ] docs/agents/issue-tracker.md defines Tick and Amend
-- [ ] AGENTS.md has no hand-tick step
-- [ ] The desktop app shows the change like other tracker writes
+- [x] `ticket tick` ticks the nth criterion; a bad number, an already ticked box or a missing criteria list gives a clear error
+- [x] `ticket resolve --amend` replaces the Answer; without `--amend`, resolving a resolved ticket still fails
+- [x] Each verb is covered by CLI tests, including concurrent writes
+- [x] docs/agents/issue-tracker.md defines Tick and Amend
+- [x] AGENTS.md has no hand-tick step
+- [x] The desktop app shows the change like other tracker writes
+
+## Answer
+
+Built in 60737c4 and 42e286b. New `dryland ticket tick <map>/<NN> --criterion <n>` (1-based, counts ticked and unticked boxes under the 'Acceptance criteria' heading; errors for out-of-range, non-number, already ticked, no list) and `ticket resolve --amend` (replaces the ## Answer of a resolved ticket; errors if the ticket is open or has no Answer section). Both go through writeTracker (lock, scoped commit); commit messages 'Tick criterion N of map/NN' and 'Amend answer of map/NN'. Without --amend, resolving a resolved ticket still fails, now hinting at --amend. docs/agents/issue-tracker.md defines Tick and Amend, AGENTS.md step 1 uses the verb, manual updated. CLI tests cover each verb including 6 parallel ticks; full suite passes on Windows and Linux. Known limits: GitHub/GitLab trackers reject both verbs with a clear message (not in scope of the ticket, no backend method added); no parallel-amend test; the desktop criterion rests on the generic ticket.changed live event both verbs emit (no desktop code changed, no Playwright run, file-watcher refresh not separately verified); no GLOSSARY entry for criterion/amend.

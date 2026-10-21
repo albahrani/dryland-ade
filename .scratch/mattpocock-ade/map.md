@@ -200,6 +200,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Fold the side panels](issues/86-fold-in-the-left-and-right-side-panels-and-reopen.md): Status-bar buttons fold and reopen the left and right panels, and the folded state is kept across restarts.
 
+- [Tick criteria and amend an answer from the CLI](issues/108-tick-criteria-and-amend-an-answer-from-the-cli.md): ticket tick and resolve --amend are sanctioned CLI verbs on local trackers, replacing hand-ticking and comment-only corrections.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
