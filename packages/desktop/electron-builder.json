@@ -4,6 +4,7 @@
   "productName": "Dryland ADE",
   "artifactName": "dryland-ade-${version}-${os}-${arch}.${ext}",
   "directories": { "output": "release" },
+  "publish": [{ "provider": "github", "owner": "dryland-ade", "repo": "dryland-ade" }],
   "files": ["out/**", "package.json"],
   "npmRebuild": false,
   "asarUnpack": ["**/node_modules/node-pty/**"],

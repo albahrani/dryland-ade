@@ -7,6 +7,7 @@ import { isRetentionDays } from "../shared/settings-change.ts";
 import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
 import { parseProjects } from "../shared/projects.ts";
 import { parseTabs, type TabsState } from "../shared/tabs.ts";
+import { DEFAULT_UPDATE_CHANNEL, isUpdateChannel, type UpdateChannel } from "../shared/updates.ts";
 import { ASK_ALWAYS, CONFIRMATION_TYPES, type DontAsk } from "../shared/tracker-actions.ts";
 
 /** The small local UI state Dryland keeps; the repo stays the source of truth for everything else. */
@@ -39,6 +40,10 @@ export interface UiState {
   compat: Record<string, CompatConfig>;
   /** Days a session stays in the session index after it was last seen. */
   sessionRetentionDays: number;
+  /** The release channel updates are checked on. */
+  updateChannel: UpdateChannel;
+  /** ISO time of the last update check; `null` before the first. */
+  lastUpdateCheck: string | null;
 }
 
 const DEFAULTS: UiState = {
@@ -57,6 +62,8 @@ const DEFAULTS: UiState = {
   resumeOnStart: false,
   compat: {},
   sessionRetentionDays: DEFAULT_SESSION_RETENTION_DAYS,
+  updateChannel: DEFAULT_UPDATE_CHANNEL,
+  lastUpdateCheck: null,
 };
 
 export interface UiStateStore {
@@ -127,6 +134,11 @@ function parse(text: string): UiState {
     sessionRetentionDays: isRetentionDays(raw.sessionRetentionDays)
       ? raw.sessionRetentionDays
       : DEFAULTS.sessionRetentionDays,
+    updateChannel: isUpdateChannel(raw.updateChannel) ? raw.updateChannel : DEFAULTS.updateChannel,
+    lastUpdateCheck:
+      typeof raw.lastUpdateCheck === "string" && !Number.isNaN(Date.parse(raw.lastUpdateCheck))
+        ? raw.lastUpdateCheck
+        : DEFAULTS.lastUpdateCheck,
   };
 }
 

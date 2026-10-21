@@ -88,11 +88,18 @@ function installedClosure(root) {
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
 }
 
-/** The licence file of an installed package; its text, trimmed of line-ending differences. */
+/**
+ * The licence file of an installed package; its text, trimmed of line-ending differences. A package that declares MIT
+ * and an author but ships no file gets the standard MIT text under its author's name.
+ */
 function licenceText(dir) {
   const file = readdirSync(dir).find((entry) => /^(licen[cs]e|copying)(\..*)?$/i.test(entry));
-  if (file === undefined) throw new Error(`${dir} has no licence file; add it to THIRD_PARTY_NOTICES by hand.`);
-  return readFileSync(join(dir, file), "utf8").replace(/\r\n/g, "\n").trim();
+  if (file !== undefined) return readFileSync(join(dir, file), "utf8").replace(/\r\n/g, "\n").trim();
+  const { license, author } = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  const holder = typeof author === "string" ? author : author?.name;
+  if (license !== "MIT" || holder === undefined)
+    throw new Error(`${dir} has no licence file; add it to THIRD_PARTY_NOTICES by hand.`);
+  return ORCA_LICENCE.replace(/^Copyright .*$/m, `Copyright (c) ${holder}`);
 }
 
 /** The full text of THIRD_PARTY_NOTICES.md for the repo at `root`; the same on every OS for the same install. */

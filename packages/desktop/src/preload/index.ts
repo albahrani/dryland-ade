@@ -1,5 +1,6 @@
 import type { LiveEvent, SessionState } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
+import type { UpdateState } from "../shared/updates.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "../shared/quit.ts";
 import type { AppSettings, DrylandApi, MenuCommand, ProjectView, SessionInfo } from "../shared/api.ts";
 
@@ -48,6 +49,15 @@ const api: DrylandApi = {
   changeAgentHooks: (agentId, action) => ipcRenderer.invoke("agent-hooks:change", agentId, action),
   overrideRule: (ruleId, enabled) => ipcRenderer.invoke("compat:override", ruleId, enabled),
   changeSetting: (change) => ipcRenderer.invoke("settings:change", change),
+  updateState: () => ipcRenderer.invoke("updates:state"),
+  checkForUpdates: () => ipcRenderer.invoke("updates:check"),
+  setUpdateChannel: (channel) => ipcRenderer.invoke("updates:channel", channel),
+  openUpdateRelease: () => ipcRenderer.invoke("updates:open-release"),
+  onUpdateChanged(callback) {
+    const listener = (_event: unknown, state: UpdateState) => callback(state);
+    ipcRenderer.on("updates:changed", listener);
+    return () => ipcRenderer.removeListener("updates:changed", listener);
+  },
   writeTerminal: (id, data) => ipcRenderer.send("terminal:write", id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send("terminal:resize", id, cols, rows),
   closeTerminal: (id) => ipcRenderer.send("terminal:close", id),

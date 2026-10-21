@@ -34,6 +34,7 @@ import type { SettingsChange } from "./settings-change.ts";
 import type { StopConfirmation } from "./stop-session.ts";
 import type { DocumentRef, TabsState } from "./tabs.ts";
 import type { ConfirmationType, DontAsk, TicketAction } from "./tracker-actions.ts";
+import type { UpdateChannel, UpdateState } from "./updates.ts";
 import type { WorkTarget } from "./work-target.ts";
 
 /** The tickets tree of a project with its next steps, or why it cannot be read and what to do about it. */
@@ -272,6 +273,16 @@ export interface DrylandApi {
   overrideRule(ruleId: string, enabled: boolean): Promise<void>;
   /** Applies a change made in the Settings dialog; the new settings reach `onSettingsChanged`. */
   changeSetting(change: SettingsChange): Promise<void>;
+  /** The version, release channel and update status the Updates tab shows. */
+  updateState(): Promise<UpdateState>;
+  /** Checks for an update now; the outcome reaches `onUpdateChanged`. */
+  checkForUpdates(): Promise<void>;
+  /** Follows another release channel and checks it at once. */
+  setUpdateChannel(channel: UpdateChannel): Promise<void>;
+  /** Opens the release page of the update a notify-only platform found. */
+  openUpdateRelease(): Promise<void>;
+  /** Called whenever the update state changes. Returns an unsubscribe function. */
+  onUpdateChanged(callback: (state: UpdateState) => void): () => void;
   writeTerminal(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
   /** Kills the terminal's process; a session's terminal is left running, hidden, until its session is stopped. */

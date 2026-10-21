@@ -83,6 +83,9 @@ import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
 import { ACTIVITY_QUIET_MS, createActivityStatus } from "./activity-status.ts";
 import { createSessionStatus } from "./session-status.ts";
+import { createElectronUpdateSource } from "./electron-update-source.ts";
+import { createUpdater } from "./updates.ts";
+import { isUpdateChannel, updateMode } from "../shared/updates.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { createUnseenOutput } from "./unseen-output.ts";
 import { autoSubmitFor, isSettingsChange, settingsPatch } from "../shared/settings-change.ts";
@@ -95,6 +98,9 @@ import { createAgentHooksControl } from "./agent-hooks.ts";
 import { isAgentHooksAction } from "../shared/agent-hooks.ts";
 import { isRootHint } from "../shared/explorer.ts";
 import { isSkillChoice, isWorkTarget } from "../shared/work-target.ts";
+
+/** How often the app asks the updater whether a daily check is due. */
+const UPDATE_TICK_MS = 60 * 60 * 1000;
 
 /** A terminal can print after its window is gone, between the window closing and the app quitting. */
 function sendToWindow(channel: string, ...args: unknown[]): void {
@@ -133,6 +139,31 @@ const dryland = createDrylandCli({
   runtime: process.execPath,
   cli: layout.cli,
   env: ptyEnv,
+});
+// A found update is shown as a notice; a failed check stays in the Updates tab and never interrupts the user.
+const updater = createUpdater({
+  source: createElectronUpdateSource(),
+  mode: updateMode({
+    platform: process.platform,
+    packaged: app.isPackaged,
+    appImage: process.env["APPIMAGE"] !== undefined,
+  }),
+  version: app.getVersion(),
+  now: Date.now,
+  saved: {
+    channel: () => store.read().updateChannel,
+    lastCheck: () => store.read().lastUpdateCheck,
+    setChannel: (updateChannel) => void store.update({ updateChannel }),
+    setLastCheck: (lastUpdateCheck) => void store.update({ lastUpdateCheck }),
+  },
+  onChange(state) {
+    sendToWindow("updates:changed", state);
+    const { status } = state;
+    if (status.kind === "ready")
+      sendToWindow("notice", `Dryland ADE ${status.version} was downloaded and installs when you quit.`);
+    else if (status.kind === "available")
+      sendToWindow("notice", `Dryland ADE ${status.version} is available: ${status.url}`);
+  },
 });
 const autoCommit = (projectPath: string) => autoCommitFor(store.read(), projectPath);
 const autoSubmit = (projectPath: string) => autoSubmitFor(store.read(), projectPath);
@@ -810,6 +841,15 @@ ipcMain.handle("confirmations:dont-ask", (_event, type: unknown) => {
   if (!isConfirmationType(type)) return;
   changeSettings({ dontAsk: { ...store.read().dontAsk, [type]: true } });
 });
+ipcMain.handle("updates:state", () => updater.state());
+ipcMain.handle("updates:check", () => updater.checkNow());
+ipcMain.handle("updates:channel", (_event, channel: unknown) => {
+  if (isUpdateChannel(channel)) return updater.setChannel(channel);
+});
+ipcMain.handle("updates:open-release", async () => {
+  const { status } = updater.state();
+  if (status.kind === "available") await shell.openExternal(status.url);
+});
 ipcMain.handle("settings:change", (_event, change: unknown) => {
   if (!isSettingsChange(change)) return;
   changeSettings(settingsPatch(store.read(), change, project?.path ?? null));
@@ -879,6 +919,8 @@ void app.whenReady().then(async () => {
   // The window opens first; a slow or missing last project fills in when it has loaded.
   buildMenu();
   createWindow();
+  void updater.automatic();
+  setInterval(() => void updater.automatic(), UPDATE_TICK_MS).unref();
   const { lastProject } = store.read();
   // The window shows the project last shown; the other open projects load when the user switches to them.
   if (lastProject !== null) {

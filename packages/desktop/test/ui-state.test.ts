@@ -17,6 +17,8 @@ const SETTINGS_DEFAULTS = {
   resumeOnStart: false,
   compat: {},
   sessionRetentionDays: 30,
+  updateChannel: "latest",
+  lastUpdateCheck: null,
   openProjects: [] as string[],
 };
 
@@ -216,5 +218,24 @@ describe("ui state store", () => {
       autoSubmit: false,
       projectAutoSubmit: { "/repos/shop": true },
     });
+  });
+});
+
+describe("ui state update fields", () => {
+  it("defaults to the latest channel and no check, and remembers both", () => {
+    const file = stateFile();
+    expect(createUiStateStore(file).read()).toMatchObject({ updateChannel: "latest", lastUpdateCheck: null });
+    createUiStateStore(file).update({ updateChannel: "beta", lastUpdateCheck: "2026-10-21T10:00:00.000Z" });
+    expect(createUiStateStore(file).read()).toMatchObject({
+      updateChannel: "beta",
+      lastUpdateCheck: "2026-10-21T10:00:00.000Z",
+    });
+  });
+
+  it("falls back for a channel or time that is not valid", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({});
+    writeFileSync(file, JSON.stringify({ updateChannel: "nightly", lastUpdateCheck: "yesterday" }));
+    expect(createUiStateStore(file).read()).toMatchObject({ updateChannel: "latest", lastUpdateCheck: null });
   });
 });

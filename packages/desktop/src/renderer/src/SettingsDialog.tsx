@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { AgentHooksAction } from "../../shared/agent-hooks.ts";
 import { AgentClisTab } from "./AgentClisTab.tsx";
 import { SkillsTab } from "./SkillsTab.tsx";
+import { UpdatesTab } from "./UpdatesTab.tsx";
 import type { StartHandler } from "./StartWork.tsx";
 import { LIVE_EVENTS_PANEL_MODES, type AppSettings, type LiveEventsPanelMode } from "../../shared/api.ts";
 import type { SettingsChange } from "../../shared/settings-change.ts";
@@ -11,11 +12,6 @@ import { CONFIRMATION_LABELS, CONFIRMATION_TYPES } from "../../shared/tracker-ac
 
 const TABS = ["General", "Agent CLIs", "Tracker", "Skills", "Write confirmations", "Updates"] as const;
 type SettingsTab = (typeof TABS)[number];
-
-/** The ticket that fills each tab still to come. */
-const COMING: Partial<Record<SettingsTab, string>> = {
-  Updates: "The Updates tab arrives with ticket 58.",
-};
 
 const PANEL_LABELS: Record<LiveEventsPanelMode, string> = {
   expanded: "Expanded",
@@ -73,7 +69,7 @@ export function SettingsDialog({
           ))}
         </div>
         <div role="tabpanel" id="settings-panel" aria-label={tab} className="settings-panel">
-          {COMING[tab] !== undefined && <p className="dim">{COMING[tab]}</p>}
+          {tab === "Updates" && <UpdatesTab />}
           {tab === "General" && (
             <>
               <p className="dim">These apply to the whole app.</p>

@@ -184,7 +184,7 @@ test("with auto-commit off for the project, writes change the files without comm
   await app.close();
 });
 
-test("Settings shows a project override over the global auto-commit, clears it, and says which tabs are still to come", async () => {
+test("Settings shows a project override over the global auto-commit, clears it, and shows the Updates tab", async () => {
   const { app, window, repo } = await openProject();
   const head = git(repo, "rev-parse", "HEAD");
   const settings = await openSettings(app, window, "Tracker");
@@ -214,7 +214,14 @@ test("Settings shows a project override over the global auto-commit, clears it, 
   await expect(retention).toHaveValue("7");
 
   await settings.getByRole("tab", { name: "Updates" }).click();
-  await expect(settings).toContainText("arrives with ticket 58");
+  // An unpackaged run has no installer to update: the tab says so, still shows the channel, and cannot check.
+  await expect(settings).toContainText("Updates are off");
+  const channel = settings.getByLabel("Channel");
+  await expect(channel).toHaveValue("latest");
+  await channel.selectOption("beta");
+  await expect(channel).toHaveValue("beta");
+  await expect(settings).toContainText("Last check: never");
+  await expect(settings.getByRole("button", { name: "Check now" })).toBeDisabled();
   await app.close();
 });
 
