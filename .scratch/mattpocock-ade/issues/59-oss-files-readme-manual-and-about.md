@@ -1,7 +1,8 @@
 # OSS files, README, manual and About
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T07:36:02.018Z","was":"ready-for-agent"}} -->
 Blocked by: 30
 
 Spec: [spec](../spec.md), user stories 90, 95. "Product shape and constraints", "UI". Details in the resolved [GitHub project preparation ticket](18-github-project-preparation.md).
