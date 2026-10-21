@@ -335,8 +335,17 @@ export function App() {
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel, panelWidths, panelFolded, sessionStates, unseenSessions, settings } =
-    state;
+  const {
+    project,
+    legendDismissed,
+    tabs,
+    liveEventsPanel,
+    panelWidths,
+    panelFolded,
+    sessionStates,
+    unseenSessions,
+    settings,
+  } = state;
   // Sessions of other projects keep running and reporting; the views show the current project's.
   const everySession = [...sessions.values()];
   const projectOnly = projectSessions(everySession, project?.path ?? null);

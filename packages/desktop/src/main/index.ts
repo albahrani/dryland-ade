@@ -746,7 +746,10 @@ ipcMain.handle(
   "panel-widths:save",
   (_event, widths: unknown) => void store.update({ panelWidths: parsePanelWidths(widths) }),
 );
-ipcMain.handle("panel-folded:save", (_event, folded: unknown) => void store.update({ panelFolded: parsePanelFolded(folded) }));
+ipcMain.handle(
+  "panel-folded:save",
+  (_event, folded: unknown) => void store.update({ panelFolded: parsePanelFolded(folded) }),
+);
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();
   if (loaded === null) return null;
