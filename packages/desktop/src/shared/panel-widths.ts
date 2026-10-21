@@ -6,6 +6,8 @@ export interface PanelWidths {
 
 export type PanelSide = keyof PanelWidths;
 
+export const PANEL_SIDES: PanelSide[] = ["left", "right"];
+
 export const DEFAULT_PANEL_WIDTHS: PanelWidths = { left: 320, right: 240 };
 
 /** The narrowest and widest each panel may be dragged. */
@@ -27,4 +29,14 @@ export function parsePanelWidths(raw: unknown): PanelWidths {
       ? clampPanelWidth(side, r[side])
       : DEFAULT_PANEL_WIDTHS[side];
   return { left: read("left"), right: read("right") };
+}
+
+/** Whether each side panel is folded away. */
+export type PanelFolded = Record<PanelSide, boolean>;
+
+export const DEFAULT_PANEL_FOLDED: PanelFolded = { left: false, right: false };
+
+export function parsePanelFolded(raw: unknown): PanelFolded {
+  const r = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return { left: r.left === true, right: r.right === true };
 }

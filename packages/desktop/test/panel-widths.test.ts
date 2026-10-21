@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   clampPanelWidth,
+  DEFAULT_PANEL_FOLDED,
   DEFAULT_PANEL_WIDTHS,
   PANEL_WIDTH_LIMITS,
+  parsePanelFolded,
   parsePanelWidths,
 } from "../src/shared/panel-widths.ts";
 
@@ -21,5 +23,13 @@ describe("panel widths", () => {
       right: PANEL_WIDTH_LIMITS.right.max,
     });
     expect(parsePanelWidths(null)).toEqual(DEFAULT_PANEL_WIDTHS);
+  });
+});
+
+describe("folded panels", () => {
+  it("reads each folded flag on its own and defaults to open", () => {
+    expect(parsePanelFolded({ left: true, right: false })).toEqual({ left: true, right: false });
+    expect(parsePanelFolded({ left: "yes", right: true })).toEqual({ left: false, right: true });
+    expect(parsePanelFolded(null)).toEqual(DEFAULT_PANEL_FOLDED);
   });
 });

@@ -13,6 +13,7 @@ const api: DrylandApi = {
   trackerWidgetAction: (kind) => ipcRenderer.invoke("tracker:widget-action", kind),
   dismissLegend: () => ipcRenderer.invoke("legend:dismiss"),
   setLiveEventsPanel: (mode) => ipcRenderer.invoke("live-events:mode", mode),
+  setPanelFolded: (folded) => ipcRenderer.invoke("panel-folded:save", folded),
   setPanelWidths: (widths) => ipcRenderer.invoke("panel-widths:save", widths),
   saveTabs: (tabs) => ipcRenderer.invoke("tabs:save", tabs),
   saveSessionsLayout: (layout) => ipcRenderer.invoke("sessions-layout:save", layout),

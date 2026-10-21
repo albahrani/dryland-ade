@@ -1,4 +1,4 @@
-import { parsePanelWidths } from "../shared/panel-widths.ts";
+import { parsePanelFolded, parsePanelWidths } from "../shared/panel-widths.ts";
 import { basename, join } from "node:path";
 import {
   type CompatConfig,
@@ -378,7 +378,7 @@ async function projectView(): Promise<{ view: ProjectView; mainCheckout: string 
 }
 
 async function currentState(): Promise<AppState> {
-  const { legendDismissed, tabs, sessionsLayout, liveEventsPanel, panelWidths } = store.read();
+  const { legendDismissed, tabs, sessionsLayout, liveEventsPanel, panelWidths, panelFolded } = store.read();
   const view = (await projectView())?.view ?? null;
   return {
     project: view,
@@ -386,6 +386,7 @@ async function currentState(): Promise<AppState> {
     legendDismissed,
     liveEventsPanel,
     panelWidths,
+    panelFolded,
     tabs: (view && tabs[view.path]) || EMPTY_TABS,
     sessionsLayout: (view && sessionsLayout[view.path]) || DEFAULT_SESSIONS_LAYOUT,
     sessions: work.sessions(),
@@ -745,6 +746,7 @@ ipcMain.handle(
   "panel-widths:save",
   (_event, widths: unknown) => void store.update({ panelWidths: parsePanelWidths(widths) }),
 );
+ipcMain.handle("panel-folded:save", (_event, folded: unknown) => void store.update({ panelFolded: parsePanelFolded(folded) }));
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();
   if (loaded === null) return null;

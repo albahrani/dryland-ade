@@ -1437,3 +1437,10 @@ ul {
 .right-side {
   min-width: 0;
 }
+
+.left-folded .sidebar,
+.left-folded .panel-resizer-left,
+.right-folded .right-side,
+.right-folded .panel-resizer-right {
+  display: none;
+}

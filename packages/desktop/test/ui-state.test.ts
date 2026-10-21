@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PANEL_WIDTHS } from "../src/shared/panel-widths.ts";
+import { DEFAULT_PANEL_FOLDED, DEFAULT_PANEL_WIDTHS } from "../src/shared/panel-widths.ts";
 import { createUiStateStore } from "../src/main/ui-state.ts";
 
 const stateFile = () => join(mkdtempSync(join(tmpdir(), "dryland-ui-")), "nested", "ui-state.json");
@@ -22,6 +22,7 @@ const SETTINGS_DEFAULTS = {
   lastUpdateCheck: null,
   openProjects: [] as string[],
   panelWidths: DEFAULT_PANEL_WIDTHS,
+  panelFolded: DEFAULT_PANEL_FOLDED,
 };
 
 describe("ui state store", () => {
@@ -150,6 +151,12 @@ describe("ui state store", () => {
 
     writeFileSync(file, JSON.stringify({ panelWidths: { left: 5, right: "x" } }));
     expect(createUiStateStore(file).read().panelWidths).toEqual({ left: 200, right: 240 });
+  });
+
+  it("remembers which side panels are folded", () => {
+    const file = stateFile();
+    createUiStateStore(file).update({ panelFolded: { left: true, right: false } });
+    expect(createUiStateStore(file).read().panelFolded).toEqual({ left: true, right: false });
   });
 
   it("remembers each confirmation type's 'do not ask again' on its own, and its reset", () => {

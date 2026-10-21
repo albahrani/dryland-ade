@@ -59,7 +59,7 @@ import { Legend } from "./Legend.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
 import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
-import type { PanelSide } from "../../shared/panel-widths.ts";
+import { PANEL_SIDES, type PanelSide } from "../../shared/panel-widths.ts";
 import { MapsView } from "./MapsView.tsx";
 import { TerminalTab } from "./TerminalTab.tsx";
 import {
@@ -335,7 +335,7 @@ export function App() {
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel, panelWidths, sessionStates, unseenSessions, settings } =
+  const { project, legendDismissed, tabs, liveEventsPanel, panelWidths, panelFolded, sessionStates, unseenSessions, settings } =
     state;
   // Sessions of other projects keep running and reporting; the views show the current project's.
   const everySession = [...sessions.values()];
@@ -351,6 +351,11 @@ export function App() {
   };
   const resizePanel = (side: PanelSide, width: number) =>
     setState({ ...state, panelWidths: { ...panelWidths, [side]: width } });
+  const togglePanel = (side: PanelSide) => {
+    const next = { ...panelFolded, [side]: !panelFolded[side] };
+    setState({ ...state, panelFolded: next });
+    void window.dryland.setPanelFolded(next);
+  };
   const savePanelWidth = (side: PanelSide, width: number) =>
     void window.dryland.setPanelWidths({ ...panelWidths, [side]: width });
   const setTabs = (next: TabsState) => {
@@ -618,8 +623,13 @@ export function App() {
 
   return (
     <div
-      className="shell"
-      style={{ "--left-width": `${panelWidths.left}px`, "--right-width": `${panelWidths.right}px` } as CSSProperties}
+      className={`shell${panelFolded.left ? " left-folded" : ""}${panelFolded.right ? " right-folded" : ""}`}
+      style={
+        {
+          "--left-width": panelFolded.left ? "0px" : `${panelWidths.left}px`,
+          "--right-width": panelFolded.right ? "0px" : `${panelWidths.right}px`,
+        } as CSSProperties
+      }
     >
       <header className="menubar">
         <ProjectWidget
@@ -950,6 +960,11 @@ export function App() {
       )}
       <LiveEventsPanel events={liveEvents} mode={liveEventsPanel} onMode={setLiveEventsPanel} />
       <footer className="statusbar">
+        {PANEL_SIDES.map((side) => (
+          <button key={side} aria-expanded={!panelFolded[side]} onClick={() => togglePanel(side)}>
+            {panelFolded[side] ? `Show ${side} panel` : `Hide ${side} panel`}
+          </button>
+        ))}
         <button
           aria-expanded={liveEventsPanel !== "hidden"}
           onClick={() => setLiveEventsPanel(liveEventsPanel === "hidden" ? lastVisiblePanel.current : "hidden")}

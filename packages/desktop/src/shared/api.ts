@@ -1,4 +1,4 @@
-import type { PanelWidths } from "./panel-widths.ts";
+import type { PanelFolded, PanelWidths } from "./panel-widths.ts";
 import type {
   AgentHooks,
   MergeStrategy,
@@ -100,6 +100,8 @@ export interface AppState {
   liveEventsPanel: LiveEventsPanelMode;
   /** The widths of the left and right side panels. */
   panelWidths: PanelWidths;
+  /** Which side panels are folded away. */
+  panelFolded: PanelFolded;
   /** The sessions this app started, in the order they started. */
   sessions: SessionInfo[];
   /** The state of each session this app started, by session id. */
@@ -194,6 +196,8 @@ export interface DrylandApi {
   setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;
   /** Remembers the widths of the side panels. */
   setPanelWidths(widths: PanelWidths): Promise<void>;
+  /** Remembers which side panels are folded. */
+  setPanelFolded(folded: PanelFolded): Promise<void>;
   /** Remembers the open tabs of the open project. */
   saveTabs(tabs: TabsState): Promise<void>;
   /** Remembers the Sessions view's layout in the open project. */
