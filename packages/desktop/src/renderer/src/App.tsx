@@ -26,6 +26,7 @@ import { stateLabel } from "../../shared/session-meta.ts";
 import { AllProjectsDialog, ProjectWidget, TrackerWidget } from "./ProjectsUi.tsx";
 import { projectSessions } from "../../shared/projects.ts";
 import { SessionsView } from "./SessionsView.tsx";
+import { AboutDialog } from "./AboutDialog.tsx";
 import { CompatDialog } from "./CompatDialog.tsx";
 import { SkillSetupPanel } from "./SkillSetupPanel.tsx";
 import { sessionTitle } from "../../shared/work-target.ts";
@@ -896,6 +897,7 @@ export function App() {
           onCloseProject={(path) => void closeProject(path)}
         />
       )}
+      {dialog === "about" && <AboutDialog onClose={() => setDialog(null)} />}
       {quitRequest !== null && <QuitDialog request={quitRequest} onClose={() => setQuitRequest(null)} />}
       {pending !== null && (
         <ConfirmWrite pending={pending} onConfirm={confirmPending} onCancel={() => setPending(null)} />

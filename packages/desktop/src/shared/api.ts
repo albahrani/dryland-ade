@@ -170,7 +170,7 @@ export interface ResumedAllResult {
 export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false; message: string; nextAction: string };
 
 /** What the application menu asks of the window: the dialogs that live in the renderer. */
-export type MenuCommand = "new-ticket" | "new-map" | "new-scratch" | "settings";
+export type MenuCommand = "new-ticket" | "new-map" | "new-scratch" | "settings" | "about";
 
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {

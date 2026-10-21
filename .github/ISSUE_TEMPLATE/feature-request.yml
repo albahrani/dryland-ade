@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest something Dryland ADE should do.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dryland is an unofficial, community-made companion for Matt Pocock's skills. Requests that fit that shape, such as a better view of a skill workflow or support for another Agent CLI, are the easiest to take on.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation and what is hard about it today, before the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Dryland to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried instead?
+      description: Workarounds, other tools, or other designs you considered.

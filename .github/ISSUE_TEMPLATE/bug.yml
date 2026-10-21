@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in Dryland ADE or the dryland CLI does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Dryland is an unofficial, community-made project. Do not include secrets or tokens; for a security problem use private vulnerability reporting instead (see SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: The steps to reproduce it, if you know them.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `dryland doctor`
+      description: Run `dryland doctor` in the affected repository and paste the output.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dryland version and OS
+      description: For example "0.1.0-beta.1 on Windows 11".
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent CLI involved
+      options:
+        - None
+        - Claude Code
+        - GitHub Copilot CLI
+        - Another one
+    validations:
+      required: true
+  - type: dropdown
+    id: tracker
+    attributes:
+      label: Tracker
+      options:
+        - Local markdown
+        - GitHub
+        - GitLab
+        - Not sure
+    validations:
+      required: true

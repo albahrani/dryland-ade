@@ -575,6 +575,7 @@ function buildMenu(): void {
         ],
       },
       { label: "View", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] },
+      { label: "Help", submenu: [{ label: "About Dryland ADE", click: menuCommand("about") }] },
     ]),
   );
 }

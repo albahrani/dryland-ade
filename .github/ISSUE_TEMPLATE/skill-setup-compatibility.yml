@@ -1,0 +1,36 @@
+name: Skill-setup compatibility report
+description: Dryland judged your repo's skills setup wrongly, or does not work with a version of the skills.
+labels: [skill-setup]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dryland compares a repo's skills with the setup it was built against and shows a Compatibility verdict (Settings > Skills). Use this form when that verdict is wrong, or when a newer version of the skills breaks something.
+  - type: textarea
+    id: verdict
+    attributes:
+      label: What did Dryland say, and what is actually true?
+      description: Quote the verdict and the skills it lists as missing or modified.
+    validations:
+      required: true
+  - type: textarea
+    id: skills
+    attributes:
+      label: Your skills setup
+      description: How you installed the skills, which version or commit, and the contents of `skills-lock.json` if you have one.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `dryland doctor`
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dryland version and OS
+    validations:
+      required: true
