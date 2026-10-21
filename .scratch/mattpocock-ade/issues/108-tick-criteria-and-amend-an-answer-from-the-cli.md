@@ -1,6 +1,7 @@
 # Tick criteria and amend an answer from the CLI
 
 Type: task
+Status: ready-for-agent
 
 ## Question
 
