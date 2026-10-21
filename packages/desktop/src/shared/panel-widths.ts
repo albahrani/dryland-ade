@@ -23,6 +23,8 @@ export function clampPanelWidth(side: PanelSide, width: number): number {
 export function parsePanelWidths(raw: unknown): PanelWidths {
   const r = raw !== null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const read = (side: PanelSide): number =>
-    typeof r[side] === "number" && Number.isFinite(r[side]) ? clampPanelWidth(side, r[side]) : DEFAULT_PANEL_WIDTHS[side];
+    typeof r[side] === "number" && Number.isFinite(r[side])
+      ? clampPanelWidth(side, r[side])
+      : DEFAULT_PANEL_WIDTHS[side];
   return { left: read("left"), right: read("right") };
 }

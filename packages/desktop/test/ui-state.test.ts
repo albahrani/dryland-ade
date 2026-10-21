@@ -2,6 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_PANEL_WIDTHS } from "../src/shared/panel-widths.ts";
 import { createUiStateStore } from "../src/main/ui-state.ts";
 
 const stateFile = () => join(mkdtempSync(join(tmpdir(), "dryland-ui-")), "nested", "ui-state.json");
@@ -20,7 +21,7 @@ const SETTINGS_DEFAULTS = {
   updateChannel: "latest",
   lastUpdateCheck: null,
   openProjects: [] as string[],
-  panelWidths: { left: 320, right: 240 },
+  panelWidths: DEFAULT_PANEL_WIDTHS,
 };
 
 describe("ui state store", () => {

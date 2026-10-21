@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clampPanelWidth, DEFAULT_PANEL_WIDTHS, PANEL_WIDTH_LIMITS, parsePanelWidths } from "../src/shared/panel-widths.ts";
+import {
+  clampPanelWidth,
+  DEFAULT_PANEL_WIDTHS,
+  PANEL_WIDTH_LIMITS,
+  parsePanelWidths,
+} from "../src/shared/panel-widths.ts";
 
 describe("panel widths", () => {
   it("keeps a dragged width between the minimum and maximum", () => {

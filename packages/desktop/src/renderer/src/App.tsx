@@ -1,5 +1,5 @@
 import type { LiveEvent, TicketRef, TreeTicket } from "@dryland/core";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import type {
   AppState,
   LiveEventsPanelMode,
@@ -335,7 +335,8 @@ export function App() {
   }, []);
 
   if (state === null) return null;
-  const { project, legendDismissed, tabs, liveEventsPanel, panelWidths, sessionStates, unseenSessions, settings } = state;
+  const { project, legendDismissed, tabs, liveEventsPanel, panelWidths, sessionStates, unseenSessions, settings } =
+    state;
   // Sessions of other projects keep running and reporting; the views show the current project's.
   const everySession = [...sessions.values()];
   const projectOnly = projectSessions(everySession, project?.path ?? null);
@@ -348,7 +349,8 @@ export function App() {
     setState({ ...state, liveEventsPanel: mode });
     void window.dryland.setLiveEventsPanel(mode);
   };
-  const resizePanel = (side: PanelSide, width: number) => setState({ ...state, panelWidths: { ...panelWidths, [side]: width } });
+  const resizePanel = (side: PanelSide, width: number) =>
+    setState({ ...state, panelWidths: { ...panelWidths, [side]: width } });
   const savePanelWidth = (side: PanelSide, width: number) =>
     void window.dryland.setPanelWidths({ ...panelWidths, [side]: width });
   const setTabs = (next: TabsState) => {
@@ -617,7 +619,7 @@ export function App() {
   return (
     <div
       className="shell"
-      style={{ gridTemplateColumns: `48px ${panelWidths.left}px 1fr ${panelWidths.right}px` }}
+      style={{ "--left-width": `${panelWidths.left}px`, "--right-width": `${panelWidths.right}px` } as CSSProperties}
     >
       <header className="menubar">
         <ProjectWidget

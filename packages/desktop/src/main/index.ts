@@ -741,7 +741,10 @@ ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true
 ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
   if (isLiveEventsPanelMode(mode)) store.update({ liveEventsPanel: mode });
 });
-ipcMain.handle("panel-widths:save", (_event, widths: unknown) => void store.update({ panelWidths: parsePanelWidths(widths) }));
+ipcMain.handle(
+  "panel-widths:save",
+  (_event, widths: unknown) => void store.update({ panelWidths: parsePanelWidths(widths) }),
+);
 ipcMain.handle("terminal:open", async () => {
   const loaded = await projectView();
   if (loaded === null) return null;
