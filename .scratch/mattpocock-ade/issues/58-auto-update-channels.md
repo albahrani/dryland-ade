@@ -1,7 +1,8 @@
 # Auto-update channels
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T11:41:44.728Z","was":"ready-for-agent"}} -->
 Blocked by: 55, 57
 
 Spec: [spec](../spec.md), user stories 91 to 93. "Lifecycle, packaging and release". ADR 0004.
