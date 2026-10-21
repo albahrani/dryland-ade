@@ -1,8 +1,7 @@
 # Auto-update channels
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-21T11:41:44.728Z","was":"ready-for-agent"}} -->
+Status: resolved
 Blocked by: 55, 57
 
 Spec: [spec](../spec.md), user stories 91 to 93. "Lifecycle, packaging and release". ADR 0004.
@@ -28,3 +27,7 @@ The Updates tab of Settings shows the current version, the channel choice, the l
 ## Comments
 
 From mattpocock-ade/41 (bc47448): every quit now goes through before-quit in packages/desktop/src/main/index.ts, which prevents it while sessions run, asks, then stops them and calls app.quit() again with quit set to 'allowed'. Install-on-quit must follow that path: hook the install after the confirmation and the shutdown steps, or call quitAndInstall only once quit is allowed, so an update never skips the question or kills sessions unasked.
+
+## Answer
+
+Built in 223b120 (+ a follow-up). Pure updater in packages/desktop/src/main/updates.ts (channel, 24h limit counted per check incl. failures, per-platform mode: NSIS/AppImage auto, macOS/deb notify-only, unpackaged off) tested with a fake source; electron-updater source with autoInstallOnAppQuit and no quitAndInstall, so install follows the before-quit confirmation (mattpocock-ade/41); Updates tab in Settings; channel and last check persisted in ui-state. Known limits: owner in publish config and RELEASES_URL is a placeholder until ticket 60; beta relies on allowPrerelease (beta.yml/channel handling unverified until a real beta release); electron-update-source.ts is untested; a notice sent before the window loads is dropped (the tab still shows the state); switching channel with a downloaded update does not unstage it. THIRD_PARTY_NOTICES generator now synthesises MIT text for packages with no licence file (lazy-val).
