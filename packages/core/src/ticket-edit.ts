@@ -35,7 +35,10 @@ export async function blockTicket(
   }
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) {
-    return remote.backend.block(runner, remote.checkout, reference, { add: change.add ?? [], remove: change.remove ?? [] });
+    return remote.backend.block(runner, remote.checkout, reference, {
+      add: change.add ?? [],
+      remove: change.remove ?? [],
+    });
   }
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     const { ticket, path, text } = await currentTicket(mainCheckout, wanted);

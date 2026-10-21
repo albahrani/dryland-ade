@@ -32,11 +32,7 @@ import type { TrackerCreateInput } from "./tracker-rules.ts";
  * `writeTracker`, which takes the lock and commits.
  */
 export interface RemoteBackend {
-  create(
-    runner: ProcessRunner,
-    cwd: string,
-    input: TrackerCreateInput,
-  ): Promise<TicketWriteResult>;
+  create(runner: ProcessRunner, cwd: string, input: TrackerCreateInput): Promise<TicketWriteResult>;
   claim(runner: ProcessRunner, cwd: string, reference: string): Promise<TicketWriteResult & { alreadyHeld: boolean }>;
   release(runner: ProcessRunner, cwd: string, reference: string): Promise<TicketWriteResult>;
   resolve(runner: ProcessRunner, cwd: string, reference: string, answer: string): Promise<TicketWriteResult>;

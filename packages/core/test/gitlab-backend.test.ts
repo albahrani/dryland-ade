@@ -95,7 +95,8 @@ function fakeGlab(world: World, calls: string[] = []): ProcessRunner {
       calls.push(line);
       if (world.missing) return fail("glab: command not found");
       if (line === "--version") return { stdout: "glab 1.50", stderr: "", exitCode: 0 };
-      if (line === "auth status") return world.loggedOut ? fail("not logged in") : { stdout: "ok", stderr: "", exitCode: 0 };
+      if (line === "auth status")
+        return world.loggedOut ? fail("not logged in") : { stdout: "ok", stderr: "", exitCode: 0 };
       if (world.loggedOut) return fail("401 Unauthorized");
       if (world.failing?.includes(line)) return fail("HTTP 500");
 
@@ -171,7 +172,11 @@ function shop(extra: Issue[] = []): World {
   return {
     issues: [
       issue(1, { title: "Shop", description: MAP_BODY, labels: ["map"] }),
-      issue(2, { title: "Schema", labels: ["map:1", "type:task"], description: "Blocked by: none\n\n## Question\n\nShape it." }),
+      issue(2, {
+        title: "Schema",
+        labels: ["map:1", "type:task"],
+        description: "Blocked by: none\n\n## Question\n\nShape it.",
+      }),
       issue(3, { title: "Cart", labels: ["map:1", "type:task", "triage"], description: "Blocked by: 2" }),
       issue(4, { title: "Pay", labels: ["map:1", "type:research"], assignees: [{ id: 9, username: "ada" }] }),
       issue(5, { title: "Spike", state: "closed", description: "Try it.\n\n## Answer\n\nIt works." }),
@@ -411,7 +416,12 @@ describe("GitLab backend write", () => {
   });
 
   it("names the links already changed when removing a link fails", async () => {
-    const world = { ...shop(), premium: true, links: { 3: [2] }, failing: ["api -X DELETE projects/:id/issues/3/links/500"] };
+    const world = {
+      ...shop(),
+      premium: true,
+      links: { 3: [2] },
+      failing: ["api -X DELETE projects/:id/issues/3/links/500"],
+    };
 
     const error = await blockTicket(fakeGlab(world), repo(), "1/3", { add: ["4"], remove: ["2"] }).catch(
       (e: unknown) => e,

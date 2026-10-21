@@ -55,8 +55,7 @@ const put = (runner: ProcessRunner, cwd: string, iid: number | string, fields: s
 const me = async (runner: ProcessRunner, cwd: string) =>
   (await glabRequired(runner, cwd, ["api", "user"])) as { id: number; username: string };
 
-const afterCreate = <T>(iid: number, step: string, run: () => Promise<T>) =>
-  afterCreateOn("GitLab", iid, step, run);
+const afterCreate = <T>(iid: number, step: string, run: () => Promise<T>) => afterCreateOn("GitLab", iid, step, run);
 
 /** Fetches the issue of a map, which must carry the map label. */
 async function mapIssue(runner: ProcessRunner, cwd: string, map: string): Promise<GitlabIssue> {
@@ -131,7 +130,9 @@ export async function createGitlabTicket(
 
   if (native) {
     for (const blocker of blockers) {
-      await afterCreate(created.iid, `blocking it by #${blocker}`, () => linkBlocker(runner, cwd, created.iid, blocker));
+      await afterCreate(created.iid, `blocking it by #${blocker}`, () =>
+        linkBlocker(runner, cwd, created.iid, blocker),
+      );
     }
   }
 

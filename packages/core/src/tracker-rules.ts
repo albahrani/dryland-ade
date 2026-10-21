@@ -15,7 +15,6 @@ export interface TrackerCreateInput {
   blockedBy?: string[] | undefined;
 }
 
-
 export const nameOf = (ticket: Ticket) => `${ticket.map}/${ticket.id}`;
 
 export async function ticketNamed(runner: ProcessRunner, mainCheckout: string, reference: string): Promise<Ticket> {
@@ -59,7 +58,12 @@ export async function partlyApplied<T>(
 }
 
 /** Decides a claim from the issue's state and first assignee: `held` when the user has it already, else `free`. */
-export function decideClaim(ticket: Ticket, closed: boolean, holder: string | undefined, login: string): "free" | "held" {
+export function decideClaim(
+  ticket: Ticket,
+  closed: boolean,
+  holder: string | undefined,
+  login: string,
+): "free" | "held" {
   if (closed) {
     throw new DrylandError(
       `Ticket ${nameOf(ticket)} is already resolved.`,
