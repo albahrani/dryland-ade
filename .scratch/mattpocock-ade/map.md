@@ -190,6 +190,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Settings: Agent CLIs and Skills tabs](issues/56-settings-agent-clis-and-skills-tabs.md): The Settings dialog's Agent CLIs tab (tiers, auto-submit, Copilot hook Install/Inspect/Remove) and Skills tab (state, verdicts, overrides, revoke, Run check) are built.
 
+- [OSS files, README, manual and About](issues/59-oss-files-readme-manual-and-about.md): Licence, README, manual, community files, issue forms, generated third-party notices with a CI check, and an unofficial/credit About dialog.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
