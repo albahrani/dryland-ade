@@ -194,6 +194,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Installers and bundled launcher](issues/57-installers-and-bundled-launcher.md): electron-builder installers, a single-file CLI with an install-directory launcher, and an opt-in global PATH link.
 
+- [Auto-update channels](issues/58-auto-update-channels.md): electron-updater from GitHub Releases with latest and beta channels, a daily check limit, install on next quit, notify-only on macOS and deb, and an Updates tab.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
