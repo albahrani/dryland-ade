@@ -196,6 +196,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Auto-update channels](issues/58-auto-update-channels.md): electron-updater from GitHub Releases with latest and beta channels, a daily check limit, install on next quit, notify-only on macOS and deb, and an Updates tab.
 
+- [Resize the side panels](issues/85-resize-the-left-and-right-side-panels.md): Drag handles resize the left and right panels within min/max limits, widths kept across restarts.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
