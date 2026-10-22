@@ -204,6 +204,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [ticket create --status](issues/62-created-tickets-enter-triage.md): Created tickets carry no Status by default; --status <role> puts one into the triage flow.
 
+- [Status bar live events toggle as an icon](issues/92-status-bar-live-events-toggle-as-an-icon.md): The toggle is a pulse-line icon button with tooltip and the same accessible names.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
