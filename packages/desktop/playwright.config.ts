@@ -13,7 +13,9 @@ process.env.DRYLAND_APP_DIR ??= mkdtempSync(join(tmpdir(), "dryland-e2e-app-"));
 export default defineConfig({
   testDir: "e2e",
   globalTeardown: "./e2e/global-teardown.ts",
-  timeout: 60_000,
+  // CI runners are slower, above all on Windows, where every process start costs more.
+  timeout: process.env.CI ? 120_000 : 60_000,
+  expect: { timeout: process.env.CI ? 20_000 : 5_000 },
   workers: 1,
-  reporter: process.env.CI ? "github" : "list",
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
 });
