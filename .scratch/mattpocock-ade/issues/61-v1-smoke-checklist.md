@@ -34,4 +34,4 @@ One risk carried from the spec is closed here:
 
 ## Comments
 
-Decision by the maintainer: the Agent CLI terms-of-service question has been addressed and decided, so no further read of the Anthropic article is needed for the release. The analysis is deliberately not kept in the repo, because it would go stale when a provider changes its terms. The README's Agent CLI terms note stays as the reminder. The first criterion below is left unticked until the maintainer confirms that note is how the decision is recorded.
+Decision by the maintainer: the Agent CLI terms-of-service question has been addressed and decided, so no further read of the Anthropic article is needed for the release. The analysis is deliberately not kept in the repo, because it would go stale when a provider changes its terms. The README's Agent CLI terms note stays as the reminder. The bullet and criterion about it were removed from this ticket.
