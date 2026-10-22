@@ -228,6 +228,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Application icon for Dryland ADE](issues/91-application-icon-for-dryland-ade.md): A code-drawn desert-sunset icon in png, ico and icns, used by the window and the installers.
 
+- [Fog in the ticket tree](issues/87-fog-in-the-ticket-tree-shows-nothing-useful-for-th.md): The app reads the Not yet specified section correctly; the Fog is unhelpful because its items are long prose paragraphs shown unabridged, so the tree should show one-line labels with the full text on hover (ticket 112).
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
