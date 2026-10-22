@@ -1,6 +1,8 @@
 # Show the approximate marking on the Sessions view's last-output line
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T07:24:39.339Z","was":""}} -->
 
 ## Question
 
