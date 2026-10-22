@@ -14,8 +14,8 @@ import {
   type LiveListener,
   startLiveListener,
 } from "@dryland/core";
-import { afterEach, describe, expect, it } from "vitest";
-import { drylandOnPath } from "./harness.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { drylandOnPath, runDryland } from "./harness.ts";
 
 const FAKE_COPILOT = fileURLToPath(new URL("./fake-copilot-hooks.mjs", import.meta.url));
 
@@ -44,7 +44,6 @@ async function session({ inDryland = true } = {}) {
     ...inherited,
     [pathKey]: [drylandOnPath(), process.env[pathKey]].join(delimiter),
     DRYLAND_APP_DIR: appDir,
-    DRYLAND_DEBUG_HOOK: "1",
     ...(inDryland ? { DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" } : {}),
   };
   /** Fires `event` in the fake CLI and returns the events the app received. */
@@ -52,17 +51,18 @@ async function session({ inDryland = true } = {}) {
     const before = received.length;
     const args = [FAKE_COPILOT, "--hooks", paths.hookFile, "--session-id", cliSession, event];
     // Not spawnSync: the listener answers on this process's event loop.
-    await new Promise((resolve) =>
-      spawn(process.execPath, args, { env, cwd: appDir, stdio: ["ignore", "inherit", "inherit"] }).on("close", resolve),
-    );
-    // The child may close before this event loop has read the last event, so wait until the count stops growing.
-    for (let seen = -1; seen !== received.length;) {
-      seen = received.length;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    await new Promise((resolve) => spawn(process.execPath, args, { env, cwd: appDir }).on("close", resolve));
     return received.slice(before);
   };
-  return { fireEvents, fire: async (event: string) => (await fireEvents(event)).map((e) => e.kind) };
+  /** Runs the hook command with exactly `input` on stdin, without a shell that could change the bytes. */
+  const hookWithInput = async (event: string, input: string) => {
+    const before = received.length;
+    const stdinEnv = { DRYLAND_APP_DIR: appDir, DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" };
+    await runDryland(["agent-hook", COPILOT_CLI.id, event], { cwd: appDir, env: stdinEnv, input });
+    await vi.waitFor(() => expect(received.length).toBeGreaterThan(before));
+    return received.slice(before).map((e) => e.kind);
+  };
+  return { fireEvents, hookWithInput, fire: async (event: string) => (await fireEvents(event)).map((e) => e.kind) };
 }
 
 describe("Copilot CLI status hooks", () => {
@@ -78,6 +78,13 @@ describe("Copilot CLI status hooks", () => {
     const { fire } = await session();
 
     expect(await fire(event)).toEqual([kind]);
+  });
+
+  it("read a payload that starts with a byte order mark, as PowerShell can pipe it", async () => {
+    const { hookWithInput } = await session();
+    const payload = JSON.stringify({ sessionId: "copilot-id", notification_type: "permission_prompt" });
+
+    expect(await hookWithInput("notification", String.fromCharCode(0xfeff) + payload)).toEqual(["session.waiting"]);
   });
 
   it("report nothing for sessionStart, which fires only at the first prompt: launched comes from the spawn", async () => {
