@@ -1,0 +1,36 @@
+import type { TreeTicket } from "@dryland/core";
+import { describe, expect, it } from "vitest";
+import { mapTooltip, ticketTooltip } from "../src/shared/tree-tooltips.ts";
+
+const ticket: Pick<TreeTicket, "id" | "title" | "status" | "claimant" | "blockers"> = {
+  id: "93",
+  title: "Diagnose tooltips",
+  status: "ready",
+  claimant: null,
+  blockers: [],
+};
+
+describe("ticketTooltip", () => {
+  it("gives every ticket a tooltip with its id, full title and status", () => {
+    expect(ticketTooltip(ticket, undefined)).toBe("93 Diagnose tooltips\nReady");
+  });
+
+  it("adds the claimant and the blockers", () => {
+    const held = { ...ticket, status: "blocked" as const, claimant: "main", blockers: ["80", "81"] };
+    expect(ticketTooltip(held, undefined)).toBe("93 Diagnose tooltips\nBlocked\nclaimed by main\nblocked by 80, 81");
+  });
+
+  it("says when the blockers are unknown", () => {
+    expect(ticketTooltip({ ...ticket, blockers: "unknown" }, undefined)).toContain("blocked by: unknown");
+  });
+
+  it("ends with the Next-up reason", () => {
+    expect(ticketTooltip(ticket, "Resolve it next")).toBe("93 Diagnose tooltips\nReady\nResolve it next");
+  });
+});
+
+describe("mapTooltip", () => {
+  it("names the map and its title", () => {
+    expect(mapTooltip("mattpocock-ade", "Matt Pocock ADE")).toBe("Matt Pocock ADE\nmattpocock-ade");
+  });
+});

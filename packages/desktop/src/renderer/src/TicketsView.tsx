@@ -10,6 +10,7 @@ import {
 import { STATUS_META } from "../../shared/status-meta.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
 import { mapMarker, type NextUp, ticketMarker } from "../../shared/next-up.ts";
+import { mapTooltip, ticketTooltip } from "../../shared/tree-tooltips.ts";
 import { NextUpStar } from "./NextUp.tsx";
 import type { TicketSession } from "../../shared/session-meta.ts";
 import { type ItemRef, tabKey, ticketKey } from "../../shared/tabs.ts";
@@ -60,7 +61,7 @@ function TicketRow({
 }) {
   const classes = ["ticket", active && "active", marker !== undefined && "next-up"].filter(Boolean).join(" ");
   return (
-    <li className={classes} title={marker?.step.reason}>
+    <li className={classes} title={ticketTooltip(ticket, marker?.step.reason)}>
       {marker !== undefined && <NextUpStar marker={marker} onShow={onShowSession} />}
       <StatusIcon status={ticket.status} />
       {paused !== undefined ? (
@@ -111,6 +112,7 @@ function Branch({
   collapsed,
   toggle,
   onOpen,
+  tooltip,
   marker,
   counts,
   children,
@@ -121,6 +123,8 @@ function Branch({
   toggle: (id: string) => void;
   /** Adds an "Open" button that opens the branch's item in the tab area. */
   onOpen?: () => void;
+  /** The tooltip of the branch head. */
+  tooltip?: string;
   /** The Next-up marker on the branch's own item, a map. */
   marker?: NextUpMarker;
   /** The map's waiting and paused sessions. */
@@ -130,7 +134,7 @@ function Branch({
   const closed = collapsed.has(id);
   return (
     <li className="branch">
-      <div className={marker === undefined ? "branch-head" : "branch-head next-up"}>
+      <div className={marker === undefined ? "branch-head" : "branch-head next-up"} title={tooltip}>
         {marker !== undefined && <NextUpStar marker={marker} />}
         <button className="branch-label" aria-expanded={!closed} onClick={() => toggle(id)}>
           {closed ? "▸" : "▾"} {label}
@@ -320,6 +324,7 @@ export function TicketsView({
             collapsed={collapsed}
             toggle={toggle}
             onOpen={() => onOpen({ kind: "map", name: map.name })}
+            tooltip={mapTooltip(map.name, map.title)}
             marker={mapMarker(nextUp, map.name)}
             counts={mapCounts(map.name)}
           >
