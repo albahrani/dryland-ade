@@ -216,6 +216,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Skill-setup state fed into the repo snapshot](issues/66-feed-skill-setup-state-and-compatibility-verdict-i.md): Already delivered by ticket 54: the snapshot carries the verdict, overrides and installed skills, and null disables nothing.
 
+- [Glossary: auto-submit, approximate status, best-effort tier](issues/96-add-auto-submit-approximate-status-and-best-effort.md): The three terms from ticket 44 and ADR 0006 now have glossary entries.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
