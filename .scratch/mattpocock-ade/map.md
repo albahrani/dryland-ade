@@ -222,6 +222,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Diagnose: clicking a tab in the middle section makes the tabs disappear](issues/90-diagnose-clicking-a-tab-in-the-middle-section-make.md): The tab strip was a shrinkable flex child and collapsed beside tall content; flex: none fixes it.
 
+- [Diagnose: tooltips on tickets and maps in the left panel do not show reliably](issues/93-diagnose-tooltips-on-tickets-and-maps-in-the-left.md): Most rows had no title attribute at all; every ticket and map row now has a tooltip.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
