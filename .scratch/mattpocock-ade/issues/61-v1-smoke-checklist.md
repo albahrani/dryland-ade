@@ -31,3 +31,7 @@ One risk carried from the spec is closed here:
 - [ ] Quit with live sessions: confirmation, no leftover processes, every claim kept and the sessions paused (ADR 0010)
 - [ ] Every failure has a ticket, and all are resolved
 - [ ] `v1.0.0` is tagged and published to `latest`
+
+## Comments
+
+Decision by the maintainer: the Agent CLI terms-of-service question has been addressed and decided, so no further read of the Anthropic article is needed for the release. The analysis is deliberately not kept in the repo, because it would go stale when a provider changes its terms. The README's Agent CLI terms note stays as the reminder. The first criterion below is left unticked until the maintainer confirms that note is how the decision is recorded.
