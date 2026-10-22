@@ -86,6 +86,8 @@ function stubAgent(): string {
       "  if (keys.includes('!')) ['PermissionRequest', 'Notification:permission_prompt'].forEach((e) => hooks.fire(settings, e, sid));",
       "  if (keys.includes('~')) hooks.fire(settings, 'Stop', sid);",
       "  if (keys.includes('#')) { hooks.fire(settings, 'SessionEnd', sid); process.exit(0); }",
+      // A crash or a kill: the CLI is gone without a SessionEnd hook.
+      "  if (keys.includes('$')) process.exit(1);",
       "  if (keys.includes('*')) setTimeout(() => { process.stdout.write('\\r\\nLATER-OUTPUT\\r\\n'); hooks.fire(settings, 'Stop', sid); }, 1500);",
       "  process.stdout.write(keys.includes('\\r') ? '\\r\\nSUBMITTED\\r\\n' : keys);",
       "});",
@@ -416,6 +418,19 @@ test("quitting with no running session asks nothing", async () => {
   const closed = app.waitForEvent("close", { timeout: 10_000 });
   await app.evaluate(({ app }) => app.quit()).catch(() => {});
   await closed;
+});
+
+test("a CLI that exits without its session-end hook reads as ended promptly", async () => {
+  const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
+  await window.getByRole("button", { name: "Start with Claude Code" }).click();
+  await expect(window.locator(".xterm-rows:visible")).toContainText("/implement shop/02");
+  await window.locator(".xterm:visible").click();
+  await window.keyboard.type("$");
+  // Only the PTY's exit says so: no hook fired.
+  await expect(window.getByRole("tablist").getByRole("img", { name: "Claude Code: ended" })).toBeVisible({
+    timeout: 3000,
+  });
+  await app.close();
 });
 
 test("shows Claude Code as unavailable when it is not installed", async () => {
