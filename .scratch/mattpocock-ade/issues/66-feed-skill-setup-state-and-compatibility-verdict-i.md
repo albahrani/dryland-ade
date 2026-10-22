@@ -1,6 +1,8 @@
 # Feed skill-setup state and Compatibility verdict into the repo snapshot
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T10:14:06.279Z","was":""}} -->
 Blocked by: 53, 54
 
 ## Question
