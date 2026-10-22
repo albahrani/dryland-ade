@@ -206,6 +206,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Status bar live events toggle as an icon](issues/92-status-bar-live-events-toggle-as-an-icon.md): The toggle is a pulse-line icon button with tooltip and the same accessible names.
 
+- [Approximate marking on the Sessions view's last-output line](issues/94-show-the-approximate-marking-on-the-sessions-view.md): A ≈ mark before the last output line flags a guessed session state.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
