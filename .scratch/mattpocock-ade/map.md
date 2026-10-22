@@ -220,6 +220,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Keep a session live across /clear](issues/83-keep-a-session-live-across-clear.md): SessionEnd with reason clear is matched out of the ended status; other reasons still end the session.
 
+- [Diagnose: clicking a tab in the middle section makes the tabs disappear](issues/90-diagnose-clicking-a-tab-in-the-middle-section-make.md): The tab strip was a shrinkable flex child and collapsed beside tall content; flex: none fixes it.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
