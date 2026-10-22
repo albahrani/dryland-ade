@@ -126,6 +126,43 @@ describe("checking for updates", () => {
     await updater.checkNow();
     expect(updater.state().status).toEqual({ kind: "failed", message: "disk full" });
   });
+
+  describe("when nothing is published to update to", () => {
+    const rejectWith = (source: UpdateSource, code: string) => {
+      source.check = () => Promise.reject(Object.assign(new Error(`404 for ${code}`), { code }));
+    };
+
+    it.each([
+      // A draft release: GitHub lists its tag, but its update files are not public.
+      "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND",
+      "ERR_UPDATER_LATEST_VERSION_NOT_FOUND",
+      "ERR_UPDATER_NO_PUBLISHED_VERSIONS",
+      "ERR_UPDATER_RELEASE_NOT_FOUND",
+    ])("says up to date on both channels, with no error, for %s", async (code) => {
+      for (const channel of ["latest", "beta"] as const) {
+        const { updater, source, saved } = setup("auto");
+        saved.channel = channel;
+        rejectWith(source, code);
+        await updater.checkNow();
+        expect(updater.state().status).toEqual({ kind: "up-to-date" });
+      }
+    });
+
+    it("still reports any other failure of a check", async () => {
+      const { updater, source } = setup("auto");
+      rejectWith(source, "ERR_UPDATER_INVALID_UPDATE_INFO");
+      await updater.checkNow();
+      expect(updater.state().status).toEqual({ kind: "failed", message: "404 for ERR_UPDATER_INVALID_UPDATE_INFO" });
+    });
+
+    it("still reports a download that cannot find its file", async () => {
+      const { updater, source } = setup("auto");
+      source.download = () =>
+        Promise.reject(Object.assign(new Error("no file"), { code: "ERR_UPDATER_ASSET_NOT_FOUND" }));
+      await updater.checkNow();
+      expect(updater.state().status).toEqual({ kind: "failed", message: "no file" });
+    });
+  });
 });
 
 describe("the daily limit", () => {

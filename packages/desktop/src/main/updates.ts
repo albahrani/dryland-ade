@@ -73,6 +73,7 @@ export function createUpdater(options: UpdaterOptions): Updater {
     try {
       found = await source.check(channel);
     } catch (error) {
+      if (nothingPublished(error)) return set({ kind: "up-to-date" });
       return set({ kind: "failed", message: messageOf(error) });
     }
     if (found === null) return set({ kind: "up-to-date" });
@@ -111,5 +112,21 @@ export function createUpdater(options: UpdaterOptions): Updater {
     },
   };
 }
+
+/**
+ * The codes `electron-updater` fails a check with when there is nothing published to update to: no release, no
+ * published version, or a release whose update files are not public, such as a draft. That is the normal state
+ * before the first release and for the beta channel, so it reads as up to date rather than as an error. The cost: a
+ * release published without its update files reads as up to date too; the release workflow attaches them.
+ */
+const NOTHING_PUBLISHED = new Set([
+  "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND",
+  "ERR_UPDATER_LATEST_VERSION_NOT_FOUND",
+  "ERR_UPDATER_NO_PUBLISHED_VERSIONS",
+  "ERR_UPDATER_RELEASE_NOT_FOUND",
+]);
+
+const nothingPublished = (error: unknown): boolean =>
+  typeof error === "object" && error !== null && NOTHING_PUBLISHED.has(String((error as { code?: unknown }).code));
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
