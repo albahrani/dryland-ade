@@ -218,6 +218,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Glossary: auto-submit, approximate status, best-effort tier](issues/96-add-auto-submit-approximate-status-and-best-effort.md): The three terms from ticket 44 and ADR 0006 now have glossary entries.
 
+- [Keep a session live across /clear](issues/83-keep-a-session-live-across-clear.md): SessionEnd with reason clear is matched out of the ended status; other reasons still end the session.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
