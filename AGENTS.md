@@ -29,6 +29,10 @@ CI runs Linux, macOS and Windows, but a Windows machine hides POSIX-only failure
 
 After a change that touches the desktop app (`packages/desktop`), also run the Playwright tests: `pnpm --filter @dryland/desktop test:e2e` natively, then `pnpm test:e2e:linux` (Electron under Xvfb in a throwaway container).
 
+### Disk space on Windows
+
+Both Linux scripts only `docker run` a stock `node` image, so they leave no Docker build cache; a large cache comes from other builds. Each test run keeps its temp folders in one `dryland-run-*` directory and deletes it at the end; only a killed run leaves one behind in `%TEMP%`, safe to delete. Never make a test crash a process on purpose: under WSL the kernel writes the whole process memory to `%TEMP%\wsl-crashes`, about 680 MB per crash, and `ulimit -c 0` does not stop it. If the disk fills anyway, `docker system df` shows what Docker holds and `docker builder prune` clears the cache. Docker Desktop can keep its disk image on another drive (Settings, Resources, Advanced, Disk image location), and compacting `docker_data.vhdx` is what returns the space to the drive.
+
 ## Editing files
 
 Create files with the Write tool and change them with the Edit tool. For a batch of replacements across files, or a regex replacement, Write a JSON spec and run `node scripts/edit.mjs <spec.json> [--dry-run]`; the spec format is in the script's header. For any other one-off script, Write it to the scratchpad and run `node <file>`. Verify a scripted change with Grep.
