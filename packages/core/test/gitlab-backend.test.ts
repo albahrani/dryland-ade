@@ -73,12 +73,13 @@ interface World {
 const json = (value: unknown): ProcessResult => ({ stdout: JSON.stringify(value), stderr: "", exitCode: 0 });
 const fail = (stderr: string): ProcessResult => ({ stdout: "", stderr, exitCode: 1 });
 
-/** Reads the `-f name=value` pairs of a `glab api` call; `name[]` collects values. */
+/** Reads the `-f` and `-F name=value` pairs of a `glab api` call; like glab, it refuses a `name[]` field name. */
 function fieldsOf(args: string[]): Record<string, string> {
   const fields: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "-f") {
+    if (args[i] === "-f" || args[i] === "-F") {
       const [name = "", ...value] = (args[i + 1] ?? "").split("=");
+      if (name.includes("[")) throw new Error(`Field name "${name}": a field name containing a bracket is not supported`);
       fields[name] = value.join("=");
     }
   }
@@ -153,8 +154,8 @@ function fakeGlab(world: World, calls: string[] = []): ProcessRunner {
       if (method === "PUT") {
         if (fields.description !== undefined) target.description = fields.description;
         if (fields.state_event === "close") target.state = "closed";
-        if ("assignee_ids[]" in fields) {
-          target.assignees = fields["assignee_ids[]"] === "0" ? [] : [{ id: 42, username: "me" }];
+        if (fields.assignee_ids !== undefined) {
+          target.assignees = fields.assignee_ids === "[0]" ? [] : [{ id: 42, username: "me" }];
         }
         if (fields.add_labels !== undefined) target.labels.push(fields.add_labels);
         if (fields.remove_labels !== undefined) {
@@ -263,7 +264,7 @@ describe("GitLab backend write", () => {
     const result = await claimTicket(fakeGlab(world, calls), repo(), "1/2", { holder: "branch-x" });
 
     expect(result).toMatchObject({ alreadyHeld: false, ticket: { state: "claimed", claimant: "me" } });
-    expect(writes(calls)).toEqual(["api -X PUT projects/:id/issues/2 -f assignee_ids[]=42"]);
+    expect(writes(calls)).toEqual(["api -X PUT projects/:id/issues/2 -F assignee_ids=[42]"]);
     expect(world.issues[1]?.assignees).toEqual([{ id: 42, username: "me" }]);
   });
 
@@ -282,7 +283,7 @@ describe("GitLab backend write", () => {
     await releaseTicket(fakeGlab(world, calls), repo(), "1/6");
     const error = await releaseTicket(fakeGlab(world, calls), repo(), "1/4").catch((e: unknown) => e);
 
-    expect(writes(calls)).toEqual(["api -X PUT projects/:id/issues/6 -f assignee_ids[]=0"]);
+    expect(writes(calls)).toEqual(["api -X PUT projects/:id/issues/6 -F assignee_ids=[0]"]);
     expect((error as DrylandError).message).toContain("claimed by ada");
   });
 

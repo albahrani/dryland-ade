@@ -49,6 +49,9 @@ const fetchIssue = (runner: ProcessRunner, cwd: string, iid: number | string) =>
 /** `glab api` field arguments: `-f` sends text. */
 const field = (name: string, value: string) => ["-f", `${name}=${value}`];
 
+/** `-F` with a JSON value: glab refuses `name[]` field names in a JSON request body, so a list is sent as an array. */
+const list = (name: string, values: number[]) => ["-F", `${name}=${JSON.stringify(values)}`];
+
 const put = (runner: ProcessRunner, cwd: string, iid: number | string, fields: string[]) =>
   glabRequired(runner, cwd, ["api", "-X", "PUT", issuePath(iid), ...fields]) as Promise<GitlabIssue>;
 
@@ -168,7 +171,7 @@ export async function claimGitlabTicket(
   if (verdict === "held") {
     return { ticket: { ...ticket, state: "claimed", claimant: user.username }, warnings: [], alreadyHeld: true };
   }
-  await put(runner, cwd, ticket.id, field("assignee_ids[]", String(user.id)));
+  await put(runner, cwd, ticket.id, list("assignee_ids", [user.id]));
   return { ticket: { ...ticket, state: "claimed", claimant: user.username }, warnings: [], alreadyHeld: false };
 }
 
@@ -182,7 +185,7 @@ export async function releaseGitlabTicket(
   assertClaimed(ticket);
   const user = await me(runner, cwd);
   assertClaimedBy(ticket, user.username, "GitLab");
-  await put(runner, cwd, ticket.id, field("assignee_ids[]", "0"));
+  await put(runner, cwd, ticket.id, list("assignee_ids", [0]));
   return { ticket: { ...ticket, state: "open", claimant: null }, warnings: [] };
 }
 
