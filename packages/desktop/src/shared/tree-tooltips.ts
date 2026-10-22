@@ -23,7 +23,8 @@ export function ticketTooltip(
 export function fogLabel(item: string): string {
   const flat = item.replace(/\s+/g, " ").trim();
   const end = flat.search(/:|[.!?](?=\s|$)/);
-  return (end === -1 ? flat : flat.slice(0, end)).trim();
+  const label = end === -1 ? flat : flat.slice(0, end).trim();
+  return label === "" ? flat : label;
 }
 
 /** The tooltip of a map row: its title and the directory name tickets are addressed by. */

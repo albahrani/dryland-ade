@@ -46,6 +46,10 @@ describe("fogLabel", () => {
     expect(fogLabel("Supports v1.2 of the schema")).toBe("Supports v1.2 of the schema");
   });
 
+  it("falls back to the whole text when the first part is empty", () => {
+    expect(fogLabel(": odd item")).toBe(": odd item");
+  });
+
   it("flattens line breaks", () => {
     expect(fogLabel("First line\nsecond line")).toBe("First line second line");
   });
