@@ -224,6 +224,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Diagnose: tooltips on tickets and maps in the left panel do not show reliably](issues/93-diagnose-tooltips-on-tickets-and-maps-in-the-left.md): Most rows had no title attribute at all; every ticket and map row now has a tooltip.
 
+- [Diagnose the lingering session PTY on Windows](issues/80-diagnose-the-lingering-session-pty-on-windows.md): Not reproducible: PTY onExit arrives about 1 s after the CLI exits, with or without hooks; an e2e now guards it.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
