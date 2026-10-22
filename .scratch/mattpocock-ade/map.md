@@ -208,6 +208,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Approximate marking on the Sessions view's last-output line](issues/94-show-the-approximate-marking-on-the-sessions-view.md): A ≈ mark before the last output line flags a guessed session state.
 
+- [Tests leave dryland-* temp folders behind](issues/111-tests-leave-dryland-temp-folders-behind.md): Each test run scopes the OS temp directory to one folder and deletes it at the end.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
