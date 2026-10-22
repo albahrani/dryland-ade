@@ -202,6 +202,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Tick criteria and amend an answer from the CLI](issues/108-tick-criteria-and-amend-an-answer-from-the-cli.md): ticket tick and resolve --amend are sanctioned CLI verbs on local trackers, replacing hand-ticking and comment-only corrections.
 
+- [ticket create --status](issues/62-created-tickets-enter-triage.md): Created tickets carry no Status by default; --status <role> puts one into the triage flow.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.

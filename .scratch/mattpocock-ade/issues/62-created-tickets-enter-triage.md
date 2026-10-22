@@ -1,8 +1,7 @@
 # Decide whether created tickets enter the triage flow
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T06:25:30.627Z","was":"ready-for-agent"}} -->
+Status: resolved
 
 Spec: [spec](../spec.md), user stories 21, 25. ADR 0008. Raised in review of [ticket 24](24-ticket-create-and-resolve.md).
 
@@ -22,10 +21,10 @@ Before choosing, check how the default skills (`to-tickets`, `wayfinder`, triage
 
 ## Acceptance criteria
 
-- [ ] The decision is recorded, with the reason, in this ticket's `## Answer` or in an ADR if it changes ADR 0008
-- [ ] `ticket create` writes the agreed `Status:` (or none), using the repo's role string from the triage labels doc when it writes one
-- [ ] A test pins the behaviour and the round-trip through `ticket show` still passes
-- [ ] The new-ticket dialog's command preview (user story 21) matches what the command writes
+- [x] The decision is recorded, with the reason, in this ticket's `## Answer` or in an ADR if it changes ADR 0008
+- [x] `ticket create` writes the agreed `Status:` (or none), using the repo's role string from the triage labels doc when it writes one
+- [x] A test pins the behaviour and the round-trip through `ticket show` still passes
+- [x] The new-ticket dialog's command preview (user story 21) matches what the command writes
 
 ## Comments
 
@@ -54,3 +53,7 @@ Before choosing, check how the default skills (`to-tickets`, `wayfinder`, triage
 - [ ] Dialog preview matches the command
 
 **Out of scope:** changing frontier semantics, GitHub/GitLab create paths unless they already share the option, changing ADR 0008.
+
+## Answer
+
+Decision (maintainer, option 3): ticket create gains an optional --status <role>; absent, it writes no Status line, so created tickets still go straight onto the frontier as wayfinder expects, and --status lets a caller enter the triage flow. The role (or the repo's label for it) goes through resolveTriageRole and the triage-labels doc, so the written line is the repo's label, never a literal; an unknown role fails naming the valid roles with a hint for --status. GitHub/GitLab reject --status as unsupported rather than drop it. The New ticket dialog has a Status select and its command preview shows --status exactly when set. Commits 55c8429 and the review follow-up. Tests: CLI create tests (label written, none without, invalid rejected, show round-trip) and tracker-actions tests; full suite, Linux suite and desktop e2e pass. Limit: the dialog's Status select has no dedicated e2e test; CREATE_STATUSES is checked against TriageRole by satisfies.
