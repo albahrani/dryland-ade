@@ -1,6 +1,8 @@
 # Add auto-submit, approximate status and best-effort tier to the glossary
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T11:10:57.234Z","was":""}} -->
 
 ## Question
 
