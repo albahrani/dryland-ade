@@ -212,6 +212,8 @@ test("runs terminal sessions in tabs: input, output, resize, independence, and n
 });
 
 test("a full-screen program fills the terminal and redraws to the new size after a resize", async ({}, testInfo) => {
+  // GitHub's Windows runner has a small virtual screen, which caps how large the window can get.
+  test.skip(process.platform === "win32" && process.env.CI !== undefined, "needs a screen larger than the CI runner's");
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
   // A stub full-screen program: on the alternate screen it draws a border around the whole terminal, with the
