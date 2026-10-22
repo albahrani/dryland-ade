@@ -73,6 +73,14 @@ export function isolatedPath(...dirs: string[]): Record<string, string> {
   const stray = ["dryland", "dryland.cmd", "dryland.exe", "dryland.bat"].find((n) => existsSync(join(gitDir, n)));
   if (stray !== undefined)
     throw new Error(`${stray} sits in git's directory ${gitDir}; isolatedPath cannot exclude it`);
+  // GitHub's runners keep gh and glab beside git, which would make the "CLI not installed" checks fail. On POSIX
+  // git is then reached through a wrapper in a directory of its own.
+  if (!WINDOWS && ["gh", "glab"].some((n) => existsSync(join(gitDir, n)))) {
+    const wrapperDir = tempDir("dryland-git-");
+    writeFileSync(join(wrapperDir, "git"), `#!/bin/sh\nexec "${join(gitDir, "git")}" "$@"\n`);
+    chmodSync(join(wrapperDir, "git"), 0o755);
+    return { [key]: [...dirs, wrapperDir].join(delimiter) };
+  }
   return { [key]: [...dirs, gitDir].join(delimiter) };
 }
 

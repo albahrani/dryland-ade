@@ -18,6 +18,9 @@ describe("createExplorerWatcher", () => {
     const onChange = vi.fn();
     watcher = createExplorerWatcher(onChange, 20);
     watcher.set(root, ["src"]);
+    // macOS replays the events of the last moment, such as the folders made above, to a new watcher.
+    await new Promise((resolve) => setTimeout(resolve, QUIET_MS));
+    onChange.mockClear();
 
     writeFileSync(join(root, "node_modules", "dep.js"), "x");
     await new Promise((resolve) => setTimeout(resolve, QUIET_MS));
