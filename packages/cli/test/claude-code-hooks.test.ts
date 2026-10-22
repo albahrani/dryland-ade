@@ -76,6 +76,7 @@ describe("Claude Code status hooks", () => {
     ["Notification:idle_prompt", "session.idle"],
     ["SessionEnd:prompt_input_exit", "session.ended"],
     ["SessionEnd:logout", "session.ended"],
+    ["SessionEnd:other", "session.ended"],
   ])("report %s as %s for the session", async (event, kind) => {
     const { fire } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
