@@ -210,8 +210,6 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Tests leave dryland-* temp folders behind](issues/111-tests-leave-dryland-temp-folders-behind.md): Each test run scopes the OS temp directory to one folder and deletes it at the end.
 
-- [Linux e2e run leaves a core dump per run under WSL](issues/109-diagnose-electron-crashing-in-the-linux-e2e-container-a.md): A test crashed the renderer on purpose; it now hangs it instead, so no dump is written.
-
 - [Linux e2e run leaves a core dump per run under WSL](issues/109-diagnose-electron-crashing-in-the-linux-e2e-contai.md): A test crashed the renderer on purpose; it now hangs it instead, so no dump is written.
 
 ## Not yet specified
