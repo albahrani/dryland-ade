@@ -230,6 +230,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Fog in the ticket tree](issues/87-fog-in-the-ticket-tree-shows-nothing-useful-for-th.md): The app reads the Not yet specified section correctly; the Fog is unhelpful because its items are long prose paragraphs shown unabridged, so the tree should show one-line labels with the full text on hover (ticket 112).
 
+- [Fog items as short labels in the ticket tree](issues/112-show-fog-items-in-the-ticket-tree-as-short-labels.md): Fog rows show a one-line label with the full text on hover and open the map on click.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
