@@ -212,6 +212,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Linux e2e run leaves a core dump per run under WSL](issues/109-diagnose-electron-crashing-in-the-linux-e2e-contai.md): A test crashed the renderer on purpose; it now hangs it instead, so no dump is written.
 
+- [Disk growth of the Linux test scripts, documented](issues/110-document-docker-and-wsl-disk-growth-for-the-linux.md): AGENTS.md says what grows on a Windows disk and how to clear it.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
