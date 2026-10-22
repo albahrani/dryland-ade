@@ -234,6 +234,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Verify the GitHub write path against a real repo](issues/102-verify-the-github-write-path-against-a-real-repo.md): Real-repo run confirmed the write calls; the earliest-assignee check is split off as 113.
 
+- [Verify the GitLab write path against a real project](issues/103-verify-the-gitlab-write-path-against-a-real-projec.md): Real-project run found glab refusing assignee_ids[]; fixed with a JSON array; the Premium checks are split off as 114.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
