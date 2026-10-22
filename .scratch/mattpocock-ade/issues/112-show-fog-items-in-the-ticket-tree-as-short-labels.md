@@ -9,4 +9,4 @@ The Fog branch in the left ticket tree (TicketsView.tsx, styles .fog) renders ea
 
 ## Answer
 
-Fog items in the Tickets tree are now one-line ellipsised labels (fogLabel in tree-tooltips.ts: text up to the first colon or sentence end, whole text if that is empty) with the full text as tooltip; clicking a fog row opens the map tab. Commits 3a3b8e0 and the follow-up fallback commit. Limit: abbreviations such as 'e.g.' end the label early.
+Fog items in the Tickets tree are now one-line ellipsised labels (fogLabel in tree-tooltips.ts: text up to the first colon or sentence end, whole text if that is empty) with the full text as tooltip; clicking a fog row opens the map tab. Commits 3027622 and the follow-up fallback commit. Limit: abbreviations such as 'e.g.' end the label early.

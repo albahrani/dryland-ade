@@ -9,4 +9,4 @@ GLOSSARY.md has no entries for auto-submit, approximate status or the best-effor
 
 ## Answer
 
-Added Best-effort tier, Approximate status and Auto-submit to GLOSSARY.md (789e067), after Agent adapter, worded from ADR 0006, ticket 44's answer and the code. Docs only, so no tests ran.
+Added Best-effort tier, Approximate status and Auto-submit to GLOSSARY.md (da3e3ee), after Agent adapter, worded from ADR 0006, ticket 44's answer and the code. Docs only, so no tests ran.

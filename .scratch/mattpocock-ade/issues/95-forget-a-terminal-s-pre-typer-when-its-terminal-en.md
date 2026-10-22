@@ -9,4 +9,4 @@ WorkStarter keeps a Pretyper per terminal in a pretypers map (work.ts) and never
 
 ## Answer
 
-Terminals take an onEnd callback (terminals.ts), called once when the process exits or the terminal is closed via close/closeAll. startWork passes one that cancels the pre-typer and deletes its pretypers entry (commit 916b36d). Tests in terminals.test.ts cover onEnd on exit, close and closeAll. Known limit: the pretypers map is private, so no test asserts the entry's removal directly. Linux/Docker run left to CI.
+Terminals take an onEnd callback (terminals.ts), called once when the process exits or the terminal is closed via close/closeAll. startWork passes one that cancels the pre-typer and deletes its pretypers entry (commit f793c26). Tests in terminals.test.ts cover onEnd on exit, close and closeAll. Known limit: the pretypers map is private, so no test asserts the entry's removal directly. Linux/Docker run left to CI.
