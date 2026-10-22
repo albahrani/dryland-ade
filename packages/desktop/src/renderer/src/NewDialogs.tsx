@@ -113,7 +113,7 @@ export function NewTicketDialog({
               setStatus(event.target.value === "" ? undefined : (event.target.value as CreateStatus))
             }
           >
-            <option value="">none (straight onto the frontier)</option>
+            <option value="">none</option>
             {CREATE_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s}

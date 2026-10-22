@@ -90,16 +90,7 @@ export async function createTicket(
     const header = [`# ${title}`, "", `Type: ${type}`];
     if (input.status !== undefined) {
       const labels = await readTriageLabels(mainCheckout);
-      const role = (() => {
-        try {
-          return resolveTriageRole(labels, input.status);
-        } catch (error) {
-          if (error instanceof DrylandError) {
-            throw new DrylandError(error.message, error.nextAction.replace("--role", "--status"));
-          }
-          throw error;
-        }
-      })();
+      const role = resolveTriageRole(labels, input.status, "--status");
       header.push(`Status: ${labels.get(role) ?? role}`);
     }
     if (blockers.length > 0) header.push(`Blocked by: ${blockers.join(", ")}`);

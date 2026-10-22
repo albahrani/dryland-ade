@@ -47,7 +47,6 @@ describe("dryland ticket create", () => {
       "docs/agents/triage-labels.md": "| Role | Label |\n|---|---|\n| `needs-triage` | `to-sort` |\n",
     });
 
-    expect(repo.read(".scratch/shop/issues/01-cart.md")).toContain("Status:");
     await create(repo);
     expect(repo.read(".scratch/shop/issues/02-pick-a-payment-provider.md")).not.toContain("Status:");
 

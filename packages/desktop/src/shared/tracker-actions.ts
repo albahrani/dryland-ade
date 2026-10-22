@@ -1,4 +1,4 @@
-import type { TicketRef } from "@dryland/core";
+import type { TicketRef, TriageRole } from "@dryland/core";
 import { ticketKey } from "./tabs.ts";
 
 /**
@@ -30,7 +30,13 @@ export interface NewTicket {
 }
 
 /** The triage roles `--status` takes; core's `TRIAGE_ROLES`, kept here because this runs in the renderer. */
-export const CREATE_STATUSES = ["needs-triage", "needs-info", "ready-for-agent", "ready-for-human", "wontfix"] as const;
+export const CREATE_STATUSES = [
+  "needs-triage",
+  "needs-info",
+  "ready-for-agent",
+  "ready-for-human",
+  "wontfix",
+] as const satisfies readonly TriageRole[];
 export type CreateStatus = (typeof CREATE_STATUSES)[number];
 
 /** Where an action was started: a ticket's own actions never ask, a general button does. */

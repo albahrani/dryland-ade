@@ -119,7 +119,7 @@ export function withAnswer(issueBody: string | null | undefined, answer: string)
 }
 
 /** A role may be given as the canonical role or as the repo's own label for it; anything else fails with the valid ones. */
-export function resolveTriageRole(labels: ReadonlyMap<TriageRole, string>, role: string): TriageRole {
+export function resolveTriageRole(labels: ReadonlyMap<TriageRole, string>, role: string, flag = "--role"): TriageRole {
   const given = role.trim().toLowerCase();
   const resolved =
     TRIAGE_ROLES.find((known) => known === given) ??
@@ -129,7 +129,7 @@ export function resolveTriageRole(labels: ReadonlyMap<TriageRole, string>, role:
     const label = labels.get(known) ?? known;
     return label === known ? known : `${known} (${label})`;
   });
-  throw new DrylandError(`"${role}" is not a triage role.`, `Use --role with one of: ${valid.join(", ")}.`);
+  throw new DrylandError(`"${role}" is not a triage role.`, `Use ${flag} with one of: ${valid.join(", ")}.`);
 }
 
 /** Only an open ticket can be re-triaged. */
