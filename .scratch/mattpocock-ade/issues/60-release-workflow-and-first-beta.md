@@ -1,7 +1,8 @@
 # Release workflow and first beta
 
 Type: task
-Status: ready-for-human
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T14:59:35.768Z","was":"ready-for-human"}} -->
 Blocked by: 21, 57, 59
 
 Spec: [spec](../spec.md), user story 89. "Lifecycle, packaging and release". ADR 0004. Details in the resolved [GitHub project preparation ticket](18-github-project-preparation.md).
