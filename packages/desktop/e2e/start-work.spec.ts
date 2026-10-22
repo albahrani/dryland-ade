@@ -377,7 +377,8 @@ test("asks natively when the window does not answer the quit request", async () 
       process.getBuiltinModule("node:fs").appendFileSync(file, options.message + "\n");
       return { response: 0, checkboxChecked: false };
     };
-    BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer();
+    // A renderer stuck in a loop never answers. Crashing it instead left a 680 MB core dump per run under WSL.
+    void BrowserWindow.getAllWindows()[0]?.webContents.executeJavaScript("for (;;) {}");
   }, asked);
   const closed = app.waitForEvent("close", { timeout: 15_000 });
   await app.evaluate(({ app }) => app.quit()).catch(() => {});
