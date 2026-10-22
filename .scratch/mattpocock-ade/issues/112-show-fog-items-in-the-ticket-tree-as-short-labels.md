@@ -1,6 +1,8 @@
 # Show fog items in the ticket tree as short labels with the full text on hover
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T14:09:45.772Z","was":""}} -->
 
 ## Question
 
