@@ -52,7 +52,9 @@ async function session({ inDryland = true } = {}) {
     const before = received.length;
     const args = [FAKE_COPILOT, "--hooks", paths.hookFile, "--session-id", cliSession, event];
     // Not spawnSync: the listener answers on this process's event loop.
-    await new Promise((resolve) => spawn(process.execPath, args, { env, cwd: appDir }).on("close", resolve));
+    await new Promise((resolve) =>
+      spawn(process.execPath, args, { env, cwd: appDir, stdio: ["ignore", "inherit", "inherit"] }).on("close", resolve),
+    );
     // The child may close before this event loop has read the last event, so wait until the count stops growing.
     for (let seen = -1; seen !== received.length;) {
       seen = received.length;
