@@ -1,6 +1,8 @@
 # Diagnose: clicking a tab in the middle section makes the tabs disappear
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T12:40:27.874Z","was":""}} -->
 
 ## Question
 
