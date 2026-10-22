@@ -1,0 +1,77 @@
+name: release
+
+# A `v*` tag builds the installers on all three OSes and attaches them to a draft release. A `-beta.N` tag marks
+# that release as a pre-release, which is what the `beta` update channel reads. Publishing the draft stays manual.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    permissions:
+      contents: write
+    env:
+      # Unsigned installers, as in ci.yml.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The updater publishes to the repo named in electron-builder.json, so a wrong owner there would send the
+      # release somewhere else. Fail before building anything.
+      - name: Check the publish target is this repository
+        shell: bash
+        run: |
+          target=$(node -p "const p = require('./packages/desktop/electron-builder.json').publish[0]; p.owner + '/' + p.repo")
+          if [ "$target" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::electron-builder.json publishes to $target but this is $GITHUB_REPOSITORY. Set publish.owner and publish.repo, then tag again."
+            exit 1
+          fi
+
+      - run: pnpm --filter @dryland/cli build
+      - run: pnpm --filter @dryland/desktop exec electron-vite build
+
+      # The version comes from the tag (v0.1.0-beta.1 -> 0.1.0-beta.1); a prerelease version makes the update
+      # metadata file beta.yml instead of latest.yml. `always` uploads to the draft release of the tag.
+      - name: Build the installers and upload them to the draft release
+        shell: bash
+        working-directory: packages/desktop
+        run: pnpm exec electron-builder --config electron-builder.json --publish always "-c.extraMetadata.version=${GITHUB_REF_NAME#v}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  prerelease:
+    name: mark beta tags as pre-release
+    needs: build
+    if: contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Flag the draft release as a pre-release
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
