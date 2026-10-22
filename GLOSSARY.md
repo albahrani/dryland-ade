@@ -127,6 +127,18 @@ _Avoid_: Orphan branch, stray branch
 The per-Agent-CLI description the ADE uses to launch a session, pre-type a skill command and observe its status.
 _Avoid_: Driver, plugin
 
+**Best-effort tier**:
+The adapter tier for Agent CLIs beyond Claude Code and GitHub Copilot CLI, such as Codex CLI and Gemini CLI: launch and the pre-typed command only, with no hooks, no session id, no resume and no status guarantee. The other tier is first-class, with a full, verified adapter.
+_Avoid_: Unsupported, experimental, second-class
+
+**Approximate status**:
+A session's state guessed from its PTY output instead of reported by hooks: working while output flows, idle after a short quiet, never waiting, and ended from process exit. It is marked "approximate" wherever it is shown.
+_Avoid_: Estimated status, fake status
+
+**Auto-submit**:
+The opt-in setting that presses Enter after the ADE pre-types a skill command, so the session starts working at once. Off by default; global, with a per-project override that wins. A key the user types first cancels the pre-typed command and its submit.
+_Avoid_: Auto-run, auto-start
+
 **Skill setup state**:
 How the repo's installed skills and `docs/agents` files compare to the known default setup: default, default with extras, or modified.
 _Avoid_: Skill version, config drift
