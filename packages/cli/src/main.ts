@@ -571,8 +571,12 @@ async function prepareAgent(id: string | undefined): Promise<string> {
   return `${lines.join("\n")}\n`;
 }
 
-/** What the process has on stdin, or "" when nothing arrives soon: a hook must never hang its CLI. */
-async function readStdin(timeoutMs = 1000): Promise<string> {
+/**
+ * What the process has on stdin, or "" when nothing arrives soon: a hook must never hang its CLI. The wait is
+ * generous because a notification's state is only in its payload, and a slow Windows host can take over a second
+ * to pipe it through PowerShell; it still ends inside the 5 seconds Copilot gives a hook.
+ */
+async function readStdin(timeoutMs = 3000): Promise<string> {
   if (process.stdin.isTTY) return "";
   const chunks: Buffer[] = [];
   const read = (async () => {
