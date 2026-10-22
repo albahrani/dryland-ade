@@ -232,6 +232,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Fog items as short labels in the ticket tree](issues/112-show-fog-items-in-the-ticket-tree-as-short-labels.md): Fog rows show a one-line label with the full text on hover and open the map on click.
 
+- [Verify the GitHub write path against a real repo](issues/102-verify-the-github-write-path-against-a-real-repo.md): Real-repo run confirmed the write calls; the earliest-assignee check is split off as 113.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
