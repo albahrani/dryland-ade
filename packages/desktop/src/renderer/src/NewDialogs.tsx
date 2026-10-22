@@ -2,7 +2,9 @@ import type { TicketsTree } from "@dryland/core";
 import { useState } from "react";
 import {
   commandLine,
+  CREATE_STATUSES,
   CREATE_TYPES,
+  type CreateStatus,
   type CreateType,
   type NewTicket,
   trackerArgs,
@@ -44,10 +46,11 @@ export function NewTicketDialog({
   const [type, setType] = useState<CreateType>("task");
   const [question, setQuestion] = useState("");
   const [blockedBy, setBlockedBy] = useState<string[]>([]);
+  const [status, setStatus] = useState<CreateStatus | undefined>(undefined);
   const chosen = tree.maps.find((m) => m.name === map);
   // Only a ticket still to be done can block the new one.
   const candidates = chosen === undefined ? [] : [...chosen.planning, ...chosen.implementation];
-  const ticket: NewTicket = { map, title: title.trim(), type, question: question.trim(), blockedBy };
+  const ticket: NewTicket = { map, title: title.trim(), type, question: question.trim(), blockedBy, status };
   const toggle = (id: string) =>
     setBlockedBy((current) =>
       current.includes(id) ? current.filter((n) => n !== id) : [...current, id].sort((a, b) => Number(a) - Number(b)),
@@ -98,6 +101,22 @@ export function NewTicketDialog({
             {CREATE_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Status
+          <select
+            value={status ?? ""}
+            onChange={(event) =>
+              setStatus(event.target.value === "" ? undefined : (event.target.value as CreateStatus))
+            }
+          >
+            <option value="">none (straight onto the frontier)</option>
+            {CREATE_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
               </option>
             ))}
           </select>

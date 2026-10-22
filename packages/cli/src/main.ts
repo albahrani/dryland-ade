@@ -142,7 +142,7 @@ const USAGE = [
   "       dryland ticket claim <map>/<number> [--commit | --no-commit] [--json]",
   "       dryland ticket release <map>/<number> [--commit | --no-commit] [--json]",
   "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
-  "                             [--blocked-by <number>[,<number>...]] [--commit | --no-commit] [--json]",
+  "                             [--blocked-by <number>[,<number>...]] [--status <role>] [--commit | --no-commit] [--json]",
   "       dryland ticket resolve <map>/<number> --answer <text> [--amend] [--commit | --no-commit] [--json]",
   "       dryland ticket tick <map>/<number> --criterion <n> [--commit | --no-commit] [--json]",
   "       dryland ticket block <map>/<number> [--add <number>[,<number>...]] [--remove <number>[,<number>...]]",
@@ -324,7 +324,7 @@ const COMMANDS: Record<
   "ticket create": {
     target: false,
     changed: changedTicket,
-    options: ["map", "title", "type", "question", "blocked-by"],
+    options: ["map", "title", "type", "question", "blocked-by", "status"],
     run: async (_target, flags) => {
       const { ticket, warnings } = await createTicket(
         nodeProcessRunner,
@@ -334,6 +334,7 @@ const COMMANDS: Record<
           title: required(flags, "title"),
           type: required(flags, "type"),
           question: flags.values["question"],
+          status: flags.values["status"],
           blockedBy: flags.values["blocked-by"]
             ?.split(",")
             .map((number) => number.trim())

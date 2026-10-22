@@ -13,6 +13,8 @@ import type { ProcessRunner } from "./process-runner.ts";
 import { TICKET_TYPES, type TicketType } from "./ticket.ts";
 import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
 import { remoteBackend } from "./tracker-backend.ts";
+import { resolveTriageRole } from "./tracker-rules.ts";
+import { readTriageLabels } from "./triage-labels.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 
 export interface CreateTicketInput {
@@ -22,6 +24,8 @@ export interface CreateTicketInput {
   question?: string;
   /** Ticket numbers of the same map, as written by the user (`1`, `02`). */
   blockedBy?: string[];
+  /** A triage role to start in, written as the repo's label for it; absent writes no `Status:` line. */
+  status?: string;
 }
 
 const SLUG_LENGTH = 50;
@@ -59,7 +63,10 @@ export async function createTicket(
 ): Promise<TicketWriteResult> {
   const { type, title } = validate(input);
   const remote = await remoteBackend(runner, cwd);
-  if (remote !== null) return remote.backend.create(runner, remote.checkout, { ...input, type, title });
+  if (remote !== null) {
+    if (input.status !== undefined) throw remoteUnsupported("--status");
+    return remote.backend.create(runner, remote.checkout, { ...input, type, title });
+  }
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {
     await readMapFile(mainCheckout, input.map); // fails with the next action when the map is unknown
 
@@ -81,6 +88,20 @@ export async function createTicket(
     });
 
     const header = [`# ${title}`, "", `Type: ${type}`];
+    if (input.status !== undefined) {
+      const labels = await readTriageLabels(mainCheckout);
+      const role = (() => {
+        try {
+          return resolveTriageRole(labels, input.status);
+        } catch (error) {
+          if (error instanceof DrylandError) {
+            throw new DrylandError(error.message, error.nextAction.replace("--role", "--status"));
+          }
+          throw error;
+        }
+      })();
+      header.push(`Status: ${labels.get(role) ?? role}`);
+    }
     if (blockers.length > 0) header.push(`Blocked by: ${blockers.join(", ")}`);
     const question = (input.question ?? "").trim();
     const content = `${[...header, ...(question === "" ? [] : ["", "## Question", "", question])].join("\n")}\n`;

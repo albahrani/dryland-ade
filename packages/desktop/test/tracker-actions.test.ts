@@ -50,6 +50,17 @@ describe("trackerArgs", () => {
     );
   });
 
+  it("passes --status exactly when the dialog chose a role", () => {
+    const created = { map: "shop", title: "Pay", type: "task" as const, question: "", blockedBy: [] };
+    expect(trackerArgs({ kind: "create", ticket: created }, true)).not.toContain("--status");
+    const triaged = { ...created, status: "needs-triage" as const };
+    expect(commandLine(trackerArgs({ kind: "create", ticket: triaged }, true))).toBe(
+      "dryland ticket create --map shop --title Pay --type task --status needs-triage --commit",
+    );
+    expect(isTicketAction({ kind: "create", ticket: triaged })).toBe(true);
+    expect(isTicketAction({ kind: "create", ticket: { ...created, status: "--json" } })).toBe(false);
+  });
+
   it("tells dryland not to commit when auto-commit is off", () => {
     expect(trackerArgs({ kind: "claim", ticket }, false)).toEqual(["ticket", "claim", "shop/02", "--no-commit"]);
   });

@@ -42,6 +42,45 @@ describe("dryland ticket create", () => {
     expect(repo.git("status", "--porcelain")).toBe("?? unrelated.txt");
   });
 
+  it("writes no Status line without --status, and the repo's label for the role with it", async () => {
+    const repo = shopRepo({
+      "docs/agents/triage-labels.md": "| Role | Label |\n|---|---|\n| `needs-triage` | `to-sort` |\n",
+    });
+
+    expect(repo.read(".scratch/shop/issues/01-cart.md")).toContain("Status:");
+    await create(repo);
+    expect(repo.read(".scratch/shop/issues/02-pick-a-payment-provider.md")).not.toContain("Status:");
+
+    const result = await repo.run([
+      "ticket",
+      "create",
+      "--map",
+      "shop",
+      "--title",
+      "Sort me",
+      "--type",
+      "task",
+      "--status",
+      "needs-triage",
+    ]);
+    expect(result.exitCode).toBe(0);
+    expect(repo.read(".scratch/shop/issues/03-sort-me.md")).toContain("Type: task\nStatus: to-sort\n");
+    const shown = JSON.parse((await repo.run(["ticket", "show", "shop/03", "--json"])).stdout);
+    expect(shown).toMatchObject({ id: "03", state: "open", triageRole: "needs-triage" });
+  });
+
+  it("rejects an unknown --status naming the valid roles, and writes nothing", async () => {
+    const repo = shopRepo();
+
+    const result = await create(repo, "--status", "urgent");
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("needs-triage");
+    expect(result.stderr).toContain("--status");
+    expect(repo.git("status", "--porcelain")).toBe("");
+    expect(repo.log()[0]).not.toContain("Create ticket");
+  });
+
   it("numbers N parallel creates consecutively without collisions", async () => {
     const repo = shopRepo();
 

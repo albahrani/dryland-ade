@@ -25,7 +25,13 @@ export interface NewTicket {
   question: string;
   /** Numbers of tickets on the same map. */
   blockedBy: string[];
+  /** A triage role to start in; left out of the command when absent. */
+  status?: CreateStatus;
 }
+
+/** The triage roles `--status` takes; core's `TRIAGE_ROLES`, kept here because this runs in the renderer. */
+export const CREATE_STATUSES = ["needs-triage", "needs-info", "ready-for-agent", "ready-for-human", "wontfix"] as const;
+export type CreateStatus = (typeof CREATE_STATUSES)[number];
 
 /** Where an action was started: a ticket's own actions never ask, a general button does. */
 export type ActionSource = "ticket" | "general-button";
@@ -62,7 +68,7 @@ export function trackerArgs(action: TicketAction, autoCommit: boolean): string[]
       case "unblock":
         return ["ticket", "block", ticketKey(action.ticket), "--remove", action.blocker];
       case "create": {
-        const { map, title, type, question, blockedBy } = action.ticket;
+        const { map, title, type, question, blockedBy, status } = action.ticket;
         return [
           "ticket",
           "create",
@@ -74,6 +80,7 @@ export function trackerArgs(action: TicketAction, autoCommit: boolean): string[]
           type,
           ...(question === "" ? [] : ["--question", question]),
           ...(blockedBy.length === 0 ? [] : ["--blocked-by", blockedBy.join(",")]),
+          ...(status === undefined ? [] : ["--status", status]),
         ];
       }
     }
@@ -126,6 +133,7 @@ function isNewTicket(value: unknown): value is NewTicket {
     value.title.trim() !== "" &&
     CREATE_TYPES.includes(value.type as CreateType) &&
     typeof value.question === "string" &&
+    (value.status === undefined || CREATE_STATUSES.includes(value.status as CreateStatus)) &&
     Array.isArray(value.blockedBy) &&
     value.blockedBy.every((n) => typeof n === "string" && NUMBER.test(n))
   );
