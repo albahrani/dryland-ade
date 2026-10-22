@@ -1,6 +1,8 @@
 # An unpublished release is no update, not an error
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T18:40:36.958Z","was":""}} -->
 
 ## Question
 
