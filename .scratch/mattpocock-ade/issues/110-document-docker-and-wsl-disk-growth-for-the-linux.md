@@ -1,7 +1,8 @@
 # Document Docker and WSL disk growth for the Linux test scripts
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T10:11:00.302Z","was":"ready-for-agent"}} -->
 
 ## Question
 
