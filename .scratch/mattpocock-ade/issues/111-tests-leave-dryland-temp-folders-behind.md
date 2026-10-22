@@ -1,7 +1,8 @@
 # Tests leave dryland-* temp folders behind
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T09:35:01.512Z","was":"ready-for-agent"}} -->
 
 ## Question
 
