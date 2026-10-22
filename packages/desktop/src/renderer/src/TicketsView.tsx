@@ -334,11 +334,7 @@ export function TicketsView({
                   <ul>
                     {map.fog.map((item) => (
                       <li key={item}>
-                        <button
-                          className="fog"
-                          title={item}
-                          onClick={() => onOpen({ kind: "map", name: map.name })}
-                        >
+                        <button className="fog" title={item} onClick={() => onOpen({ kind: "map", name: map.name })}>
                           {fogLabel(item)}
                         </button>
                       </li>
