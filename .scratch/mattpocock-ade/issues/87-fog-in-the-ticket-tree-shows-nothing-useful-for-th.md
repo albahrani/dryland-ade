@@ -1,6 +1,8 @@
 # Fog in the ticket tree shows nothing useful for the Matt Pocock ADE map
 
 Type: research
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T14:05:31.297Z","was":""}} -->
 
 ## Question
 
