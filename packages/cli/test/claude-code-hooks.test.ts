@@ -74,7 +74,8 @@ describe("Claude Code status hooks", () => {
     ["ElicitationResult", "session.running"],
     ["Stop", "session.idle"],
     ["Notification:idle_prompt", "session.idle"],
-    ["SessionEnd", "session.ended"],
+    ["SessionEnd:prompt_input_exit", "session.ended"],
+    ["SessionEnd:logout", "session.ended"],
   ])("report %s as %s for the session", async (event, kind) => {
     const { fire } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
@@ -88,6 +89,14 @@ describe("Claude Code status hooks", () => {
     const [after] = await fireEvents("UserPromptSubmit", "cleared-id");
 
     expect(before).toMatchObject({ session_id: "session-a", kind: "session.idle", agent_session_id: "launched-id" });
+    expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
+  });
+
+  it("keep the session live through /clear: the old id's SessionEnd reports nothing, the new id's events do", async () => {
+    const { fire, fireEvents } = await session(hookSettings(CLAUDE_CODE.statusEvents));
+
+    expect(await fire("SessionEnd:clear")).toEqual([]);
+    const [after] = await fireEvents("UserPromptSubmit", "cleared-id");
     expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
   });
 

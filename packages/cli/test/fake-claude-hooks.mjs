@@ -41,11 +41,12 @@ export function fire(settings, event, sessionId = DEFAULT_SESSION_ID) {
     session_id: sessionId,
     cwd: process.cwd(),
     ...(name === "Notification" ? { notification_type: subtype } : {}),
+    ...(name === "SessionEnd" ? { reason: subtype } : {}),
   });
   const env = { ...process.env, CLAUDE_CODE_SESSION_ID: sessionId };
   let ran = 0;
   for (const group of settings.hooks?.[name] ?? []) {
-    if (!matches(group.matcher, name === "Notification" ? subtype : undefined)) continue;
+    if (!matches(group.matcher, name === "Notification" || name === "SessionEnd" ? subtype : undefined)) continue;
     for (const hook of group.hooks ?? []) {
       if (hook.type !== "command") continue;
       spawnSync(hook.command, { shell: true, input, env, stdio: ["pipe", "ignore", "inherit"] });

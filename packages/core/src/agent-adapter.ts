@@ -123,7 +123,9 @@ export const CLAUDE_CODE: AgentAdapter = {
     ElicitationResult: "running",
     Stop: "idle",
     "Notification:idle_prompt": "idle",
-    SessionEnd: "ended",
+    // /clear ends the CLI session id (reason "clear") but the CLI keeps running under a new one (ticket 74), so
+    // that reason is matched out; every other reason is the CLI exiting. The matcher is a regex over the reason.
+    "SessionEnd:^(?!clear$).*": "ended",
   },
 };
 
