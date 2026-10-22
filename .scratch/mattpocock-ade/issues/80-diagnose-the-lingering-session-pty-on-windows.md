@@ -1,8 +1,7 @@
 # Diagnose the lingering session PTY on Windows
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T13:43:08.741Z","was":""}} -->
+Status: resolved
 
 ## Question
 
@@ -15,3 +14,7 @@ Find out what keeps the PTY open, and how long, then fix it or record why it can
 Check the real Claude Code too. Its `claude` on Windows may be an `.exe`, not a `.cmd`.
 
 Done when: an Agent CLI that exits on Windows has its PTY's onExit reach the TerminalManager within about a second, with or without its session-end hook. Add an e2e test where the fake CLI exits without firing SessionEnd and the session reads "ended" promptly. Or, if the cause is outside Dryland, record the cause and the measured delay in the answer, and say what Dryland does about it.
+
+## Answer
+
+Could not reproduce the lingering PTY on Windows 11 (node-pty ConPTY), so nothing needed fixing in Dryland. Measured with node-pty directly: a child that exits reaches onExit about 1.0-1.1 s after it ends (about 1.6 s total including ~1 s ConPTY startup) for a plain node child, through the cmd.exe /d /c claude.cmd wrapper, with a spawnSync hook, and with the real dryland status run as a shell command before exit. No variant lingered; the three suspects (the cmd wrapper, a hook leaving a process attached, ConPTY exit detection) were each ruled out. The real claude on this host is claude.exe, so Dryland spawns it directly, with no cmd wrapper. The earlier >10 s was probably the Playwright/Electron run under load, or the stale pre-fix dialog state; it did not recur. Added e2e 'a CLI that exits without its session-end hook reads as ended promptly' (commit 0acd223): the stub exits on '$' with no SessionEnd, and the tab must read 'ended' within 3 s; it passes natively. Known limits: the Linux Docker run was not done, and the live app's hook POST was not part of the node-pty timing.
