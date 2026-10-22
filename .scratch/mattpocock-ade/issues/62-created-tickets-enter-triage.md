@@ -1,7 +1,8 @@
 # Decide whether created tickets enter the triage flow
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T06:25:30.627Z","was":"ready-for-agent"}} -->
 
 Spec: [spec](../spec.md), user stories 21, 25. ADR 0008. Raised in review of [ticket 24](24-ticket-create-and-resolve.md).
 
