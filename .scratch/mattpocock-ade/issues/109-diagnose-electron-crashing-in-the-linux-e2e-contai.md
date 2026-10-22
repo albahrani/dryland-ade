@@ -1,7 +1,8 @@
 # Diagnose Electron crashing in the Linux e2e container and leaving 680 MB dumps
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T09:55:13.372Z","was":"ready-for-agent"}} -->
 
 ## Question
 
