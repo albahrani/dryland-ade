@@ -1,6 +1,8 @@
 # Diagnose the lingering session PTY on Windows
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T13:43:08.741Z","was":""}} -->
 
 ## Question
 
