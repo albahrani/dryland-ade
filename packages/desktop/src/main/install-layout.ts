@@ -10,6 +10,8 @@ export interface InstallLayoutInput {
   builtCli: string;
   /** Where the app writes the launcher shims it generates at startup. */
   userDataBin: string;
+  /** The icon in the source tree, used when the app is not installed. */
+  sourceIcon?: string;
 }
 
 export interface InstallLayout {
@@ -19,13 +21,26 @@ export interface InstallLayout {
   pathDirs: string[];
   /** Whether the app writes the `dryland` launcher itself; an installed app ships one instead. */
   writeLauncher: boolean;
+  /** The window icon file; the asar holds only `out/`, so an installed app ships its own copy in resources. */
+  icon: string | undefined;
 }
 
 /** An installed app runs the launcher and single-file CLI the installer shipped; a development run writes its own. */
-export function installLayout({ packaged, resourcesPath, builtCli, userDataBin }: InstallLayoutInput): InstallLayout {
-  if (!packaged) return { cli: builtCli, pathDirs: [userDataBin], writeLauncher: true };
+export function installLayout({
+  packaged,
+  resourcesPath,
+  builtCli,
+  userDataBin,
+  sourceIcon,
+}: InstallLayoutInput): InstallLayout {
+  if (!packaged) return { cli: builtCli, pathDirs: [userDataBin], writeLauncher: true, icon: sourceIcon };
   const installBin = join(resourcesPath, "bin");
-  return { cli: join(installBin, "dryland.mjs"), pathDirs: [userDataBin, installBin], writeLauncher: false };
+  return {
+    cli: join(installBin, "dryland.mjs"),
+    pathDirs: [userDataBin, installBin],
+    writeLauncher: false,
+    icon: join(resourcesPath, "icon.png"),
+  };
 }
 
 /** Deletes the `dryland` launcher an earlier version left in `dir`, so it never shadows the installed one. */

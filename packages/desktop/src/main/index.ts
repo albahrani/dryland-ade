@@ -134,6 +134,7 @@ const layout = installLayout({
   resourcesPath: process.resourcesPath,
   builtCli: join(import.meta.dirname, "dryland.js"),
   userDataBin: shimDir,
+  sourceIcon: join(import.meta.dirname, "../../build/icon.png"),
 });
 // Every tracker write the app makes runs this, the same CLI sessions and the user run (ADR 0003).
 const dryland = createDrylandCli({
@@ -528,6 +529,7 @@ function createWindow(): void {
     width: 1280,
     height: 800,
     title: "Dryland ADE",
+    icon: layout.icon,
     webPreferences: { preload: join(import.meta.dirname, "../preload/index.cjs"), sandbox: true },
   });
   // Closing the window quits the app, so it asks first, like any other quit, and a cancel keeps the window.

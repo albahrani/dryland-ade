@@ -12,7 +12,8 @@
     { "from": "installer/bin/dryland", "to": "bin/dryland" },
     { "from": "installer/bin/dryland.cmd", "to": "bin/dryland.cmd" },
     { "from": "../cli/dist/dryland.mjs", "to": "bin/dryland.mjs" },
-    { "from": "installer/path.ps1", "to": "path.ps1" }
+    { "from": "installer/path.ps1", "to": "path.ps1" },
+    { "from": "build/icon.png", "to": "icon.png" }
   ],
   "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
   "nsis": {
