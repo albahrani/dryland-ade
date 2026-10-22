@@ -1,5 +1,5 @@
-/** Where releases are published. The owner is a placeholder, here and in `electron-builder.json`, until ticket 60. */
-export const RELEASES_URL = "https://github.com/dryland-ade/dryland-ade/releases";
+/** Where releases are published; the owner matches `publish` in `electron-builder.json`, which the release workflow checks. */
+export const RELEASES_URL = "https://github.com/albahrani/dryland-ade/releases";
 
 /** The release page of `version`, which a notify-only platform links to. */
 export const releaseUrl = (version: string): string => `${RELEASES_URL}/tag/v${version}`;
