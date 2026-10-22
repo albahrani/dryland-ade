@@ -1,6 +1,10 @@
 {
   "name": "@dryland/desktop",
   "version": "0.0.0",
+  "description": "Unofficial, community-made desktop ADE for repos using Matt Pocock's skills.",
+  "homepage": "https://github.com/albahrani/dryland-ade",
+  "license": "MIT",
+  "author": "Dryland ADE contributors <11669181+albahrani@users.noreply.github.com>",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
@@ -9,7 +13,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json",
     "test:e2e": "electron-vite build && playwright test",
-    "package": "pnpm --filter @dryland/cli build && electron-vite build && electron-builder --config electron-builder.json"
+    "package": "pnpm --filter @dryland/cli build && electron-vite build && electron-builder --config electron-builder.json --publish never"
   },
   "devDependencies": {
     "@dryland/core": "workspace:*",
