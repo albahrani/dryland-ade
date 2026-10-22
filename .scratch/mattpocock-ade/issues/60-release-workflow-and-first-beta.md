@@ -26,9 +26,9 @@ The human does:
 ## Acceptance criteria
 
 - [ ] The release workflow builds all installers from a `v*` tag and attaches them to a draft release; a `-beta.N` tag is marked pre-release
-- [ ] The scan report is reviewed and nothing sensitive remains in the pushed history
-- [ ] The repo `dryland-ade` exists with one initial commit, description, topics and the listed settings
-- [ ] `ci` is green on the pushed repo on all three OSes
+- [x] The scan report is reviewed and nothing sensitive remains in the pushed history
+- [x] The repo `dryland-ade` exists with one initial commit, description, topics and the listed settings
+- [x] `ci` is green on the pushed repo on all three OSes
 - [ ] `v0.1.0-beta.1` is published and its Windows installer installs and starts
 - [ ] An installed beta finds the release on the `beta` channel
 
@@ -41,3 +41,5 @@ Agent part done. The release workflow is .github/workflows/release.yml (20b5781)
 Decision by the maintainer, replacing the squash in this ticket's body and in acceptance criterion 3 (and the First push line of ticket 18): the full history is pushed as it is, with no squash. Why: resolved tickets cite commit hashes in their Answers (77 ticket files do), so a squash or any rewrite would leave those references dangling and cut the history of the tracker and of git unevenly. The scan found nothing that needs removing: no secrets, no personal email, authors are a GitHub noreply address; the only trace of the Windows account name is a test fixture in two commits (2ff5d79, 414aadd), neutralised in the second, which is accepted. Criterion 3 therefore reads: the repo dryland-ade exists with the full history, description, topics and the listed settings.
 
 Supersedes the comment above about the history. Decision by the maintainer: the history is not squashed and not pushed as it was. It is rewritten once with git filter-repo before the push, so every commit is kept and only the hashes change. The rewrite removed from every commit the terms-of-service analysis of the Agent CLI providers (it would go stale when the terms change), the maintainer's local project folder path (about 210 occurrences) and two Windows account names, and it updated the commit hashes cited in tickets and docs to the new ones (51 in 32 files). Commit 414aadd, cited above, no longer exists: it became empty and was dropped. The scan report describes the checks.
+
+Status after the first pushes to albahrani/dryland-ade. Done: the repo is public with the full rewritten history, description, seven topics, private vulnerability reporting, Discussions and wiki off, secret scanning with push protection, Dependabot alerts, and branch protection on main (the three check jobs required, no force-push, no deletion, admins not forced). CI is green on all three OSes (run 39829095706): check, package, Linux e2e and the Windows smoke spec. The first real CI runs found problems that no local run could: the deb target needed a description, homepage and author; the package script tried to publish in CI; two files were unformatted; a doctor test assumed gh is not beside git; a macOS watch test saw replayed events; and dryland agent-hook dropped a payload that PowerShell had prefixed with a byte order mark (fixed in the app, with a test). On the Windows runner only the smoke spec runs in e2e, because its small virtual screen and slow process starts failed about half of the full suite; that was the maintainer's decision. Still open: the three release criteria, which need the v0.1.0-beta.1 tag.

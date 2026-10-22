@@ -25,7 +25,7 @@ Adds the one Playwright-for-Electron smoke test and its Windows CI job.
 - [x] The "..." menu offers expand/collapse, sort, filters and show done/fog
 - [x] The legend is shown on first use and stays dismissed afterwards
 - [x] The app reopens the last project on restart
-- [ ] The Playwright smoke test (launch, open a fixture repo, see the tickets tree) passes on Windows and runs in CI
+- [x] The Playwright smoke test (launch, open a fixture repo, see the tickets tree) passes on Windows and runs in CI
 
 ## Answer
 
