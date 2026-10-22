@@ -93,10 +93,11 @@ describe("Claude Code status hooks", () => {
     expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
   });
 
-  it("keep the session live through /clear: the old id's SessionEnd reports nothing, the new id's events do", async () => {
+  it("keep the session live through /clear and /resume: the old id's SessionEnd reports nothing, the new id's events do", async () => {
     const { fire, fireEvents } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
     expect(await fire("SessionEnd:clear")).toEqual([]);
+    expect(await fire("SessionEnd:resume")).toEqual([]);
     const [after] = await fireEvents("UserPromptSubmit", "cleared-id");
     expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
   });
