@@ -10,7 +10,7 @@ import {
 import { STATUS_META } from "../../shared/status-meta.ts";
 import { formatBlockers } from "../../shared/blockers.ts";
 import { mapMarker, type NextUp, ticketMarker } from "../../shared/next-up.ts";
-import { mapTooltip, ticketTooltip } from "../../shared/tree-tooltips.ts";
+import { fogLabel, mapTooltip, ticketTooltip } from "../../shared/tree-tooltips.ts";
 import { NextUpStar } from "./NextUp.tsx";
 import type { TicketSession } from "../../shared/session-meta.ts";
 import { type ItemRef, tabKey, ticketKey } from "../../shared/tabs.ts";
@@ -333,8 +333,14 @@ export function TicketsView({
                 <Branch id={`${map.name}/fog`} label={`Fog (${map.fog.length})`} collapsed={collapsed} toggle={toggle}>
                   <ul>
                     {map.fog.map((item) => (
-                      <li key={item} className="fog">
-                        {item}
+                      <li key={item}>
+                        <button
+                          className="fog"
+                          title={item}
+                          onClick={() => onOpen({ kind: "map", name: map.name })}
+                        >
+                          {fogLabel(item)}
+                        </button>
                       </li>
                     ))}
                   </ul>

@@ -1,6 +1,6 @@
 import type { TreeTicket } from "@dryland/core";
 import { describe, expect, it } from "vitest";
-import { mapTooltip, ticketTooltip } from "../src/shared/tree-tooltips.ts";
+import { fogLabel, mapTooltip, ticketTooltip } from "../src/shared/tree-tooltips.ts";
 
 const ticket: Pick<TreeTicket, "id" | "title" | "status" | "claimant" | "blockers"> = {
   id: "93",
@@ -26,6 +26,28 @@ describe("ticketTooltip", () => {
 
   it("ends with the Next-up reason", () => {
     expect(ticketTooltip(ticket, "Resolve it next")).toBe("93 Diagnose tooltips\nReady\nResolve it next");
+  });
+});
+
+describe("fogLabel", () => {
+  it("keeps a short item whole", () => {
+    expect(fogLabel("Auto-update channels")).toBe("Auto-update channels");
+  });
+
+  it("stops at the first colon", () => {
+    expect(fogLabel("Packaging: installers for three OSes, signing and updates")).toBe("Packaging");
+  });
+
+  it("stops at the end of the first sentence", () => {
+    expect(fogLabel("Hooks may differ per CLI. We have not checked Copilot yet.")).toBe("Hooks may differ per CLI");
+  });
+
+  it("does not split on a dot inside a word", () => {
+    expect(fogLabel("Supports v1.2 of the schema")).toBe("Supports v1.2 of the schema");
+  });
+
+  it("flattens line breaks", () => {
+    expect(fogLabel("First line\nsecond line")).toBe("First line second line");
   });
 });
 

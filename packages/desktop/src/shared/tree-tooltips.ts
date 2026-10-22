@@ -19,6 +19,13 @@ export function ticketTooltip(
     .join("\n");
 }
 
+/** The one-line label of a fog item: its text up to the first colon or sentence end. The full text is its tooltip. */
+export function fogLabel(item: string): string {
+  const flat = item.replace(/\s+/g, " ").trim();
+  const end = flat.search(/:|[.!?](?=\s|$)/);
+  return (end === -1 ? flat : flat.slice(0, end)).trim();
+}
+
 /** The tooltip of a map row: its title and the directory name tickets are addressed by. */
 export function mapTooltip(name: string, title: string): string {
   return `${title}\n${name}`;
