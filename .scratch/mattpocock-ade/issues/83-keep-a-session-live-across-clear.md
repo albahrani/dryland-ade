@@ -1,6 +1,8 @@
 # Keep a session live across /clear
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T11:27:42.333Z","was":""}} -->
 
 ## Question
 
