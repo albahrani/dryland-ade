@@ -596,11 +596,17 @@ async function agentHook(id: string | undefined, event: string | undefined): Pro
   const adapter = AGENT_ADAPTERS.find((a) => a.id === id);
   if (adapter === undefined || event === undefined || !process.env["DRYLAND_PANE_KEY"]) return;
   let payload: unknown;
+  let rawForDebug = "";
   try {
-    payload = JSON.parse(await readStdin());
+    rawForDebug = await readStdin();
+    payload = JSON.parse(rawForDebug);
   } catch {
     // No payload, or one that is not JSON: the event alone may still say enough.
   }
+  if (process.env["DRYLAND_DEBUG_HOOK"])
+    process.stderr.write(
+      `DEBUG-HOOK event=${event} tty=${String(process.stdin.isTTY)} raw=${JSON.stringify(rawForDebug.slice(0, 200))} state=${String(hookStateOf(adapter, event, payload))}\n`,
+    );
   const state = hookStateOf(adapter, event, payload);
   if (state === null) return;
   // The CLI's own session id is in the payload when it sets no variable for its hooks.

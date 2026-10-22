@@ -44,6 +44,7 @@ async function session({ inDryland = true } = {}) {
     ...inherited,
     [pathKey]: [drylandOnPath(), process.env[pathKey]].join(delimiter),
     DRYLAND_APP_DIR: appDir,
+    DRYLAND_DEBUG_HOOK: "1",
     ...(inDryland ? { DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" } : {}),
   };
   /** Fires `event` in the fake CLI and returns the events the app received. */
