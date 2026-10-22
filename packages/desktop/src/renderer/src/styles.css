@@ -1021,6 +1021,11 @@ ul {
   text-overflow: ellipsis;
 }
 
+.session-row .approximate-mark {
+  margin-right: 4px;
+  cursor: help;
+}
+
 .session-badge.paused .badge {
   color: var(--bg);
 }

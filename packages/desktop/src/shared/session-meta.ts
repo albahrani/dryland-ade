@@ -22,6 +22,11 @@ export function stateLabel(state: SessionState, approximate: boolean | undefined
   return approximate && state !== "ended" ? `${label} (approximate)` : label;
 }
 
+/** A small mark for a row that shows a last output line instead of the state label, which would carry "(approximate)". */
+export function approximateMark(state: SessionState, approximate: boolean | undefined): string | undefined {
+  return approximate && state !== "ended" ? "≈" : undefined;
+}
+
 /** The session working on a ticket, as its badge shows it. */
 export interface TicketSession {
   agent: string;

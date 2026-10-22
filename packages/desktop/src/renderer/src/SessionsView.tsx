@@ -1,7 +1,7 @@
 import type { SessionState, TicketRef } from "@dryland/core";
 import { type PointerEvent, type ReactNode, useRef, useState } from "react";
 import type { SessionInfo } from "../../shared/api.ts";
-import { stateLabel } from "../../shared/session-meta.ts";
+import { approximateMark, stateLabel } from "../../shared/session-meta.ts";
 import {
   dragSash,
   groupCount,
@@ -412,6 +412,7 @@ export function SessionsView({
               const state = stateOf(session);
               const title = lookups.title(session);
               const line = lookups.lastLine(session);
+              const mark = line === undefined ? undefined : approximateMark(state, session.statusApproximate);
               return (
                 <li
                   key={session.id}
@@ -423,7 +424,14 @@ export function SessionsView({
                     <button className="session-title" title={title} onClick={() => handlers.show(session)}>
                       {title}
                     </button>
-                    <span className="meta last-line">{line ?? stateLabel(state, session.statusApproximate)}</span>
+                    <span className="meta last-line">
+                      {mark && (
+                        <span className="approximate-mark" title={stateLabel(state, true)}>
+                          {mark}
+                        </span>
+                      )}
+                      {line ?? stateLabel(state, session.statusApproximate)}
+                    </span>
                   </span>
                   {handlers.unseen(session) && <UnseenMark />}
                 </li>

@@ -1,6 +1,6 @@
 import type { SessionState } from "@dryland/core";
 import { describe, expect, it } from "vitest";
-import { stateLabel, ticketSessions } from "../src/shared/session-meta.ts";
+import { approximateMark, stateLabel, ticketSessions } from "../src/shared/session-meta.ts";
 
 const session = (id: string, ticket: string) => {
   const [map = "", number = ""] = ticket.split("/");
@@ -50,5 +50,14 @@ describe("a state's label", () => {
     expect(stateLabel("running", true)).toBe("working (approximate)");
     expect(stateLabel("running", false)).toBe("working");
     expect(stateLabel("ended", true)).toBe("ended");
+  });
+});
+
+describe("the approximate mark beside a session row's badge", () => {
+  it("shows for a guessed state, not for a hook-reported or ended one", () => {
+    expect(approximateMark("running", true)).toBe("≈");
+    expect(approximateMark("running", false)).toBeUndefined();
+    expect(approximateMark("running", undefined)).toBeUndefined();
+    expect(approximateMark("ended", true)).toBeUndefined();
   });
 });
