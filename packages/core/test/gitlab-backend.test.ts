@@ -79,7 +79,8 @@ function fieldsOf(args: string[]): Record<string, string> {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "-f" || args[i] === "-F") {
       const [name = "", ...value] = (args[i + 1] ?? "").split("=");
-      if (name.includes("[")) throw new Error(`Field name "${name}": a field name containing a bracket is not supported`);
+      if (name.includes("["))
+        throw new Error(`Field name "${name}": a field name containing a bracket is not supported`);
       fields[name] = value.join("=");
     }
   }
