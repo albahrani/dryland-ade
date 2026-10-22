@@ -214,6 +214,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Disk growth of the Linux test scripts, documented](issues/110-document-docker-and-wsl-disk-growth-for-the-linux.md): AGENTS.md says what grows on a Windows disk and how to clear it.
 
+- [Skill-setup state fed into the repo snapshot](issues/66-feed-skill-setup-state-and-compatibility-verdict-i.md): Already delivered by ticket 54: the snapshot carries the verdict, overrides and installed skills, and null disables nothing.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
