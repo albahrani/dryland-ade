@@ -1,6 +1,8 @@
 # Status bar live events toggle as an icon
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T07:04:06.402Z","was":""}} -->
 
 ## Question
 
