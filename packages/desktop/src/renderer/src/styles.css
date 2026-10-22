@@ -303,6 +303,12 @@ ul {
   color: #fff;
 }
 
+.statusbar .icon-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 4px;
+}
+
 .empty {
   color: var(--fg-dim);
   padding: 8px 12px;

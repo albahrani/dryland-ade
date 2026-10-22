@@ -975,10 +975,15 @@ export function App() {
           </button>
         ))}
         <button
+          className="icon-button"
+          aria-label={liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
+          title={liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
           aria-expanded={liveEventsPanel !== "hidden"}
           onClick={() => setLiveEventsPanel(liveEventsPanel === "hidden" ? lastVisiblePanel.current : "hidden")}
         >
-          {liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M1 8h3l2-5 4 10 2-5h3" />
+          </svg>
         </button>
         <span>{project === null ? "No project" : project.path}</span>
         {selected !== undefined && (
