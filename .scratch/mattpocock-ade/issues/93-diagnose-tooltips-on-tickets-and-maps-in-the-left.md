@@ -1,6 +1,8 @@
 # Diagnose: tooltips on tickets and maps in the left panel do not show reliably
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T12:59:16.354Z","was":""}} -->
 
 ## Question
 
