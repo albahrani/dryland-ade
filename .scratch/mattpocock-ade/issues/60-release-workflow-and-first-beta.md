@@ -25,7 +25,7 @@ The human does:
 
 ## Acceptance criteria
 
-- [ ] The release workflow builds all installers from a `v*` tag and attaches them to a draft release; a `-beta.N` tag is marked pre-release
+- [x] The release workflow builds all installers from a `v*` tag and attaches them to a draft release; a `-beta.N` tag is marked pre-release
 - [x] The scan report is reviewed and nothing sensitive remains in the pushed history
 - [x] The repo `dryland-ade` exists with one initial commit, description, topics and the listed settings
 - [x] `ci` is green on the pushed repo on all three OSes
