@@ -226,6 +226,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Diagnose the lingering session PTY on Windows](issues/80-diagnose-the-lingering-session-pty-on-windows.md): Not reproducible: PTY onExit arrives about 1 s after the CLI exits, with or without hooks; an e2e now guards it.
 
+- [Application icon for Dryland ADE](issues/91-application-icon-for-dryland-ade.md): A code-drawn desert-sunset icon in png, ico and icns, used by the window and the installers.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
