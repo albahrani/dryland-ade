@@ -19,6 +19,6 @@ Options to weigh: make the sh launcher detect Windows (`uname` MINGW*/MSYS*/CYGW
 
 ## Acceptance criteria
 
-- [ ] From Git Bash on Windows, `dryland status session.running` runs the bundled CLI instead of exiting 127.
+- [x] From Git Bash on Windows, `dryland status session.running` runs the bundled CLI instead of exiting 127.
 - [ ] A Claude session opened in the ADE on Windows records no `hook_non_blocking_error` for the dryland hooks.
 - [ ] A test or installer check covers the Windows launcher path, so a missing runtime fails the build.
