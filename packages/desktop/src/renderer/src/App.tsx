@@ -135,7 +135,7 @@ function Sidebar({
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
   onStartWork: StartWorkHandler;
-  onDialog: (dialog: MenuCommand) => void;
+  onDialog: (dialog: Exclude<MenuCommand, "new-terminal">) => void;
   /** Shows the session a Next-up marker points at, by session id. */
   onShowSession: (sessionId: string) => void;
   sessionsView: ReactNode;
@@ -238,7 +238,9 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
-  const [dialog, setDialog] = useState<MenuCommand | "all-projects" | null>(null);
+  const [dialog, setDialog] = useState<Exclude<MenuCommand, "new-terminal"> | "all-projects" | null>(null);
+  /** The latest `newTerminal`, for the menu listener that is registered once. */
+  const newTerminalRef = useRef<() => Promise<void>>(async () => {});
   // The setup (by project and fingerprint) whose Compatibility dialog was skipped; skipping asks again once it changes.
   const [skippedSetup, setSkippedSetup] = useState<string | null>(null);
   /** Counts installs and removals of the CLI hooks, so the Agent CLIs tab reads them again. */
@@ -317,7 +319,10 @@ export function App() {
     const stopLive = window.dryland.onLiveEvent((event) =>
       setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
     );
-    const stopMenu = window.dryland.onMenuCommand(setDialog);
+    const stopMenu = window.dryland.onMenuCommand((command) => {
+      if (command === "new-terminal") void newTerminalRef.current();
+      else setDialog(command);
+    });
     const stopExplorer = window.dryland.onExplorerChanged(() => setExplorerRevision((revision) => revision + 1));
     return () => {
       stopExplorer();
@@ -568,6 +573,7 @@ export function App() {
     terminalsOpened.current += 1;
     showTerminal(id, `Terminal ${terminalsOpened.current}`);
   };
+  newTerminalRef.current = newTerminal;
   /** Runs an action through `dryland` and reports its error or warnings; resolves with whether it made the change. */
   const runAction = async (action: TicketAction): Promise<boolean> => {
     setNotice(null);
@@ -649,9 +655,6 @@ export function App() {
           onAll={() => setDialog("all-projects")}
         />
         {project !== null && <TrackerWidget info={project.tracker} onError={setNotice} />}
-        <button className="project-widget" disabled={project === null} onClick={() => void newTerminal()}>
-          New terminal
-        </button>
       </header>
       <nav className="activitybar" aria-label="Activity bar">
         {ACTIVITIES.map(({ id, label, glyph }) => {
@@ -716,35 +719,38 @@ export function App() {
         />
       </aside>
       <main className="editor">
-        {tabs.open.length > 0 && (
-          <div className="tabbar" role="tablist" aria-label="Open items">
-            {tabs.open.map((tab) => {
-              const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
-              const paused =
-                tab.kind === "ticket" || tab.kind === "session" ? pausedMap.get(ticketKey(tab)) : undefined;
-              return (
-                <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
-                  {paused !== undefined && <PausedBadge agent={paused.agent} was={paused.was} />}
-                  {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
-                  {session !== undefined && isUnseen(session) && <UnseenMark />}
-                  <button
-                    role="tab"
-                    aria-selected={tabKey(tab) === tabs.active}
-                    onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
-                  >
-                    {tabLabel(tab, terminalTitles, pausedMap)}
-                  </button>
-                  <button
-                    aria-label={`Close ${tabLabel(tab, terminalTitles, pausedMap)}`}
-                    onClick={() => closeItem(tab)}
-                  >
-                    ×
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
+        <div className="tabbar" role="tablist" aria-label="Open items">
+          {tabs.open.map((tab) => {
+            const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
+            const paused = tab.kind === "ticket" || tab.kind === "session" ? pausedMap.get(ticketKey(tab)) : undefined;
+            return (
+              <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
+                {paused !== undefined && <PausedBadge agent={paused.agent} was={paused.was} />}
+                {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
+                {session !== undefined && isUnseen(session) && <UnseenMark />}
+                <button
+                  role="tab"
+                  aria-selected={tabKey(tab) === tabs.active}
+                  onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
+                >
+                  {tabLabel(tab, terminalTitles, pausedMap)}
+                </button>
+                <button aria-label={`Close ${tabLabel(tab, terminalTitles, pausedMap)}`} onClick={() => closeItem(tab)}>
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <button
+            className="tab-new"
+            aria-label="New terminal"
+            title="Open a shell in the project's main checkout. Start an agent CLI by hand here."
+            disabled={project === null}
+            onClick={() => void newTerminal()}
+          >
+            +
+          </button>
+        </div>
         {terminalError !== null && (
           <p className="notice" role="alert">
             Could not start a terminal: {terminalError}

@@ -600,6 +600,13 @@ function buildMenu(): void {
             enabled: project !== null,
             click: menuCommand("new-ticket"),
           },
+          {
+            id: "new-terminal",
+            label: "New Terminal",
+            accelerator: "Ctrl+`",
+            enabled: project !== null,
+            click: menuCommand("new-terminal"),
+          },
           { label: "Open Project...", accelerator: "CmdOrCtrl+O", click: () => void pickProject().then(refresh) },
           { type: "separator" },
           { label: "Settings...", accelerator: "CmdOrCtrl+,", click: menuCommand("settings") },

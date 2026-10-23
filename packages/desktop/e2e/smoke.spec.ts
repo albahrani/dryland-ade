@@ -159,11 +159,20 @@ test("runs terminal sessions in tabs: input, output, resize, independence, and n
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, repo);
   const window = await app.firstWindow();
-  await expect(window.getByRole("button", { name: "New terminal" })).toBeDisabled();
+  const newTerminal = window.getByRole("tablist").getByRole("button", { name: "New terminal" });
+  await expect(newTerminal).toBeDisabled();
+  expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("new-terminal")?.enabled)).toBe(
+    false,
+  );
   await window.getByRole("button", { name: "Open project..." }).click();
+  await expect(newTerminal).toHaveAttribute(
+    "title",
+    "Open a shell in the project's main checkout. Start an agent CLI by hand here.",
+  );
 
-  // A session tab runs the shell in the project's checkout and shows its output.
-  await window.getByRole("button", { name: "New terminal" }).click();
+  // File > New Terminal opens a terminal tab; a session tab runs the shell in the project's checkout.
+  await expect(newTerminal).toBeEnabled();
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("new-terminal")?.click());
   await expect(window.getByRole("tab", { name: "Terminal 1" })).toHaveAttribute("aria-selected", "true");
   const screen = window.locator(".xterm-rows:visible");
   // The banner's last line is the working directory, so everything before it has been printed.
