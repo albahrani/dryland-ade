@@ -1,6 +1,8 @@
 # Move New terminal into the tab strip and add File > New Terminal
 
 Type: task
+Status: claimed
+<!-- dryland: {"claim":{"holder":"mattpocock-ade/116-move-new-terminal-into-the-tab-strip-and","at":"2026-10-23T20:40:07.959Z","was":""}} -->
 Blocked by: 088
 
 ## Question
