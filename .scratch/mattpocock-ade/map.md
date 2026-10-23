@@ -244,6 +244,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Move New terminal into the tab strip and add File > New Terminal](issues/116-move-new-terminal-into-the-tab-strip-and-add-file.md): Implements the decision of ticket 88.
 
+- [Combine the menu bar with the project selector bar](issues/89-combine-the-menu-bar-with-the-project-selector-bar.md): One 36 px title bar with a hamburger menu, project and tracker widgets and window controls; the Tickets icon changes from ☰ to ☑ (ticket 117).
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
