@@ -13,4 +13,4 @@ Decided in mattpocock-ade/88. Move the New terminal button out of the top bar in
 
 - [x] The top bar no longer holds a New terminal button; the tab strip has a '+' button named New terminal with the tooltip above.
 - [x] File > New Terminal opens a terminal tab, enabled only when a project is open.
-- [ ] The e2e tests and docs/manual/README.md match the new place.
+- [x] The e2e tests and docs/manual/README.md match the new place.
