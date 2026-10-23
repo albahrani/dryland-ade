@@ -21,7 +21,7 @@ The app side of tracker differences.
 - [x] Polling does not run for local-markdown projects
 - [x] The tracker widget names the tracker and offers the right action per tracker
 - [x] On local-markdown with the main checkout off the default branch, the widget shows a warning
-- [ ] A repo whose tracker doc names a plain native tracker opens in lens mode: tickets are shown, sessions can be started, and the widget says claims are best-effort
+- [x] A repo whose tracker doc names a plain native tracker opens in lens mode: tickets are shown, sessions can be started, and the widget says claims are best-effort
 - [x] With `gh` missing or logged out, the Tickets view shows the problem and the next action
 - [x] Polling is tested with a fake process runner and a fake clock
 
