@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -28,12 +28,21 @@ function installTree(): { root: string; bin: string } {
     writeFileSync(exe, `#!/bin/sh\nexec '${process.execPath}' "$@"\n`);
     chmodSync(exe, 0o755);
   }
-  for (const name of WINDOWS ? ["dryland.cmd"] : ["dryland"]) {
+  for (const name of WINDOWS ? ["dryland.cmd", "dryland"] : ["dryland"]) {
     copyFileSync(join(SHIPPED, name), join(bin, name));
     chmodSync(join(bin, name), 0o755);
   }
   copyFileSync(CLI_BUNDLE, join(bin, "dryland.mjs"));
   return { root, bin };
+}
+
+function hasSh(): boolean {
+  try {
+    execFileSync("sh", ["-c", "exit 0"], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Runs `dryland` as found first in `dir`. The launcher itself needs no Node: it runs the app's executable. */
@@ -56,6 +65,14 @@ describe("the launcher shipped in the install directory", () => {
     mkdirSync(linkDir);
     symlinkSync(join(bin, "dryland"), join(linkDir, "dryland"));
     expect(run(linkDir, "ticket list", fixtureRepo())).toContain("shop/02");
+  });
+
+  // Claude Code runs hooks through Git Bash, which resolves `dryland` to the sh script, not dryland.cmd.
+  it.skipIf(!WINDOWS || !hasSh())("runs the sh script under Git Bash on Windows", () => {
+    const { bin } = installTree();
+    const script = join(bin, "dryland").replace(/\\/g, "/");
+    const out = execFileSync("sh", [script, "ticket", "list"], { cwd: fixtureRepo(), encoding: "utf8", stdio: "pipe" });
+    expect(out).toContain("shop/02");
   });
 
   it("keeps the CLI's exit code", () => {

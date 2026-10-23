@@ -9,11 +9,12 @@ while [ -L "$self" ]; do
   case $self in /*) ;; *) self=$dir/$self ;; esac
 done
 here=$(cd "$(dirname "$self")" && pwd)
-if [ "$(uname)" = Darwin ]; then
-  runtime=$here/../../MacOS/Dryland\ ADE
-else
-  runtime=$here/../../dryland-ade
-fi
+case $(uname) in
+  Darwin) runtime=$here/../../MacOS/Dryland\ ADE ;;
+  # Git Bash on Windows (where Claude Code runs hooks) picks this script over dryland.cmd.
+  MINGW* | MSYS* | CYGWIN*) runtime=$here/../../Dryland\ ADE.exe ;;
+  *) runtime=$here/../../dryland-ade ;;
+esac
 DRYLAND_LAUNCHER=$here/dryland
 export DRYLAND_LAUNCHER
 ELECTRON_RUN_AS_NODE=1 exec "$runtime" "$here/dryland.mjs" "$@"
