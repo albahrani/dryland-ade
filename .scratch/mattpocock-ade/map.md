@@ -236,6 +236,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Verify the GitLab write path against a real project](issues/103-verify-the-gitlab-write-path-against-a-real-projec.md): Real-project run found glab refusing assignee_ids[]; fixed with a JSON array; the Premium checks are split off as 114.
 
+- [An unpublished release is no update, not an error](issues/115-an-unpublished-release-is-no-update-not-an-error.md): A draft or missing release reads as up to date on both channels; real failures still show.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
