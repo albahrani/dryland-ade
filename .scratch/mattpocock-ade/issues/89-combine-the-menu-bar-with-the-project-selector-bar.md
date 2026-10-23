@@ -1,6 +1,8 @@
 # Combine the menu bar with the project selector bar
 
 Type: prototype
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-23T11:10:46.245Z","was":""}} -->
 
 ## Question
 
