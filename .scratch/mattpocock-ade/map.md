@@ -238,6 +238,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [An unpublished release is no update, not an error](issues/115-an-unpublished-release-is-no-update-not-an-error.md): A draft or missing release reads as up to date on both channels; real failures still show.
 
+- [Lens mode: test starting a session and decide what it changes](issues/104-lens-mode-test-starting-a-session-and-decide-what.md): A session starts and claims in a lens-mode repo; lens mode changes nothing else.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
