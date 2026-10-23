@@ -10,6 +10,7 @@ import {
   hookSettings,
   nodeProcessRunner,
   readSessionIndex,
+  readTrackerInfo,
 } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
 import { createDrylandCli } from "../src/main/dryland-cli.ts";
@@ -284,6 +285,18 @@ describe("starting work on a ticket", () => {
     expect(JSON.parse(shown)).toMatchObject({ state: "claimed", claimant: "shop/02-grill" });
     provider.spawned[0]?.emit("❯ ");
     await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/implement shop/02"));
+  });
+
+  it("starts and claims the same way in a lens-mode repo, whose tracker doc never mentions dryland", async () => {
+    const repo = fixtureRepo();
+    expect(await readTrackerInfo(repo)).toEqual({ kind: "local-markdown", lens: true });
+    const { provider, starter } = setup();
+
+    const { session, warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
+
+    expect(warnings).toEqual([]);
+    expect(provider.spawned).toHaveLength(1);
+    expect(grill(repo)).toContain(`"holder":"${session.worktree.branch}"`);
   });
 
   it("keeps the claim when work starts on the ticket again, its branch already holding it", async () => {
