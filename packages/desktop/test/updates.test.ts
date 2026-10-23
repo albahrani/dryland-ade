@@ -148,6 +148,34 @@ describe("checking for updates", () => {
       }
     });
 
+    it("says up to date when the releases feed lists only a draft and no production release exists", async () => {
+      // electron-updater wraps the inner 'latest version not found' failure in its feed-parsing error.
+      const { updater, source } = setup("auto");
+      source.check = () =>
+        Promise.reject(
+          Object.assign(
+            new Error(
+              "Cannot parse releases feed: Error: Unable to find latest version on GitHub (https://github.com/o/r/releases/latest), please ensure a production release exists: HttpError: 406",
+            ),
+            { code: "ERR_UPDATER_INVALID_RELEASE_FEED" },
+          ),
+        );
+      await updater.checkNow();
+      expect(updater.state().status).toEqual({ kind: "up-to-date" });
+    });
+
+    it("still reports a releases feed that cannot be parsed", async () => {
+      const { updater, source } = setup("auto");
+      source.check = () =>
+        Promise.reject(
+          Object.assign(new Error("Cannot parse releases feed: Error: bad xml"), {
+            code: "ERR_UPDATER_INVALID_RELEASE_FEED",
+          }),
+        );
+      await updater.checkNow();
+      expect(updater.state().status).toEqual({ kind: "failed", message: "Cannot parse releases feed: Error: bad xml" });
+    });
+
     it("still reports any other failure of a check", async () => {
       const { updater, source } = setup("auto");
       rejectWith(source, "ERR_UPDATER_INVALID_UPDATE_INFO");

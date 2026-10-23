@@ -126,7 +126,17 @@ const NOTHING_PUBLISHED = new Set([
   "ERR_UPDATER_RELEASE_NOT_FOUND",
 ]);
 
-const nothingPublished = (error: unknown): boolean =>
-  typeof error === "object" && error !== null && NOTHING_PUBLISHED.has(String((error as { code?: unknown }).code));
+/**
+ * With a draft listed in the releases feed and no production release, `electron-updater` wraps the inner "latest
+ * version not found" failure in its feed-parsing error, so only the message tells it from a feed that is really broken.
+ */
+const NO_PRODUCTION_RELEASE = "Unable to find latest version on GitHub";
+
+const nothingPublished = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  if (NOTHING_PUBLISHED.has(String(code))) return true;
+  return code === "ERR_UPDATER_INVALID_RELEASE_FEED" && String(message).includes(NO_PRODUCTION_RELEASE);
+};
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
