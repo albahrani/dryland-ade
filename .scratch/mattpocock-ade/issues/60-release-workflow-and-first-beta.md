@@ -29,7 +29,7 @@ The human does:
 - [x] The scan report is reviewed and nothing sensitive remains in the pushed history
 - [x] The repo `dryland-ade` exists with one initial commit, description, topics and the listed settings
 - [x] `ci` is green on the pushed repo on all three OSes
-- [x] `v0.1.0-beta.1` is published and its Windows installer installs and starts
+- [x] `v0.1.0-beta.2` is published and its Windows installer installs and starts (beta.1 was dropped unpublished: its update check failed on a draft, fixed in ticket 115)
 - [ ] An installed beta finds the release on the `beta` channel
 
 ## Comments
