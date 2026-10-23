@@ -1,7 +1,7 @@
 # Windows: the extensionless dryland launcher fails when run from Git Bash, so agent hooks error
 
 Type: task
-Status: needs-triage
+Status: resolved
 
 ## Question
 
@@ -22,3 +22,7 @@ Options to weigh: make the sh launcher detect Windows (`uname` MINGW*/MSYS*/CYGW
 - [x] From Git Bash on Windows, `dryland status session.running` runs the bundled CLI instead of exiting 127.
 - [ ] A Claude session opened in the ADE on Windows records no `hook_non_blocking_error` for the dryland hooks.
 - [x] A test or installer check covers the Windows launcher path, so a missing runtime fails the build.
+
+## Answer
+
+Fixed in a9e5917: the sh launcher now detects MINGW*/MSYS*/CYGWIN* and runs 'Dryland ADE.exe' instead of the Linux 'dryland-ade', so Git Bash hooks reach the CLI. installed-launcher.test.ts installs both launchers on Windows and runs the sh script through sh; it fails without the fix. Checked doctor --link-path and path.ps1: neither assumes the Linux executable name. Known limit: criterion 2 (no hook_non_blocking_error in a live ADE session) needs a real Windows install and is not ticked.
