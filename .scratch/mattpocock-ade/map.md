@@ -248,6 +248,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Windows: the extensionless dryland launcher fails when run from Git Bash](issues/118-windows-the-extensionless-dryland-launcher-fails-w.md): The sh launcher now runs Dryland ADE.exe under Git Bash, so agent hooks reach the CLI.
 
+- [Move New terminal into the tab strip and add File > New Terminal](issues/116-move-new-terminal-into-the-tab-strip-and-add-file.md): New terminal is now a + button in the tab strip and File > New Terminal (Ctrl+`).
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
