@@ -10,7 +10,7 @@ The Updates tab shows a long raw HTTP error (with headers and a stack trace) whe
 
 ## Acceptance criteria
 
-- [ ] A check that finds no release, no published version, no such release, or a release without update files (a draft) ends as up to date on the stable and on the beta channel, with no error text
+- [x] A check that finds no release, no published version, no such release, or a release without update files (a draft) ends as up to date on the stable and on the beta channel, with no error text
 - [ ] Any other failure of a check (a network error, a malformed answer) still ends as a failed status with its message
 - [ ] A failed download is still reported as failed
 - [ ] The installed beta, with the draft v0.1.0-beta.1 unpublished, shows up to date in the Updates tab on both channels
