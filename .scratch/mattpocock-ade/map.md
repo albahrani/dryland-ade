@@ -246,6 +246,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Combine the menu bar with the project selector bar](issues/89-combine-the-menu-bar-with-the-project-selector-bar.md): One 36 px title bar with a hamburger menu, project and tracker widgets and window controls; the Tickets icon changes from ☰ to ☑ (ticket 117).
 
+- [Windows: the extensionless dryland launcher fails when run from Git Bash](issues/118-windows-the-extensionless-dryland-launcher-fails-w.md): The sh launcher now runs Dryland ADE.exe under Git Bash, so agent hooks reach the CLI.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
