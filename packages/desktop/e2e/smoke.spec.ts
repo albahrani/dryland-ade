@@ -159,7 +159,7 @@ test("runs terminal sessions in tabs: input, output, resize, independence, and n
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
   }, repo);
   const window = await app.firstWindow();
-  const newTerminal = window.getByRole("tablist").getByRole("button", { name: "New terminal" });
+  const newTerminal = window.locator(".tabbar").getByRole("button", { name: "New terminal" });
   await expect(newTerminal).toBeDisabled();
   expect(await app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("new-terminal")?.enabled)).toBe(
     false,

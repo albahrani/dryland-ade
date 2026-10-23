@@ -567,6 +567,11 @@ ul {
   overflow-x: auto;
 }
 
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+
 .tab {
   display: flex;
   align-items: center;

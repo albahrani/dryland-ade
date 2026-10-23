@@ -3,7 +3,7 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import type {
   AppState,
   LiveEventsPanelMode,
-  MenuCommand,
+  DialogCommand,
   ProjectView,
   ResumeMode,
   SessionInfo,
@@ -135,7 +135,7 @@ function Sidebar({
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
   onStartWork: StartWorkHandler;
-  onDialog: (dialog: Exclude<MenuCommand, "new-terminal">) => void;
+  onDialog: (dialog: DialogCommand) => void;
   /** Shows the session a Next-up marker points at, by session id. */
   onShowSession: (sessionId: string) => void;
   sessionsView: ReactNode;
@@ -238,7 +238,7 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
-  const [dialog, setDialog] = useState<Exclude<MenuCommand, "new-terminal"> | "all-projects" | null>(null);
+  const [dialog, setDialog] = useState<DialogCommand | "all-projects" | null>(null);
   /** The latest `newTerminal`, for the menu listener that is registered once. */
   const newTerminalRef = useRef<() => Promise<void>>(async () => {});
   // The setup (by project and fingerprint) whose Compatibility dialog was skipped; skipping asks again once it changes.
@@ -719,28 +719,34 @@ export function App() {
         />
       </aside>
       <main className="editor">
-        <div className="tabbar" role="tablist" aria-label="Open items">
-          {tabs.open.map((tab) => {
-            const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
-            const paused = tab.kind === "ticket" || tab.kind === "session" ? pausedMap.get(ticketKey(tab)) : undefined;
-            return (
-              <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
-                {paused !== undefined && <PausedBadge agent={paused.agent} was={paused.was} />}
-                {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
-                {session !== undefined && isUnseen(session) && <UnseenMark />}
-                <button
-                  role="tab"
-                  aria-selected={tabKey(tab) === tabs.active}
-                  onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
-                >
-                  {tabLabel(tab, terminalTitles, pausedMap)}
-                </button>
-                <button aria-label={`Close ${tabLabel(tab, terminalTitles, pausedMap)}`} onClick={() => closeItem(tab)}>
-                  ×
-                </button>
-              </span>
-            );
-          })}
+        <div className="tabbar">
+          <div className="tabs" role="tablist" aria-label="Open items">
+            {tabs.open.map((tab) => {
+              const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
+              const paused =
+                tab.kind === "ticket" || tab.kind === "session" ? pausedMap.get(ticketKey(tab)) : undefined;
+              return (
+                <span key={tabKey(tab)} className="tab" aria-current={tabKey(tab) === tabs.active}>
+                  {paused !== undefined && <PausedBadge agent={paused.agent} was={paused.was} />}
+                  {session !== undefined && <SessionBadge agent={session.agent.name} state={sessionState(session)} />}
+                  {session !== undefined && isUnseen(session) && <UnseenMark />}
+                  <button
+                    role="tab"
+                    aria-selected={tabKey(tab) === tabs.active}
+                    onClick={() => setTabs(focusTab(tabs, tabKey(tab)))}
+                  >
+                    {tabLabel(tab, terminalTitles, pausedMap)}
+                  </button>
+                  <button
+                    aria-label={`Close ${tabLabel(tab, terminalTitles, pausedMap)}`}
+                    onClick={() => closeItem(tab)}
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
           <button
             className="tab-new"
             aria-label="New terminal"

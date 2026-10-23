@@ -177,6 +177,8 @@ export type TicketActionResult = { ok: true; warnings: string[] } | { ok: false;
 
 /** What the application menu asks of the window: the dialogs that live in the renderer. */
 export type MenuCommand = "new-ticket" | "new-map" | "new-scratch" | "new-terminal" | "settings" | "about";
+/** The menu commands that open a dialog; "new-terminal" opens a tab instead. */
+export type DialogCommand = Exclude<MenuCommand, "new-terminal">;
 
 /** What the preload script exposes to the renderer as `window.dryland`. */
 export interface DrylandApi {
