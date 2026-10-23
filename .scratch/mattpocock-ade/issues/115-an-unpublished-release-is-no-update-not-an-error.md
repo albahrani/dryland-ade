@@ -1,8 +1,7 @@
 # An unpublished release is no update, not an error
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-22T18:40:36.958Z","was":""}} -->
+Status: resolved
 
 ## Question
 
@@ -14,3 +13,7 @@ The Updates tab shows a long raw HTTP error (with headers and a stack trace) whe
 - [x] Any other failure of a check (a network error, a malformed answer) still ends as a failed status with its message
 - [x] A failed download is still reported as failed
 - [x] The installed beta, with the draft v0.1.0-beta.1 unpublished, shows up to date in the Updates tab on both channels
+
+## Answer
+
+createUpdater (packages/desktop/src/main/updates.ts) now reads 'nothing published' as up to date on both channels: ERR_UPDATER_CHANNEL_FILE_NOT_FOUND, ERR_UPDATER_LATEST_VERSION_NOT_FOUND, ERR_UPDATER_NO_PUBLISHED_VERSIONS and ERR_UPDATER_RELEASE_NOT_FOUND (4db9666). Running the packaged app showed the stable channel still failing: with only a draft listed in the releases feed, electron-updater wraps the inner 'Unable to find latest version on GitHub' error as ERR_UPDATER_INVALID_RELEASE_FEED. 334b5c6 treats that code as no update only when the message names that inner failure; a feed that truly cannot be parsed still fails. Other check failures and failed downloads still show as failed. Verified by hand in a packaged build with the draft v0.1.0-beta.1 unpublished: up to date on stable and beta. Known limits: a release published without update files also reads as up to date (the release workflow attaches them), and the wrapped-feed match depends on electron-updater's message text.
