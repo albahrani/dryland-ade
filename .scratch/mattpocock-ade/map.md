@@ -240,6 +240,10 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Lens mode: test starting a session and decide what it changes](issues/104-lens-mode-test-starting-a-session-and-decide-what.md): A session starts and claims in a lens-mode repo; lens mode changes nothing else.
 
+- [What is the New terminal button for?](issues/88-what-is-the-new-terminal-button-for.md): It stays as the entry point for hand-started sessions, moving to a + in the tab strip and File > New Terminal.
+
+- [Move New terminal into the tab strip and add File > New Terminal](issues/116-move-new-terminal-into-the-tab-strip-and-add-file.md): Implements the decision of ticket 88.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
