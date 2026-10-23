@@ -1,0 +1,107 @@
+<!doctype html>
+<!-- PROTOTYPE (throwaway): ticket mattpocock-ade/89, "Combine the menu bar with the project selector bar".
+     Question: can one bar hold the menu and the project selector, and which shape?
+     Variants (?variant=A|B|C, bottom bar or arrow keys): A = current two rows (baseline), B = one custom title bar with the full in-app menu,
+     C = one custom title bar with a hamburger menu, D = native menu stays, project widget moves into the sidebar header.
+     Static mock, in-memory state only. Sizes copied from the real app / views-and-ux prototype. -->
+<html lang="en"><head><meta charset="utf-8"><title>Top bar prototype</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:13px/1.4 "Segoe UI",system-ui,sans-serif;background:#1e1e1e;color:#ccc;height:100vh;overflow:hidden;display:flex;flex-direction:column;user-select:none}
+.dim{color:#7a7a7a}
+button{background:#3a3d41;color:#ddd;border:1px solid #4a4d51;border-radius:3px;padding:3px 10px;cursor:pointer;font:inherit}
+button:hover{background:#45494e}
+/* native menu bar mock (stays light on Windows today) */
+.native{height:24px;background:#f0f0f0;color:#222;display:flex;align-items:center;padding:0 4px;flex:none;font-size:12px}
+.native span{padding:2px 9px}
+/* title bar / top bar */
+.bar{height:36px;background:#2b2d30;display:flex;align-items:center;padding:0 0 0 8px;gap:6px;flex:none;border-bottom:1px solid #1a1a1a}
+.drag{flex:1;align-self:stretch;-webkit-app-region:drag}
+.logo{font-weight:800;color:#fff;background:#0e639c;border-radius:5px;padding:1px 6px}
+.pw{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 4px;border-radius:6px;cursor:pointer;font-weight:700;color:#fff}
+.pw:hover{background:#3c3f41}.pw .av{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#21d789,#087cfa);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.tw{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;color:#ccc;cursor:pointer}.tw:hover{background:#3c3f41}
+.sepv{width:1px;height:18px;background:#454545;margin:0 4px}
+.mw{position:relative}.m{padding:4px 9px;border-radius:4px;cursor:pointer}.m:hover,.m.on{background:#4a4d50}
+.dd{position:absolute;top:28px;left:0;background:#252526;border:1px solid #454545;box-shadow:0 4px 14px #000a;min-width:250px;z-index:20;padding:4px 0}
+.dd>div{padding:4px 22px;display:flex;justify-content:space-between;gap:30px;cursor:pointer}.dd>div:hover{background:#04395e}.dd hr{border:0;border-top:1px solid #454545;margin:4px 0}.dd .k{color:#888}
+.ham{width:34px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;font-size:16px}.ham:hover,.ham.on{background:#4a4d50}
+.wc{display:flex;align-self:stretch}.wc div{width:46px;display:flex;align-items:center;justify-content:center;color:#ccc}.wc div:hover{background:#3c3f41}.wc div:last-child:hover{background:#c42b1c}
+/* body mock */
+#main{flex:1;display:flex;min-height:0}
+#act{width:48px;background:#333;flex:none;display:flex;flex-direction:column;align-items:center;padding-top:4px;color:#888;font-size:20px;gap:12px}
+.side{width:260px;background:#252526;flex:none;display:flex;flex-direction:column}
+.sh{padding:6px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#bbb}
+.row{padding:2px 12px;white-space:nowrap}
+.ed{flex:1;display:flex;flex-direction:column;min-width:0}
+.tabs{background:#2d2d2d;display:flex;flex:none;align-items:stretch}
+.tab{padding:6px 12px;color:#999;border-right:1px solid #252526}.tab.on{background:#1e1e1e;color:#fff;border-top:1px solid #007acc}
+.plus{padding:6px 12px;color:#aaa;cursor:pointer}.plus:hover{background:#3c3f41}
+.term{flex:1;background:#101010;padding:10px;font:12px/1.5 Consolas,monospace}
+.status{height:22px;background:#007acc;color:#fff;font-size:12px;display:flex;align-items:center;padding:0 10px;gap:14px;flex:none}
+/* switcher */
+#sw{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);background:#fff;color:#111;border-radius:20px;box-shadow:0 2px 12px #000c;padding:4px 14px;display:flex;gap:14px;align-items:center;z-index:99;font-weight:600}
+#sw span.a{cursor:pointer;font-size:16px}
+#note{position:fixed;top:70px;right:14px;width:290px;background:#202123;border:1px solid #3a3a3a;border-radius:6px;padding:8px 10px;font-size:12px;z-index:5;pointer-events:none}
+#note b{color:#fff}
+</style></head><body>
+<div id="app"></div>
+<div id="note"></div>
+<div id="sw"><span class="a" id="prev">←</span><span id="lbl"></span><span class="a" id="next">→</span></div>
+<script>
+const V = {
+  A: "Current: native menu row + project row",
+  B: "One title bar, full in-app menu",
+  C: "One title bar, hamburger menu",
+  D: "Native menu stays, project widget in sidebar"
+};
+const NOTES = {
+  A: "<b>Baseline.</b> 24 + 36 = 60 px of chrome. Native menu stays light on Windows. Menu and project widget live on separate rows. After ticket 116 the New terminal button leaves the top bar, so the project row is mostly empty.",
+  B: "<b>36 px total.</b> Custom title bar (titleBarOverlay for window controls). File / Sessions / View / Help drawn in-app, dark on every OS. Saves 24 px. Cost: we draw and keyboard-drive our own menu (Alt access, arrow keys) and lose native macOS menu bar (macOS would keep its native menu).",
+  C: "<b>36 px, least width.</b> One hamburger holds all menus as submenus, the project widget and tracker widget get the room. Fewest things to build, but every command is two clicks away and it is not what a VS Code user expects.",
+  D: "<b>24 px chrome, no custom title bar.</b> Native menu stays (no OS-menu work, still light on Windows). The project widget and tracker widget move to the top of the left side panel. Cheapest to build; does not fix the light menu bar."
+};
+const MENUS = {
+  File:[["New Map...","Ctrl+Shift+M"],["New Scratch Session..."],["New Ticket...","Ctrl+N"],["Open Project...","Ctrl+O"],"-",["New Terminal","Ctrl+`"],"-",["Settings...","Ctrl+,"],"-",["Quit"]],
+  Sessions:[["Resume All Paused Sessions"]],
+  View:[["Reload"],["Toggle Developer Tools"]],
+  Help:[["About Dryland ADE"]]
+};
+let open = null;
+const dd = (items) => `<div class="dd">${items.map(i => i==="-" ? "<hr>" : `<div><span>${i[0]}</span><span class="k">${i[1]||""}</span></div>`).join("")}</div>`;
+const menus = () => Object.keys(MENUS).map(n => `<div class="mw"><div class="m ${open===n?'on':''}" data-m="${n}">${n}</div>${open===n?dd(MENUS[n]):""}</div>`).join("");
+const hamburger = () => `<div class="mw"><div class="ham ${open==='ham'?'on':''}" data-m="ham">☰</div>${open==='ham'?`<div class="dd">${Object.keys(MENUS).map(n=>`<div><span>${n}</span><span class="k">▸</span></div>`).join("")}<hr>${MENUS.File.slice(0,4).map(i=>i==="-"?"":`<div><span>${i[0]}</span><span class="k">${i[1]||""}</span></div>`).join("")}</div>`:""}</div>`;
+const proj = `<div class="pw"><div class="av">sh</div>shop ▾</div>`;
+const tracker = `<div class="tw">⎇ local-markdown ▾</div>`;
+const wc = `<div class="wc"><div>—</div><div>▢</div><div>✕</div></div>`;
+const native = `<div class="native"><span>File</span><span>Sessions</span><span>View</span><span>Help</span></div>`;
+const sideBody = `<div class="sh">Tickets</div><div class="row">▾ shop</div><div class="row">&nbsp;&nbsp;★ 02 Checkout flow</div><div class="row">&nbsp;&nbsp;&nbsp;&nbsp;03 Receipts</div><div class="row dim">&nbsp;&nbsp;&nbsp;&nbsp;01 Cart (resolved)</div>`;
+function chrome(v) {
+  if (v==="A") return native + `<div class="bar">${proj}${tracker}<div class="drag"></div></div>`;
+  if (v==="B") return `<div class="bar"><span class="logo">D</span>${menus()}<div class="sepv"></div>${proj}${tracker}<div class="drag"></div>${wc}</div>`;
+  if (v==="C") return `<div class="bar">${hamburger()}${proj}${tracker}<div class="drag"></div>${wc}</div>`;
+  return native;
+}
+function render() {
+  const v = new URLSearchParams(location.search).get("variant") || "A";
+  document.getElementById("app").innerHTML = `<div style="display:flex;flex-direction:column;height:100vh">${chrome(v)}
+   <div id="main"><div id="act"><div title="Tickets">☑</div><div title="Maps">◈</div><div title="Sessions">▶</div></div>
+   <div class="side">${v==="D"?`<div style="padding:6px 8px;display:flex;gap:4px;border-bottom:1px solid #1a1a1a">${proj}${tracker}</div>`:""}${sideBody}</div>
+   <div class="ed"><div class="tabs"><div class="tab">Ticket 02</div><div class="tab on">claude · 02</div><div class="plus" title="New terminal (ticket 116)">+</div></div>
+   <div class="term">$ claude<br>&gt; /implement shop/02</div></div></div>
+   <div class="status"><span>main</span><span>2 waiting</span></div></div>`;
+  document.getElementById("lbl").textContent = `${v} (${V[v]})`;
+  document.getElementById("note").innerHTML = NOTES[v];
+  document.querySelectorAll("[data-m]").forEach(e => e.onclick = ev => { ev.stopPropagation(); open = open===e.dataset.m ? null : e.dataset.m; render(); });
+}
+function go(d) {
+  const ks = Object.keys(V), cur = new URLSearchParams(location.search).get("variant") || "A";
+  const n = ks[(ks.indexOf(cur)+d+ks.length)%ks.length];
+  history.replaceState(null,"","?variant="+n); open = null; render();
+}
+document.getElementById("prev").onclick = () => go(-1);
+document.getElementById("next").onclick = () => go(1);
+document.addEventListener("keydown", e => { if (e.key==="ArrowLeft") go(-1); if (e.key==="ArrowRight") go(1); });
+document.addEventListener("click", () => { if (open) { open = null; render(); } });
+render();
+</script></body></html>
