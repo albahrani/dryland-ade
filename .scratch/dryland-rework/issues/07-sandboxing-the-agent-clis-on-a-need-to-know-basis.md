@@ -1,6 +1,8 @@
 # Sandboxing the agent CLIs on a need-to-know basis
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T15:46:40.308Z","was":""}} -->
 Blocked by: 01
 
 ## Question
