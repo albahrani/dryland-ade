@@ -43,6 +43,18 @@ _Avoid_: Checklist item, requirement
 Replacing the Answer of an already resolved ticket, by `ticket resolve --amend`. Without `--amend`, resolving a resolved ticket fails. Local markdown only.
 _Avoid_: Edit, re-resolve
 
+**Workflow engine**:
+The deterministic part of Dryland that owns maps, fog, tickets, comments and the rules of the skill workflow, as opposed to the agents that run prompts under it. Under the rework it is the source of truth for that state, not a reader of files that skills write.
+_Avoid_: Backbone, tracker logic
+
+**Fog item**:
+One entry in a map's Not yet specified: an area or question too coarse to ticket yet. Shown as a short label, with the full text on hover.
+_Avoid_: Fog ticket, TODO
+
+**Prompt**:
+What Dryland sends an agent to run one step of the workflow. It may be derived from an upstream Matt Pocock skill; where Dryland owns the text, it is a prompt, not a skill.
+_Avoid_: Skill (for text Dryland owns), template
+
 **Frontier**:
 The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
