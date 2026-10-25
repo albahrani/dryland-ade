@@ -162,3 +162,15 @@ _Avoid_: Validation, lint result
 **ADE-owned annotation**:
 A clearly marked addition the ADE writes into a prose artifact for its own benefit, which the skills can ignore.
 _Avoid_: Metadata block, tag
+
+**Isolation level**:
+The user's choice of how strongly an agent session is kept from the host and from tracker state: Off, Guarded (the agent CLI's own permission rules plus the engine's checks) or Contained (the agent CLI runs in a container that mounts only the session's worktree).
+_Avoid_: Sandbox mode, security level
+
+**Access request**:
+An agent's ask, with a reason, for access its session profile denies. The human answers deny, deny and never ask again, allow once, allow for the session, or allow always; with no human present the session ends as blocked.
+_Avoid_: Override, escalation
+
+**Violation**:
+A recorded event where an agent changed tracker state outside the engine; the engine reverts the change and tells the agent.
+_Avoid_: Breach, incident
