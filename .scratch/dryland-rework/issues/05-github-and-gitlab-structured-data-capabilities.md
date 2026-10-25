@@ -1,6 +1,8 @@
 # GitHub and GitLab structured-data capabilities
 
 Type: research
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T14:54:16.227Z","was":""}} -->
 
 ## Question
 
