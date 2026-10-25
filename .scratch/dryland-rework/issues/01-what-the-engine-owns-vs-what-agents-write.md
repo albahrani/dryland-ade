@@ -1,6 +1,8 @@
 # What the engine owns vs. what agents write
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T14:57:57.572Z","was":""}} -->
 Blocked by: 03
 
 ## Question
