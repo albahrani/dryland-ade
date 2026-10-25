@@ -1,6 +1,8 @@
 # Storage format and where the truth lives
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T16:31:40.363Z","was":""}} -->
 Blocked by: 01, 02, 07, 05
 
 ## Question
