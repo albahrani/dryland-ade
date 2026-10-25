@@ -19,6 +19,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 
 - [Rules and workflow in the upstream skills](issues/03-rules-and-workflow-in-the-upstream-skills.md): Upstream rules split into a mechanical shell (order, enums, sections, gates) and a judgement core; see research file.
 - [What the UI gets from live state reporting](issues/04-what-the-ui-gets-from-live-state-reporting.md): Live events feed only session badges, the events panel and instant refresh; core flows do not need them.
+- [GitHub and GitLab structured-data capabilities](issues/05-github-and-gitlab-structured-data-capabilities.md): GitHub is natively rich and gh covers it; GitLab gates much to Premium and glab needs raw API.
 
 ## Not yet specified
 
