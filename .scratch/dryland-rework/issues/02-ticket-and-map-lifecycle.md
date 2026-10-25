@@ -1,6 +1,8 @@
 # Ticket and map lifecycle
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T15:26:33.381Z","was":""}} -->
 Blocked by: 01
 
 ## Question
