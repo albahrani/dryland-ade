@@ -22,6 +22,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [GitHub and GitLab structured-data capabilities](issues/05-github-and-gitlab-structured-data-capabilities.md): GitHub is natively rich and gh covers it; GitLab gates much to Premium and glab needs raw API.
 - [What the engine owns vs. what agents write](issues/01-what-the-engine-owns-vs-what-agents-write.md): Engine is sole writer of structured state; agents supply prose via commands; controlled append-only edits; sandboxing to prevent bypass.
 - [Ticket and map lifecycle](issues/02-ticket-and-map-lifecycle.md): Ticket is named parts (report, analysis log, description, summary); edits via revisions, reopen for resolved; map charting or done.
+- [Live state reporting: improve, shrink or cut](issues/06-live-state-reporting-improve-shrink-or-cut.md): Cut panel, ticket.changed, lock file, adoption and guesser; keep a session-only state channel.
 
 ## Not yet specified
 
