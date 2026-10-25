@@ -1,10 +1,13 @@
 # Ticket and map lifecycle
 
 Type: grilling
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T15:26:33.381Z","was":""}} -->
+Status: resolved
 Blocked by: 01
 
 ## Question
 
 Define the lifecycle of a ticket and a map: problem report or task description, analysis (comments, findings, corrections, retractions), extended description with cause and solution, streamlined description, final solution summary usable for release notes. Settle what is editable when, how a retraction is recorded, how long titles, descriptions and fog items may be, and how reviewers and later agents reconstruct what was done, why and what failed. Supersedes closed ticket mattpocock-ade/106; may change ADR 0001.
+
+## Answer
+
+Decision: a ticket is one record of named parts, with no new statuses beyond open, claimed, resolved. Parts: Report (fixed once claimed; human edits only, revisioned), Analysis log (append-only, typed finding, failed-attempt, correction, retraction; correction and retraction must point at an earlier entry and give a one-line reason; the target is never deleted, the UI strikes and collapses it), Description (current problem, cause and plan; editable by command while open or claimed, each edit a revision), Solution summary (written at resolve, release-note source). Resolved tickets: only the summary can change, via amend with a reason (revision kept); anything else needs reopen, which requires a reason, sets open, keeps the old summary as a superseded revision, adds a correction entry and needs a new summary at next resolve; agents may reopen, the UI flags it for human attention. Unslop: human-invoked runs show a diff and need explicit human accept (checking clarity, density, nothing cut); workflow- or agent-triggered runs apply without acceptance, recorded agent-authored, gated only by caps and lint, since the engine cannot judge meaning. Resolve requires a Description and summary within caps. Caps are per field kind with overflow to a link plus gist; ballparks title 60, fog item 140, Description 1200, summary 600, analysis entry 500 characters; spec fixes numbers. Map: Destination human-only edits, Notes editable by command, both revisioned; fog items are records open, graduated (names the ticket it became) or dropped (one-line reason); out-of-scope items closed from the start; Decisions so far derived; map status charting or done, done when no open tickets and no open fog and a human confirms with a one-line summary. Reading: ticket show prints summary and Description, --log adds the Analysis log with retractions marked, --history adds revisions with author kind (human, agent, engine), time and reason. Release notes: a command collates summaries of tickets resolved in a range, grouped by type, no rewriting, no model. Supersedes mattpocock-ade/106; ADR 0001 is superseded for ticket edits by this model (ADR work left to the destination). Limits: exact caps, entry schema and UI left to spec and UX rework.
