@@ -1,6 +1,7 @@
 # Live state reporting: improve, shrink or cut
 
 Type: grilling
+Blocked by: 04
 
 ## Question
 
