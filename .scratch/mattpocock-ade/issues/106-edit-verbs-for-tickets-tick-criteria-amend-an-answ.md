@@ -1,7 +1,7 @@
 # Edit verbs for tickets: tick criteria, amend an answer, edit a body
 
 Type: task
-Status: needs-info
+Status: wontfix
 
 ## Question
 
