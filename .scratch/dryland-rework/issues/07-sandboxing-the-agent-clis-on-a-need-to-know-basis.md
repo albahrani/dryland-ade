@@ -1,10 +1,13 @@
 # Sandboxing the agent CLIs on a need-to-know basis
 
 Type: grilling
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-25T15:46:40.308Z","was":""}} -->
+Status: resolved
 Blocked by: 01
 
 ## Question
 
 Decide how Claude Code and Copilot CLI are sandboxed so an agent gets only the access its current ticket needs and reaches tracker state only through the engine. Cover what is denied, how the sandbox is enforced per OS, and how it works with the storage decision. Baseline: the engine-vs-agent boundary from the engine ownership ticket.
+
+## Answer
+
+Decision: three isolation levels, user-selectable with individual feature toggles. Off (warning), Guarded (default: the CLI's own permission rules and hooks plus engine detect-and-reject, native on every OS), Contained (agent CLI in a Docker container mounting only the session worktree; Docker Desktop covers Windows and macOS; microVMs a future level). Threat model: treat the agent as possibly hostile and favour host safety over speed; Guarded is weaker than Contained and the spec states per OS and CLI what is enforced. Denied always: any direct write to tracker state (files, store, history, raw gh/glab mutations); the only write path is the dryland commands, using a per-session token tied to one ticket (enforces claim-before-work, one resolve). Profile derived from ticket type: writes only in the session worktree plus a per-type extra (research file, prototype assets); reads outside the worktree denied except own config and toolchain. Reading: map, resolved tickets and own ticket readable; the starting brief holds only the map, own ticket and blocker answers; other sessions' in-progress tickets and worktrees are not volunteered, readable on request and logged; a strict setting turns that into an access request. Network open by default; secrets protected by scrubbed env, forge tokens held by the engine, home credential paths denied; optional egress allowlist in Contained. Contained gets only the CLI's own auth. Access requests: five answers (deny, deny and never ask again, allow once, session, always); rules in user settings plus a repo layer that can only narrow; one rule store translated into each CLI's native rules so the user sees one prompt; settings screen lists and revokes. Requests need a reason and are not repeated once denied. AFK: human may pre-approve extras at launch; a denial tells the agent not to look for workarounds and to end blocked; request recorded on the ticket; nothing auto-allowed; no queue or rate limit. Violations (bypass caught): engine reverts from revision history, records a violation event, tells the agent in the next command result, pauses on a second one. Storage link: the property is that an agent has no write path to the state store; in Contained tracker state is outside the mount or read-only; a storage option that cannot be protected in Contained counts against it. Glossary: Isolation level, Access request, Violation added. Limits: exact deny lists, profile contents and CLI rule translation left to the spec; an ADR for the isolation ladder to be written with the ADR set.
