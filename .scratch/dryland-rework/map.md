@@ -17,7 +17,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 
 ## Decisions so far
 
-Nothing.
+- [Rules and workflow in the upstream skills](issues/03-rules-and-workflow-in-the-upstream-skills.md): Upstream rules split into a mechanical shell (order, enums, sections, gates) and a judgement core; see research file.
 
 ## Not yet specified
 
