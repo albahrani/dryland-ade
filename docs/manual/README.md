@@ -67,7 +67,7 @@ dryland map index <map> --title <title> --link <path> --gist <text>
 dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>]
 dryland worktree list
 dryland worktree prune <branch> [--yes]
-dryland status <kind> [--session <id>] [--payload <json>]
+dryland status <running|waiting|idle|ended> [--session <id>]
 dryland doctor [--install-hooks | --remove-hooks | --compat-prompt]
 ```
 

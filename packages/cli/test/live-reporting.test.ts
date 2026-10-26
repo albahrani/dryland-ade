@@ -32,49 +32,21 @@ function shopRepo(): TempRepo {
   });
 }
 
-describe("ticket.changed", () => {
-  it("is emitted by every mutating ticket and map command, naming the command and what it changed", async () => {
-    const repo = shopRepo();
-    const { env, received } = await runningApp();
-    const commands: [string[], Record<string, string>][] = [
-      [["ticket", "claim", "shop/01"], { ticket: "shop/01" }],
-      [["ticket", "release", "shop/01"], { ticket: "shop/01" }],
-      [["ticket", "create", "--map", "shop", "--title", "Ship it", "--type", "task"], { ticket: "shop/03" }],
-      [["ticket", "block", "shop/02", "--add", "01"], { ticket: "shop/02" }],
-      [["ticket", "comment", "shop/02", "--text", "Waiting on the cart."], { ticket: "shop/02" }],
-      [["ticket", "triage", "shop/02", "--role", "needs-info"], { ticket: "shop/02" }],
-      [["ticket", "resolve", "shop/01", "--answer", "Built."], { ticket: "shop/01" }],
-      [["map", "index", "shop", "--title", "Cart", "--link", "issues/01-cart.md", "--gist", "Built."], { map: "shop" }],
-    ];
-
-    for (const [args] of commands) {
-      const result = await repo.run(args, repo.path, { ...env, DRYLAND_SESSION_ID: "session-a" });
-      expect(result.exitCode, `${args.join(" ")}: ${result.stderr}`).toBe(0);
-    }
-
-    expect(received).toEqual(
-      commands.map(([args, changed]) => ({
-        session_id: "session-a",
-        kind: "ticket.changed",
-        timestamp: expect.any(String),
-        payload: { command: args.slice(0, 2).join(" "), ...changed },
-      })),
-    );
-  });
-
-  it("is not emitted by commands that only read, or by a write that fails", async () => {
+describe("ticket commands", () => {
+  it("send the app nothing: only session state reports use the channel", async () => {
     const repo = shopRepo();
     const { env, received } = await runningApp();
 
     for (const args of [
       ["ticket", "list"],
-      ["ticket", "show", "shop/01"],
+      ["ticket", "claim", "shop/01"],
+      ["ticket", "comment", "shop/02", "--text", "Waiting on the cart."],
+      ["ticket", "resolve", "shop/01", "--answer", "Built."],
       ["map", "show", "shop"],
-      ["map", "frontier", "shop"],
     ]) {
-      expect((await repo.run(args, repo.path, env)).exitCode).toBe(0);
+      const result = await repo.run(args, repo.path, { ...env, DRYLAND_SESSION_ID: "session-a" });
+      expect(result.exitCode, `${args.join(" ")}: ${result.stderr}`).toBe(0);
     }
-    expect((await repo.run(["ticket", "claim", "shop/99"], repo.path, env)).exitCode).toBe(1);
 
     expect(received).toEqual([]);
   });
@@ -85,7 +57,7 @@ describe("dryland status", () => {
     const repo = TempRepo.create();
     const { env, received } = await runningApp();
 
-    const result = await repo.run(["status", "session.waiting", "--payload", '{"reason":"permission"}'], repo.path, {
+    const result = await repo.run(["status", "waiting"], repo.path, {
       ...env,
       DRYLAND_SESSION_ID: "session-a",
     });
@@ -94,9 +66,8 @@ describe("dryland status", () => {
     expect(received).toEqual([
       {
         session_id: "session-a",
-        kind: "session.waiting",
+        state: "waiting",
         timestamp: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
-        payload: { reason: "permission" },
       },
     ]);
   });
@@ -105,8 +76,8 @@ describe("dryland status", () => {
     const repo = TempRepo.create();
     const { env, received } = await runningApp();
 
-    await repo.run(["status", "session.idle"], repo.path, { ...env, CLAUDE_CODE_SESSION_ID: "cli-1" });
-    await repo.run(["status", "session.idle"], repo.path, env);
+    await repo.run(["status", "idle"], repo.path, { ...env, CLAUDE_CODE_SESSION_ID: "cli-1" });
+    await repo.run(["status", "idle"], repo.path, env);
 
     expect(received.map((e) => e.agent_session_id)).toEqual(["cli-1", undefined]);
     expect(received[1]).not.toHaveProperty("agent_session_id");
@@ -115,7 +86,7 @@ describe("dryland status", () => {
   it("exits 0 with no output when the app is not running", async () => {
     const repo = TempRepo.create();
 
-    const result = await repo.run(["status", "session.running"]);
+    const result = await repo.run(["status", "running"]);
 
     expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
   });
@@ -130,7 +101,7 @@ describe("dryland status", () => {
     writeFileSync(liveLockFile({ DRYLAND_APP_DIR: dir }), JSON.stringify({ port, token: "stale" }));
 
     const started = Date.now();
-    const result = await repo.run(["status", "session.running"], repo.path, { DRYLAND_APP_DIR: dir });
+    const result = await repo.run(["status", "running"], repo.path, { DRYLAND_APP_DIR: dir });
     const elapsed = Date.now() - started;
     silent.close();
 
@@ -138,13 +109,13 @@ describe("dryland status", () => {
     expect(elapsed).toBeLessThan(3_000);
   });
 
-  it("refuses an unknown event kind", async () => {
+  it("refuses an unknown session state", async () => {
     const repo = TempRepo.create();
 
-    const result = await repo.run(["status", "session.exploded"]);
+    const result = await repo.run(["status", "exploded"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("session.exploded");
-    expect(result.stderr).toContain("session.running");
+    expect(result.stderr).toContain("exploded");
+    expect(result.stderr).toContain("running");
   });
 });

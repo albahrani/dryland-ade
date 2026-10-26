@@ -60,31 +60,31 @@ async function session({ inDryland = true } = {}) {
     const stdinEnv = { DRYLAND_APP_DIR: appDir, DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" };
     await runDryland(["agent-hook", COPILOT_CLI.id, event], { cwd: appDir, env: stdinEnv, input });
     await vi.waitFor(() => expect(received.length).toBeGreaterThan(before));
-    return received.slice(before).map((e) => e.kind);
+    return received.slice(before).map((e) => e.state);
   };
-  return { fireEvents, hookWithInput, fire: async (event: string) => (await fireEvents(event)).map((e) => e.kind) };
+  return { fireEvents, hookWithInput, fire: async (event: string) => (await fireEvents(event)).map((e) => e.state) };
 }
 
 describe("Copilot CLI status hooks", () => {
   it.each([
-    ["userPromptSubmitted", "session.running"],
-    ["preToolUse", "session.running"],
-    ["postToolUse", "session.running"],
-    ["permissionRequest", "session.waiting"],
-    ["notification:permission_prompt", "session.waiting"],
-    ["agentStop", "session.idle"],
-    ["sessionEnd", "session.ended"],
-  ])("report %s as %s for the session", async (event, kind) => {
+    ["userPromptSubmitted", "running"],
+    ["preToolUse", "running"],
+    ["postToolUse", "running"],
+    ["permissionRequest", "waiting"],
+    ["notification:permission_prompt", "waiting"],
+    ["agentStop", "idle"],
+    ["sessionEnd", "ended"],
+  ])("report %s as %s for the session", async (event, state) => {
     const { fire } = await session();
 
-    expect(await fire(event)).toEqual([kind]);
+    expect(await fire(event)).toEqual([state]);
   });
 
   it("read a payload that starts with a byte order mark, as PowerShell can pipe it", async () => {
     const { hookWithInput } = await session();
     const payload = JSON.stringify({ sessionId: "copilot-id", notification_type: "permission_prompt" });
 
-    expect(await hookWithInput("notification", String.fromCharCode(0xfeff) + payload)).toEqual(["session.waiting"]);
+    expect(await hookWithInput("notification", String.fromCharCode(0xfeff) + payload)).toEqual(["waiting"]);
   });
 
   it("report nothing for sessionStart, which fires only at the first prompt: launched comes from the spawn", async () => {
@@ -107,7 +107,7 @@ describe("Copilot CLI status hooks", () => {
 
     expect(event).toMatchObject({
       session_id: "session-a",
-      kind: "session.idle",
+      state: "idle",
       agent_session_id: "learned-at-first-submit",
     });
   });

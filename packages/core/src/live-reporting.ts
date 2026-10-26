@@ -7,37 +7,23 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-/** Every kind of live event: a session's state changes, and `ticket.changed` for any Dryland write. */
-export const LIVE_EVENT_KINDS = [
-  "session.running",
-  "session.waiting",
-  "session.idle",
-  "session.ended",
-  "ticket.changed",
-] as const;
+/** The states a hook reports; the app marks a session it just spawned `launched` itself, before any report. */
+export const REPORTED_STATES = ["running", "waiting", "idle", "ended"] as const;
 
-export type LiveEventKind = (typeof LIVE_EVENT_KINDS)[number];
+export type ReportedState = (typeof REPORTED_STATES)[number];
 
-export const isLiveEventKind = (value: unknown): value is LiveEventKind =>
-  LIVE_EVENT_KINDS.includes(value as LiveEventKind);
+export const isReportedState = (value: unknown): value is ReportedState =>
+  REPORTED_STATES.includes(value as ReportedState);
 
-/** What `dryland` tells the running app; shown live and never stored (ADR 0008). */
+/** What a hook tells the running app through `dryland`: a session state report, shown live and never stored (ADR 0015). */
 export interface LiveEvent {
   /** `DRYLAND_SESSION_ID` of the session it came from; empty from a terminal outside any session. */
   session_id: string;
-  kind: LiveEventKind;
-  /** ISO timestamp of when the event happened. */
+  state: ReportedState;
+  /** ISO timestamp of when the state was reported. */
   timestamp: string;
   /** The Agent CLI's own id of the session it came from, when the CLI set one for its hooks (ADR 0010). */
   agent_session_id?: string;
-  payload?: unknown;
-}
-
-/** The payload of `ticket.changed`: the command that wrote, and the ticket (`map/id`) or map it changed. */
-export interface TicketChangedPayload {
-  command: string;
-  ticket?: string;
-  map?: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -60,13 +46,13 @@ function appDir(env: Env, platform: NodeJS.Platform, home: string): string {
 /** The event `value` describes, or `null` when it is not a well-formed live event. */
 export function parseLiveEvent(value: unknown): LiveEvent | null {
   if (value === null || typeof value !== "object") return null;
-  const { session_id, kind, timestamp, agent_session_id, payload } = value as Record<string, unknown>;
+  const { session_id, state, timestamp, agent_session_id } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || typeof timestamp !== "string") return null;
-  if (!isLiveEventKind(kind)) return null;
+  if (!isReportedState(state)) return null;
   if (agent_session_id !== undefined && typeof agent_session_id !== "string") return null;
-  const event: LiveEvent = { session_id, kind, timestamp };
+  const event: LiveEvent = { session_id, state, timestamp };
   if (agent_session_id) event.agent_session_id = agent_session_id as string;
-  return payload === undefined ? event : { ...event, payload };
+  return event;
 }
 
 interface Endpoint {

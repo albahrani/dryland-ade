@@ -1,4 +1,4 @@
-import { type LiveEvent, type SessionState, sessionStateOf } from "@dryland/core";
+import type { LiveEvent, SessionState } from "@dryland/core";
 
 export interface SessionStatus {
   /** A session Dryland just spawned. */
@@ -22,10 +22,7 @@ export function createSessionStatus(): SessionStatus {
   };
   return {
     launched: (sessionId) => void states.set(sessionId, "launched"),
-    apply(event) {
-      const state = sessionStateOf(event.kind);
-      return state !== null && set(event.session_id, state);
-    },
+    apply: (event) => set(event.session_id, event.state),
     exited: (sessionId) => void set(sessionId, "ended"),
     states: () => Object.fromEntries(states),
   };

@@ -18,8 +18,7 @@ import {
   installAgentHooks,
   isStoreInitialised,
   linkLauncher,
-  isLiveEventKind,
-  LIVE_EVENT_KINDS,
+  isReportedState,
   listTickets,
   listWorktrees,
   mapFrontier,
@@ -32,8 +31,8 @@ import {
   releaseTicket,
   removeAgentHooks,
   resolveTicket,
+  REPORTED_STATES,
   runDoctor,
-  SESSION_STATE_EVENTS,
   sendLiveEvent,
   sessionsOf,
   showMap,
@@ -46,10 +45,9 @@ import {
   type DoctorReport,
   type IndexedSession,
   type LiveEvent,
-  type LiveEventKind,
   type MapView,
+  type ReportedState,
   type Ticket,
-  type TicketChangedPayload,
   type WorktreeEntry,
 } from "@dryland/core";
 
@@ -155,7 +153,7 @@ const USAGE = [
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
-  "       dryland status <kind> [--session <id>] [--payload <json>] [--json]",
+  "       dryland status <running|waiting|idle|ended> [--session <id>] [--json]",
   "       dryland doctor [--install-hooks | --remove-hooks | --link-path | --unlink-path | --compat-prompt] [--json]",
   "",
 ].join("\n");
@@ -195,42 +193,21 @@ function numberList(flags: Flags, name: string): string[] | undefined {
     .filter((number) => number !== "");
 }
 
-/** The JSON of `--payload`; `undefined` when it was not given. */
-function parsePayload(text: string | undefined): unknown {
-  if (text === undefined) return undefined;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    throw new DrylandError("--payload is not valid JSON.", `Pass a JSON value, such as --payload '{"reason":"..."}'.`);
-  }
-}
-
 /**
- * Tells the running app about `kind`, for the session in `DRYLAND_SESSION_ID` unless `session` names one, with the
+ * Tells the running app the session in `DRYLAND_SESSION_ID` (unless `session` names one) is in `state`, with the
  * Agent CLI's own session id when the CLI set one. Fire-and-forget: with no app running, or one that does not
  * answer, nothing happens.
  */
-function reportLiveEvent(
-  kind: LiveEventKind,
-  payload?: unknown,
-  session?: string,
-  agentSessionId?: string,
-): Promise<boolean> {
+function reportSessionState(state: ReportedState, session?: string, agentSessionId?: string): Promise<boolean> {
   const agentSession = currentAgentSession(AGENT_ADAPTERS, process.env)?.sessionId ?? agentSessionId;
   const event: LiveEvent = {
     session_id: session ?? process.env["DRYLAND_SESSION_ID"] ?? "",
-    kind,
+    state,
     timestamp: new Date().toISOString(),
     ...(agentSession === undefined ? {} : { agent_session_id: agentSession }),
   };
-  return sendLiveEvent(payload === undefined ? event : { ...event, payload });
+  return sendLiveEvent(event);
 }
-
-/** What a command that returns the changed ticket changed. */
-const changedTicket = (value: unknown): Omit<TicketChangedPayload, "command"> => {
-  const ticket = value as Ticket;
-  return { ticket: `${ticket.map}/${ticket.id}` };
-};
 
 /**
  * Records the Agent CLI session this command runs in, if any, against `ticket` in the session index. The index is a
@@ -262,11 +239,6 @@ const COMMANDS: Record<
     switches?: string[];
     /** The value options (without `--`) the command accepts; any other is refused rather than ignored. */
     options?: string[];
-    /**
-     * Set on commands that change tickets or maps: what changed, from the command's value and target. After the
-     * command succeeds the app is told with a `ticket.changed` live event, whatever the tracker backend.
-     */
-    changed?: (value: unknown, target: string) => Omit<TicketChangedPayload, "command">;
     /** Set on commands that act on one ticket: run inside an Agent CLI session, that session is recorded on it. */
     recordsSession?: true;
     run: (target: string, flags: Flags) => Promise<Output>;
@@ -300,7 +272,6 @@ const COMMANDS: Record<
   },
   "ticket claim": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     run: async (target, flags) => {
       // Always the branch, even inside a Dryland session: a claim outlives its session (ADR 0010).
@@ -318,7 +289,6 @@ const COMMANDS: Record<
   },
   "ticket release": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     run: async (target, flags) => {
       const { ticket, warnings } = await releaseTicket(nodeProcessRunner, process.cwd(), target, {
@@ -329,7 +299,6 @@ const COMMANDS: Record<
   },
   "ticket create": {
     target: false,
-    changed: changedTicket,
     options: ["map", "title", "type", "question", "blocked-by", "status"],
     run: async (_target, flags) => {
       if (await isStoreInitialised(process.cwd())) {
@@ -369,7 +338,6 @@ const COMMANDS: Record<
   },
   "ticket resolve": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     options: ["answer"],
     switches: ["amend"],
@@ -388,7 +356,6 @@ const COMMANDS: Record<
   },
   "ticket tick": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     options: ["criterion"],
     run: async (target, flags) => {
@@ -401,7 +368,6 @@ const COMMANDS: Record<
   },
   "ticket block": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     options: ["add", "remove"],
     run: async (target, flags) => {
@@ -419,7 +385,6 @@ const COMMANDS: Record<
   },
   "ticket comment": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     options: ["text"],
     run: async (target, flags) => {
@@ -435,7 +400,6 @@ const COMMANDS: Record<
   },
   "ticket triage": {
     target: true,
-    changed: changedTicket,
     recordsSession: true,
     options: ["role"],
     run: async (target, flags) => {
@@ -465,7 +429,6 @@ const COMMANDS: Record<
   },
   "map index": {
     target: true,
-    changed: (_value, map) => ({ map }),
     options: ["title", "link", "gist"],
     run: async (target, flags) => {
       const { value, warnings } = await indexMap(
@@ -480,12 +443,12 @@ const COMMANDS: Record<
   },
   status: {
     target: true,
-    options: ["session", "payload"],
-    run: async (kind, flags) => {
-      if (!isLiveEventKind(kind)) {
-        throw new DrylandError(`"${kind}" is not a live event kind.`, `Use one of: ${LIVE_EVENT_KINDS.join(", ")}.`);
+    options: ["session"],
+    run: async (state, flags) => {
+      if (!isReportedState(state)) {
+        throw new DrylandError(`"${state}" is not a session state.`, `Use one of: ${REPORTED_STATES.join(", ")}.`);
       }
-      const sent = await reportLiveEvent(kind, parsePayload(flags.values["payload"]), flags.values["session"]);
+      const sent = await reportSessionState(state, flags.values["session"]);
       return { value: { sent }, text: "" };
     },
   },
@@ -597,7 +560,7 @@ async function agentHook(id: string | undefined, event: string | undefined): Pro
   // The CLI's own session id is in the payload when it sets no variable for its hooks.
   const own =
     typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["sessionId"] : null;
-  await reportLiveEvent(SESSION_STATE_EVENTS[state], undefined, undefined, typeof own === "string" ? own : undefined);
+  await reportSessionState(state, undefined, typeof own === "string" ? own : undefined);
 }
 
 async function run(args: string[]): Promise<number> {
@@ -651,10 +614,6 @@ async function run(args: string[]): Promise<number> {
     }
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
     process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
-    if (entry.changed !== undefined) {
-      const payload: TicketChangedPayload = { command: commandName, ...entry.changed(value, target ?? "") };
-      await reportLiveEvent("ticket.changed", payload);
-    }
     return exitCode;
   }
 

@@ -1,10 +1,10 @@
-import { COPILOT_CLI, hookStateOf, type LiveEvent, type LiveEventKind, SESSION_STATE_EVENTS } from "@dryland/core";
+import { COPILOT_CLI, hookStateOf, type LiveEvent, type ReportedState } from "@dryland/core";
 import { describe, expect, it } from "vitest";
 import { createSessionStatus } from "../src/main/session-status.ts";
 
-const event = (session: string, kind: LiveEventKind): LiveEvent => ({
+const event = (session: string, state: ReportedState): LiveEvent => ({
   session_id: session,
-  kind,
+  state,
   timestamp: "2026-10-15T10:00:00.000Z",
 });
 
@@ -14,33 +14,30 @@ describe("session status", () => {
     status.launched("a");
     expect(status.states()).toEqual({ a: "launched" });
 
-    const seen = (
-      ["session.running", "session.waiting", "session.running", "session.idle", "session.ended"] as const
-    ).map((kind) => {
-      status.apply(event("a", kind));
+    const seen = (["running", "waiting", "running", "idle", "ended"] as const).map((state) => {
+      status.apply(event("a", state));
       return status.states()["a"];
     });
 
     expect(seen).toEqual(["running", "waiting", "running", "idle", "ended"]);
   });
 
-  it("ignores events of sessions Dryland did not start, and events that are not about a session's state", () => {
+  it("ignores events of sessions Dryland did not start", () => {
     const status = createSessionStatus();
     status.launched("a");
 
-    expect(status.apply(event("stranger", "session.running"))).toBe(false);
-    expect(status.apply(event("", "session.running"))).toBe(false);
-    expect(status.apply(event("a", "ticket.changed"))).toBe(false);
+    expect(status.apply(event("stranger", "running"))).toBe(false);
+    expect(status.apply(event("", "running"))).toBe(false);
     expect(status.states()).toEqual({ a: "launched" });
   });
 
   it("ends a session whose process exits, and nothing brings an ended session back", () => {
     const status = createSessionStatus();
     status.launched("a");
-    status.apply(event("a", "session.running"));
+    status.apply(event("a", "running"));
 
     status.exited("a");
-    expect(status.apply(event("a", "session.idle"))).toBe(false);
+    expect(status.apply(event("a", "idle"))).toBe(false);
 
     expect(status.states()).toEqual({ a: "ended" });
   });
@@ -49,8 +46,8 @@ describe("session status", () => {
     const status = createSessionStatus();
     status.launched("a");
 
-    expect(status.apply(event("a", "session.running"))).toBe(true);
-    expect(status.apply(event("a", "session.running"))).toBe(false);
+    expect(status.apply(event("a", "running"))).toBe(true);
+    expect(status.apply(event("a", "running"))).toBe(false);
   });
 });
 
@@ -58,7 +55,7 @@ describe("session status of a Copilot CLI session", () => {
   /** Plays Copilot's native hook events through the adapter's mapping, as `dryland agent-hook` reports them. */
   function play(status: ReturnType<typeof createSessionStatus>, hook: string, payload: unknown = {}) {
     const state = hookStateOf(COPILOT_CLI, hook, payload);
-    if (state !== null) status.apply(event("a", SESSION_STATE_EVENTS[state]));
+    if (state !== null) status.apply(event("a", state));
     return status.states()["a"];
   }
 

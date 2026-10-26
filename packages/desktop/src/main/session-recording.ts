@@ -1,4 +1,4 @@
-import { type LiveEvent, type ProcessRunner, recordSession, sessionStateOf } from "@dryland/core";
+import { type LiveEvent, type ProcessRunner, recordSession } from "@dryland/core";
 import type { SessionInfo } from "../shared/api.ts";
 
 /**
@@ -43,9 +43,9 @@ export function createSessionRecorder({
 
   return {
     apply(event) {
-      const state = sessionStateOf(event.kind);
+      const { state } = event;
       const session = sessions().find((s) => s.id === event.session_id);
-      if (state === null || session === undefined) return;
+      if (session === undefined) return;
       const sessionId = event.agent_session_id ?? latest.get(session.id) ?? session.agentSessionId;
       if (sessionId === null) return;
       latest.set(session.id, sessionId);

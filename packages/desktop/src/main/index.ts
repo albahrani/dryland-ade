@@ -261,13 +261,14 @@ function terminalEnded(id: string): void {
   void refresh();
 }
 
-/** Applies every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
+/** Applies every live event, a session state report. */
 function onLiveEvent(event: LiveEvent): void {
   recorder.apply(event);
   const stateChanged = status.apply(event);
-  if (stateChanged) sendSessionStates();
+  if (!stateChanged) return;
+  sendSessionStates();
   // A session's state moves the next steps too: a waiting one ranks first.
-  if (stateChanged || event.kind === "ticket.changed") void refresh();
+  void refresh();
 }
 
 async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: string | null }> {

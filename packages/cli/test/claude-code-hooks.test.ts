@@ -55,32 +55,33 @@ async function session(settings: unknown) {
     );
     return received.slice(before);
   };
-  /** The session and kind of each event `event` reported. */
-  const fire = async (event: string) => (await fireEvents(event)).map((e) => ({ session: e.session_id, kind: e.kind }));
+  /** The session and state of each event `event` reported. */
+  const fire = async (event: string) =>
+    (await fireEvents(event)).map((e) => ({ session: e.session_id, state: e.state }));
   return { fire, fireEvents };
 }
 
 describe("Claude Code status hooks", () => {
   it.each([
-    ["UserPromptSubmit", "session.running"],
-    ["PreToolUse", "session.running"],
-    ["PostToolUse", "session.running"],
-    ["PostToolUseFailure", "session.running"],
-    ["PermissionRequest", "session.waiting"],
-    ["Notification:permission_prompt", "session.waiting"],
-    ["Notification:elicitation_dialog", "session.waiting"],
-    ["Notification:elicitation_url_dialog", "session.waiting"],
-    ["Elicitation", "session.waiting"],
-    ["ElicitationResult", "session.running"],
-    ["Stop", "session.idle"],
-    ["Notification:idle_prompt", "session.idle"],
-    ["SessionEnd:prompt_input_exit", "session.ended"],
-    ["SessionEnd:logout", "session.ended"],
-    ["SessionEnd:other", "session.ended"],
-  ])("report %s as %s for the session", async (event, kind) => {
+    ["UserPromptSubmit", "running"],
+    ["PreToolUse", "running"],
+    ["PostToolUse", "running"],
+    ["PostToolUseFailure", "running"],
+    ["PermissionRequest", "waiting"],
+    ["Notification:permission_prompt", "waiting"],
+    ["Notification:elicitation_dialog", "waiting"],
+    ["Notification:elicitation_url_dialog", "waiting"],
+    ["Elicitation", "waiting"],
+    ["ElicitationResult", "running"],
+    ["Stop", "idle"],
+    ["Notification:idle_prompt", "idle"],
+    ["SessionEnd:prompt_input_exit", "ended"],
+    ["SessionEnd:logout", "ended"],
+    ["SessionEnd:other", "ended"],
+  ])("report %s as %s for the session", async (event, state) => {
     const { fire } = await session(hookSettings(CLAUDE_CODE.statusEvents));
 
-    expect(await fire(event)).toEqual([{ session: "session-a", kind }]);
+    expect(await fire(event)).toEqual([{ session: "session-a", state }]);
   });
 
   it("carry the CLI's own session id, and the new one once the CLI has changed it, as after /clear", async () => {
@@ -89,8 +90,8 @@ describe("Claude Code status hooks", () => {
     const [before] = await fireEvents("Stop", "launched-id");
     const [after] = await fireEvents("UserPromptSubmit", "cleared-id");
 
-    expect(before).toMatchObject({ session_id: "session-a", kind: "session.idle", agent_session_id: "launched-id" });
-    expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
+    expect(before).toMatchObject({ session_id: "session-a", state: "idle", agent_session_id: "launched-id" });
+    expect(after).toMatchObject({ session_id: "session-a", state: "running", agent_session_id: "cleared-id" });
   });
 
   it("keep the session live through /clear and /resume: the old id's SessionEnd reports nothing, the new id's events do", async () => {
@@ -99,7 +100,7 @@ describe("Claude Code status hooks", () => {
     expect(await fire("SessionEnd:clear")).toEqual([]);
     expect(await fire("SessionEnd:resume")).toEqual([]);
     const [after] = await fireEvents("UserPromptSubmit", "cleared-id");
-    expect(after).toMatchObject({ session_id: "session-a", kind: "session.running", agent_session_id: "cleared-id" });
+    expect(after).toMatchObject({ session_id: "session-a", state: "running", agent_session_id: "cleared-id" });
   });
 
   it("report nothing for a notification that is not about the session's state", async () => {

@@ -61,9 +61,9 @@ function recorderFor(repo: string, sessions: SessionInfo[]) {
   return { recorder, warnings, indexed };
 }
 
-const event = (kind: LiveEvent["kind"], extra: Partial<LiveEvent> = {}): LiveEvent => ({
+const event = (state: LiveEvent["state"], extra: Partial<LiveEvent> = {}): LiveEvent => ({
   session_id: "dryland-session",
-  kind,
+  state,
   timestamp: "2026-10-16T12:00:01.000Z",
   ...extra,
 });
@@ -91,7 +91,7 @@ describe("the session recorder", () => {
       },
     );
 
-    recorder.apply(event("session.waiting", { agent_session_id: "launched-id" }));
+    recorder.apply(event("waiting", { agent_session_id: "launched-id" }));
 
     const [entry] = await indexed();
     expect(entry).toMatchObject({ sessionId: "launched-id", lastState: "waiting" });
@@ -102,8 +102,8 @@ describe("the session recorder", () => {
     const repo = fixtureRepo();
     const { recorder, indexed } = recorderFor(repo, [sessionIn(repo)]);
 
-    recorder.apply(event("session.idle", { agent_session_id: "launched-id" }));
-    recorder.apply(event("session.running", { agent_session_id: "cleared-id" }));
+    recorder.apply(event("idle", { agent_session_id: "launched-id" }));
+    recorder.apply(event("running", { agent_session_id: "cleared-id" }));
 
     expect(await indexed()).toMatchObject([
       { sessionId: "cleared-id", lastState: "running" },
@@ -115,9 +115,9 @@ describe("the session recorder", () => {
     const repo = fixtureRepo();
     const { recorder, indexed } = recorderFor(repo, [sessionIn(repo)]);
 
-    recorder.apply(event("session.running"));
-    recorder.apply(event("session.idle", { agent_session_id: "cleared-id" }));
-    recorder.apply(event("session.waiting"));
+    recorder.apply(event("running"));
+    recorder.apply(event("idle", { agent_session_id: "cleared-id" }));
+    recorder.apply(event("waiting"));
 
     expect(await indexed()).toMatchObject([
       { sessionId: "cleared-id", lastState: "waiting" },
@@ -129,18 +129,17 @@ describe("the session recorder", () => {
     const repo = fixtureRepo();
     const { recorder, indexed } = recorderFor(repo, [sessionIn(repo)]);
 
-    recorder.apply(event("session.idle"));
-    recorder.apply(event("session.ended"));
+    recorder.apply(event("idle"));
+    recorder.apply(event("ended"));
 
     expect(await indexed()).toMatchObject([{ sessionId: "launched-id", lastState: "idle" }]);
   });
 
-  it("ignores events of sessions Dryland did not start, and events that are not about a state", async () => {
+  it("ignores events of sessions Dryland did not start", async () => {
     const repo = fixtureRepo();
     const { recorder, indexed } = recorderFor(repo, [sessionIn(repo)]);
 
-    recorder.apply(event("session.idle", { session_id: "someone-else" }));
-    recorder.apply(event("ticket.changed", { payload: { command: "ticket claim", ticket: "shop/02" } }));
+    recorder.apply(event("idle", { session_id: "someone-else" }));
 
     expect(await indexed()).toEqual([]);
   });
@@ -149,7 +148,7 @@ describe("the session recorder", () => {
     const repo = fixtureRepo();
     const { recorder, indexed } = recorderFor(repo, [sessionIn(repo, { agentSessionId: null })]);
 
-    recorder.apply(event("session.idle"));
+    recorder.apply(event("idle"));
 
     expect(await indexed()).toEqual([]);
   });
@@ -158,7 +157,7 @@ describe("the session recorder", () => {
     const outside = mkdtempSync(join(tmpdir(), "dryland-not-a-repo-"));
     const { recorder, warnings } = recorderFor(outside, [sessionIn(outside)]);
 
-    recorder.apply(event("session.idle"));
+    recorder.apply(event("idle"));
     await recorder.flush();
 
     expect(warnings).toEqual([expect.stringContaining("not recorded in the session index")]);

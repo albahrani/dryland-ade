@@ -8,9 +8,8 @@ const appDir = () => mkdtempSync(join(tmpdir(), "dryland-live-"));
 
 const EVENT: LiveEvent = {
   session_id: "session-a",
-  kind: "ticket.changed",
+  state: "running",
   timestamp: "2026-10-15T10:00:00.000Z",
-  payload: { command: "ticket claim", ticket: "shop/01" },
 };
 
 const listeners: LiveListener[] = [];
@@ -112,9 +111,9 @@ describe("live reporting", () => {
       });
 
     expect((await post("{not json")).status).toBe(400);
-    expect((await post({ ...EVENT, kind: "session.exploded" })).status).toBe(400);
+    expect((await post({ ...EVENT, state: "exploded" })).status).toBe(400);
     expect((await post({ ...EVENT, session_id: 7 })).status).toBe(400);
-    expect((await post({ kind: "ticket.changed" })).status).toBe(400);
+    expect((await post({ state: "running" })).status).toBe(400);
     expect((await post({ ...EVENT, agent_session_id: 7 })).status).toBe(400);
     expect(received).toEqual([]);
   });
@@ -122,7 +121,7 @@ describe("live reporting", () => {
   it("carries the Agent CLI's session id when the event has one", async () => {
     const dir = appDir();
     const { received } = await listen(dir);
-    const event: LiveEvent = { ...EVENT, kind: "session.idle", agent_session_id: "cli-session-1" };
+    const event: LiveEvent = { ...EVENT, state: "idle", agent_session_id: "cli-session-1" };
 
     await sendLiveEvent(event, { env: { DRYLAND_APP_DIR: dir } });
 
