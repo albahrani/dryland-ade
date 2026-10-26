@@ -63,9 +63,7 @@ export function parseLiveEvent(value: unknown): LiveEvent | null {
   const { session_id, kind, timestamp, agent_session_id, payload } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || typeof timestamp !== "string") return null;
   if (!isLiveEventKind(kind)) return null;
-  for (const optional of [agent_session_id]) {
-    if (optional !== undefined && typeof optional !== "string") return null;
-  }
+  if (agent_session_id !== undefined && typeof agent_session_id !== "string") return null;
   const event: LiveEvent = { session_id, kind, timestamp };
   if (agent_session_id) event.agent_session_id = agent_session_id as string;
   return payload === undefined ? event : { ...event, payload };

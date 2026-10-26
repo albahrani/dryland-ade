@@ -855,11 +855,8 @@ void app.whenReady().then(async () => {
   // An installed app ships its launcher; one an earlier version wrote here would shadow it.
   if (layout.writeLauncher) writeLauncher(shimDir, { runtime: process.execPath, cli: layout.cli });
   else removeStaleLauncher(shimDir);
-  // Earlier versions wrote a shim per Agent CLI here, which now would stand in for the real CLI.
-  removeAgentShims(
-    shimDir,
-    AGENT_ADAPTERS.map(({ binary }) => binary),
-  );
+  // Earlier versions wrote a shim per Agent CLI here (Codex and Gemini included), which would stand in for the real CLI.
+  removeAgentShims(shimDir, [...AGENT_ADAPTERS.map(({ binary }) => binary), "codex", "gemini"]);
   ptyEnv[SESSION_RETENTION_ENV] = String(store.read().sessionRetentionDays);
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.
   try {
