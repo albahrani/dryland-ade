@@ -12,7 +12,7 @@ Status: resolved
 - [x] Five new ADRs: engine owns structured state; event log on a dedicated ref with optional state remote; isolation ladder and access requests; prompts from a pinned upstream snapshot through overlays; CLI surface and session-state channel
 - [x] Header notes mark 0001, 0003, 0008, 0009 superseded and 0004, 0005, 0006, 0007, 0010 amended; 0002 wording fixed
 - [x] Glossary: remove, redefine and add the terms listed in the spec
-- [ ] Grep for removed terms finds nothing outside old ADR bodies
+- [x] Grep for removed terms finds nothing outside old ADR bodies
 
 ## Answer
 
