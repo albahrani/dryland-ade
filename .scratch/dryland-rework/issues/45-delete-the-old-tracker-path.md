@@ -6,6 +6,8 @@ Blocked by: 44, 40
 
 ## Question
 
+**Read first:** The Answers of tickets 40 to 44 and the porting list in ticket 41, ADR 0011, and `GLOSSARY.md` for the removed terms.
+
 **What to build:** once every command and screen runs on the store, remove the file-based tracker and the per-repo dispatch. Replaces old ticket 36. This repo's own `.scratch` tracker is plain files outside Dryland and is not touched.
 
 - [ ] Local-markdown, GitHub and GitLab tracker readers and writers are removed, with the tracker-doc requirement and the "no store, so markdown" branch in the CLI and core

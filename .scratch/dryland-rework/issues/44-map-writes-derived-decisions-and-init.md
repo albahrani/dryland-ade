@@ -6,6 +6,8 @@ Blocked by: 43
 
 ## Question
 
+**Read first:** ADRs 0011 and 0015, `GLOSSARY.md`, the Answers of tickets 41 to 43 and the porting list in 41, and the old map code (`packages/core/src/map.ts`, `map-write.ts`) and the new map and new ticket dialogs in `packages/desktop`.
+
 **What to build:** the remaining old write paths on the store, and the setup flow for a fresh repo.
 
 - [ ] The new map and new ticket dialogs work in a store repo
