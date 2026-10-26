@@ -16,7 +16,7 @@ Rejected: a SQLite file as the store (does not merge, sits in a mount); state on
 
 ## Consequences
 
-- **Open: reachability.** "Never checked out" keeps state out of the files an agent edits, not out of reach of git: a linked worktree shares the git common dir, so `git update-ref refs/dryland/state` works from inside it, and a file-level sandbox cannot deny the common dir because commits write there. Whether a deny set is enough or the store must live elsewhere is decided by the prototype in dryland-rework ticket 39, and this ADR is amended with the result.
+- **Reachability: the store is its own bare git dir outside the repo.** "Never checked out" keeps state out of the files an agent edits, not out of reach of git: a linked worktree shares the git common dir, and update-ref, push, fetch, symbolic-ref, fast-import, aliases and plain file writes all change a ref there, so no deny set is enough. The dedicated ref therefore lives in a separate bare git dir (under the user data dir, keyed by repo), addressed by the engine with `GIT_DIR`; the cache and session index sit beside it. Findings: `.scratch/dryland-rework/research/git-and-the-state-ref.md`.
 
 - Supersedes ADR 0008's backend mapping: there is one ticket model and no per-forge claim or blocking mapping.
 - The session index of ADR 0010 stays machine-local, now beside the cache.
