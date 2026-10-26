@@ -6,7 +6,7 @@ Blocked by: 39
 
 ## Question
 
-**Read first:** ADRs 0011, 0012 and 0015, `GLOSSARY.md`, ticket 14's Answer and the store code it built (`packages/core/src/state-store.ts`).
+**Read first:** ADRs 0011, 0012 and 0015, ticket 39's Answer and `research/git-and-the-state-ref.md`, `GLOSSARY.md`, ticket 14's Answer and the store code it built (`packages/core/src/state-store.ts`).
 
 **What to build:** the first of four tickets (41 to 44) that make the state store the only tracker with the behaviour the old tracker had and no new rules. Here the store gets the structured-document contract of ADR 0015, efforts, maps and every field a ticket has at creation, and reads return documents too. Until ticket 45 a repo is either on the store (it ran `dryland init`) or on markdown.
 
@@ -22,6 +22,8 @@ Model decisions: tickets belong to an **effort** slug and are referenced as `eff
 - [ ] A bare id that exists in several efforts, an unknown ticket or effort and a malformed reference fail with the next action stated
 - [ ] One helper builds a throwaway store repo with efforts, maps and tickets for core, CLI and e2e tests
 - [ ] Events carry a `schema` number, and an event of an unknown schema fails loudly on replay
+- [ ] The store moves out of the git common dir into its own bare git dir (ticket 39, `research/git-and-the-state-ref.md`): store operations run with `GIT_DIR`, a `storeDir()` replaces `commonDir()` as the anchor, the cache and the ADR 0010 session index sit beside it, and `dryland init` creates the dir. The path is derived from a repo id and kept in the user data dir, not in the repo
+- [ ] The open placement decisions are settled and recorded in ADR 0012: the repo-id scheme, the store path per OS, how a moved repo is re-bound, and that the store is bare
 
 ## Porting list
 
