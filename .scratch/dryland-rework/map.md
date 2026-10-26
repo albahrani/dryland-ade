@@ -28,6 +28,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Migration from a skills-only repo](issues/09-migration-from-a-skills-only-repo.md): Explicit hands-off dryland migrate: idempotent import on a branch and staging ref, verified finish, installs prompts, zero loss via verbatim originals.
 - [The prompt set Dryland ships and tracking upstream releases](issues/10-the-prompt-set-dryland-ships-and-tracking-upstream.md): Workflow skills ship as prompts built from a pinned upstream snapshot plus overlays, synced per launch; user overrides allowed; maintainer adopts releases.
 - [UX rework for the engine-owned model](issues/11-ux-rework-for-the-engine-owned-model.md): Named Description sections, collapsed log and History, derived map screen, unslop diff with ticks, plain Mark done, Suggest helper for hand-written one-liners.
+- [ADRs superseded and spec and glossary consequences](issues/12-adrs-superseded-and-spec-and-glossary-consequences.md): Five new ADRs; 0001, 0003, 0008, 0009 superseded, 0004-0007 and 0010 amended; lens mode and best-effort tier dropped.
 
 ## Not yet specified
 
