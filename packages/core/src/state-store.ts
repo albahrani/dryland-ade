@@ -7,7 +7,7 @@ import { type Diagnostic, parseDocument, WriteFailure } from "./documents.ts";
 import { DrylandError } from "./errors.ts";
 import { gitOk as gitOkIn, runGit as runGitIn } from "./git-exec.ts";
 import { assertMapName } from "./map.ts";
-import { bindStore, storeDir } from "./store-dir.ts";
+import { type BindOptions, bindStore, CopiedRepoError, storeDir } from "./store-dir.ts";
 import { MAP_INPUT, TICKET_INPUT } from "./store-schemas.ts";
 import type { Ticket, TicketState, TicketType, TriageRole } from "./ticket.ts";
 
@@ -111,9 +111,15 @@ async function stateHead(git: StoreGit): Promise<string | null> {
   return result.exitCode === 0 ? result.stdout.trim() : null;
 }
 
+/** A repo that is not in git has no store; a copied repo must not quietly fall back to markdown. */
+function notCopied(error: unknown): null {
+  if (error instanceof CopiedRepoError) throw error;
+  return null;
+}
+
 /** The store of the repo containing `cwd`, with its head; fails with the next action when there is none. */
 async function openStore(cwd: string): Promise<{ dir: string; git: StoreGit; head: string }> {
-  const dir = await storeDir(cwd).catch(() => null);
+  const dir = await storeDir(cwd).catch(notCopied);
   if (dir === null) throw notInitialised();
   const git = inStore(dir);
   const head = await stateHead(git);
@@ -123,7 +129,7 @@ async function openStore(cwd: string): Promise<{ dir: string; git: StoreGit; hea
 
 /** Whether the repo containing `cwd` keeps its tickets in the state store. */
 export async function isStoreInitialised(cwd: string): Promise<boolean> {
-  const dir = await storeDir(cwd).catch(() => null);
+  const dir = await storeDir(cwd).catch(notCopied);
   return dir !== null && (await stateHead(inStore(dir))) !== null;
 }
 
@@ -131,8 +137,8 @@ export async function isStoreInitialised(cwd: string): Promise<boolean> {
  * Binds the repo to a store and creates the state ref with an empty tree. `bind` re-binds the repo to the existing
  * store of that id. Does nothing, and says so, when the store already has its ref.
  */
-export async function initStore(cwd: string, bind?: string): Promise<{ created: boolean }> {
-  const { dir } = await bindStore(cwd, bind);
+export async function initStore(cwd: string, opts: BindOptions = {}): Promise<{ created: boolean }> {
+  const { dir } = await bindStore(cwd, opts);
   const git = inStore(dir);
   if ((await stateHead(git)) !== null) return { created: false };
   const tree = await git.ok(["mktree"]);

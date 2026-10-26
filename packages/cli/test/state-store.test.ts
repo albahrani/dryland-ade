@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -311,7 +311,7 @@ describe("reads", () => {
     const repo = await TempRepo.createStore(efforts);
     const several = await repo.run(["ticket", "show", "1"]);
     expect(several.exitCode).toBe(1);
-    expect(several.stderr).toContain('Ticket "1" exists in several maps: blog/01, shop/01.');
+    expect(several.stderr).toContain('Ticket "1" exists in several efforts: blog/01, shop/01.');
     expect(several.stderr).toContain("Next: Name the map too");
 
     const unknown = await repo.run(["ticket", "show", "shop/99"]);
@@ -347,5 +347,47 @@ describe("reads outside a store repo", () => {
     const repo = await TempRepo.createStore();
     expect(JSON.parse((await repo.run(["ticket", "list"])).stdout).tickets).toEqual([]);
     expect((await repo.run(["ticket", "list", "--text"])).stdout).toBe("No tickets.\n");
+  });
+});
+
+describe("a copied or moved repo", () => {
+  const efforts = [{ effort: "shop", tickets: [{ title: "Pick a cart" }] }];
+  const copyOf = (repo: TempRepo): string => {
+    const copy = join(mkdtempSync(join(tmpdir(), "dryland-copy-")), "repo");
+    cpSync(repo.path, copy, { recursive: true });
+    return copy;
+  };
+
+  it("is refused, rather than sharing the original's store, until it is given its own", async () => {
+    const repo = await TempRepo.createStore(efforts);
+    const copy = copyOf(repo);
+
+    const read = await runDryland(["ticket", "list"], { cwd: copy });
+    expect(read.exitCode).toBe(1);
+    expect(read.stderr).toContain("looks like a copy");
+    expect(read.stderr).toContain("Next: Run `dryland init --new-store`");
+    expect((await runDryland(["init"], { cwd: copy })).exitCode).toBe(1);
+
+    const fresh = await runDryland(["init", "--new-store"], { cwd: copy });
+    expect(fresh.stdout).toBe("Created the Dryland state store.\n");
+    expect(JSON.parse((await runDryland(["ticket", "list"], { cwd: copy })).stdout).tickets).toEqual([]);
+    expect(JSON.parse((await repo.run(["ticket", "list"])).stdout).tickets).toHaveLength(1);
+  });
+
+  it("can instead be bound to the original's store on purpose", async () => {
+    const repo = await TempRepo.createStore(efforts);
+    const copy = copyOf(repo);
+    const bound = await runDryland(["init", "--bind", repo.git("config", "dryland.repoId")], { cwd: copy });
+    expect(bound.exitCode).toBe(0);
+    expect(JSON.parse((await runDryland(["ticket", "list"], { cwd: copy })).stdout).tickets).toHaveLength(1);
+  });
+
+  it("keeps its store when the repo is only moved", async () => {
+    const repo = await TempRepo.createStore(efforts);
+    const moved = join(mkdtempSync(join(tmpdir(), "dryland-moved-")), "repo");
+    renameSync(repo.path, moved);
+    const list = await runDryland(["ticket", "list"], { cwd: moved });
+    expect(list.exitCode).toBe(0);
+    expect(JSON.parse(list.stdout).tickets).toHaveLength(1);
   });
 });

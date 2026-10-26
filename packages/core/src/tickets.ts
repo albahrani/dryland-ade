@@ -101,7 +101,7 @@ export function findTicket(tickets: Ticket[], wanted: TicketReference): Ticket {
   }
   if (others.length > 0) {
     throw new DrylandError(
-      `Ticket "${wanted.text}" exists in several maps: ${matches.map((t) => `${t.map}/${t.id}`).join(", ")}.`,
+      `Ticket "${wanted.text}" exists in several efforts: ${matches.map((t) => `${t.map}/${t.id}`).join(", ")}.`,
       "Name the map too, as <map>/<number>.",
     );
   }

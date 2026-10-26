@@ -188,7 +188,7 @@ function formatStoreMap(d: MapDocument): string {
 }
 
 const USAGE = [
-  "Usage: dryland init [--bind <repo id>] [--json]",
+  "Usage: dryland init [--bind <repo id> | --new-store] [--json]",
   "       dryland ticket list [--text] [--json]",
   "       dryland ticket show <map>/<number> [--text] [--json]",
   "       dryland ticket claim <map>/<number> [--commit | --no-commit] [--json]",
@@ -314,8 +314,12 @@ const COMMANDS: Record<
   init: {
     target: false,
     options: ["bind"],
+    switches: ["new-store"],
     run: async (_target, flags) => {
-      const { created } = await initStore(process.cwd(), flags.values["bind"]);
+      const { created } = await initStore(process.cwd(), {
+        bind: flags.values["bind"],
+        newStore: flags.switches.has("new-store"),
+      });
       return {
         value: { created },
         text: created ? "Created the Dryland state store.\n" : "The Dryland state store already exists.\n",
