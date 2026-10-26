@@ -67,7 +67,7 @@ export function watchProject(mainCheckout: string, onChange: () => void, debounc
         polling = false;
       });
   };
-  tick(); // the baseline, so a write just after the watch began is seen
+  tick(); // the baseline; a write before this first read lands is not seen, the open already shows it
   const poll = setInterval(tick, pollMs);
   return () => {
     clearTimeout(timer);
