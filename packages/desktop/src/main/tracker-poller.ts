@@ -1,4 +1,4 @@
-import type { TrackerKind } from "@dryland/core";
+import type { TrackerWidgetKind } from "@dryland/core";
 
 /** How often a remote tracker is re-read while the window keeps its focus. No webhooks (spec). */
 export const TRACKER_POLL_INTERVAL_MS = 60_000;
@@ -23,10 +23,10 @@ export class TrackerPoller {
     return this.polling;
   }
 
-  /** Polls a project of tracker `kind`, replacing the project polled before; local markdown polls nothing. */
-  start(kind: TrackerKind): void {
+  /** Polls a project of tracker `kind`, replacing the project polled before; local markdown and the state store poll nothing. */
+  start(kind: TrackerWidgetKind): void {
     this.stop();
-    if (kind === "local-markdown") return;
+    if (kind === "local-markdown" || kind === "state-store") return;
     this.polling = true;
     this.timer = setInterval(() => void this.focus(), this.intervalMs);
   }

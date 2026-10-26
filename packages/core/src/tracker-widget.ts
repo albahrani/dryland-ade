@@ -1,10 +1,15 @@
 import { DrylandError } from "./errors.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import { isStoreInitialised } from "./state-store.ts";
 import { type TrackerInfo, readTrackerInfo } from "./tracker.ts";
 import { defaultBranch } from "./tracker-write.ts";
 
 /** What the menu bar's tracker widget shows of a project. */
-export interface TrackerWidgetInfo extends TrackerInfo {
+/** The tracker a project shows: one of the three trackers its doc can name, or the state store, which has no doc. */
+export type TrackerWidgetKind = TrackerInfo["kind"] | "state-store";
+
+export interface TrackerWidgetInfo extends Omit<TrackerInfo, "kind"> {
+  kind: TrackerWidgetKind;
   /**
    * Set for local markdown when the main checkout, where tracker state lives, is not on the default branch: tickets
    * read from there are not the default branch's. `current` is `null` for a detached HEAD.
@@ -12,11 +17,12 @@ export interface TrackerWidgetInfo extends TrackerInfo {
   offDefaultBranch: { current: string | null; defaultBranch: string } | null;
 }
 
-/** The tracker widget's data for `mainCheckout`; `null` when its tracker doc is missing or names no tracker Dryland reads. */
+/** The tracker widget's data for `mainCheckout`; `null` when it has no store and its tracker doc is missing or names no tracker Dryland reads. */
 export async function readTrackerWidget(
   runner: ProcessRunner,
   mainCheckout: string,
 ): Promise<TrackerWidgetInfo | null> {
+  if (await isStoreInitialised(mainCheckout)) return { kind: "state-store", lens: false, offDefaultBranch: null };
   let info: TrackerInfo;
   try {
     info = await readTrackerInfo(mainCheckout);

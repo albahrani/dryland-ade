@@ -114,6 +114,34 @@ describe("the tickets tree and snapshot on a store", () => {
   });
 });
 
+describe("the project state of a store with only open tickets", () => {
+  // Claimed and resolved tickets, and so the paused, stale and folded-done cases of the markdown tests, need the
+  // lifecycle events of ticket 43; they are ported there.
+  it("shows an effort without a map as a standalone group, and leaves sessions unknown when given none", async () => {
+    const root = await storeRepo([
+      { effort: "blog", tickets: [{ title: "Write post" }, { title: "Edit post", blockedBy: [1] }] },
+    ]);
+
+    const { tree, snapshot } = await readProjectState(nodeProcessRunner, root);
+
+    expect(tree.maps).toMatchObject([{ name: "blog", title: "blog", fog: [] }]);
+    expect(tree.maps[0]?.implementation.map((t) => [t.id, t.status])).toEqual([
+      ["01", "ready"],
+      ["02", "blocked"],
+    ]);
+    expect(snapshot.sessions).toBeNull();
+    expect(nextSteps(snapshot)).toEqual([]);
+  });
+
+  it("lists no ticket claimed and no stale claim for live sessions that are given", async () => {
+    const root = await storeRepo([SHOP]);
+
+    const { snapshot } = await readProjectState(nodeProcessRunner, root, []);
+
+    expect(nextSteps(snapshot).map((s) => s.ruleId)).toEqual(["map-frontier"]);
+  });
+});
+
 describe("the item tabs on a store", () => {
   it("shows a ticket with its criteria, triage role, claim holder and blockers", async () => {
     const root = await storeRepo([SHOP]);
@@ -153,10 +181,14 @@ describe("worktrees and the tracker widget on a store", () => {
     expect(result.branch).toBe("shop/01-grill-the-cart");
   });
 
-  it("has no tracker widget, since the store has no tracker doc or default-branch concern", async () => {
+  it("names the state store as the tracker, with no lens mode and no default-branch note", async () => {
     const root = await storeRepo([SHOP]);
 
-    expect(await readTrackerWidget(nodeProcessRunner, root)).toBeNull();
+    expect(await readTrackerWidget(nodeProcessRunner, root)).toEqual({
+      kind: "state-store",
+      lens: false,
+      offDefaultBranch: null,
+    });
   });
 });
 

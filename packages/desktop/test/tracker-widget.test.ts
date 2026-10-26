@@ -10,6 +10,14 @@ describe("trackerWidgetView", () => {
     });
   });
 
+  it("names the state store and offers no issues action, since it has no folder or site to open", () => {
+    expect(trackerWidgetView({ kind: "state-store", lens: false, offDefaultBranch: null })).toEqual({
+      label: "State store",
+      action: null,
+      notes: [],
+    });
+  });
+
   it.each([
     ["github", "GitHub"],
     ["gitlab", "GitLab"],

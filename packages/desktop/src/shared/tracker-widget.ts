@@ -13,7 +13,12 @@ export interface TrackerWidgetView {
   notes: string[];
 }
 
-const NAMES = { "local-markdown": "Local markdown", github: "GitHub", gitlab: "GitLab" } as const;
+const NAMES = {
+  "local-markdown": "Local markdown",
+  github: "GitHub",
+  gitlab: "GitLab",
+  "state-store": "State store",
+} as const;
 
 export function trackerWidgetView(info: TrackerWidgetInfo | null): TrackerWidgetView {
   if (info === null) return { label: "No tracker", action: null, notes: [] };
@@ -28,9 +33,11 @@ export function trackerWidgetView(info: TrackerWidgetInfo | null): TrackerWidget
   return {
     label: info.lens ? `${NAMES[info.kind]} (lens mode)` : NAMES[info.kind],
     action:
-      info.kind === "local-markdown"
-        ? { kind: "reveal-issues", label: "Reveal issues folder" }
-        : { kind: "open-issues", label: "Open issues in browser" },
+      info.kind === "state-store"
+        ? null
+        : info.kind === "local-markdown"
+          ? { kind: "reveal-issues", label: "Reveal issues folder" }
+          : { kind: "open-issues", label: "Open issues in browser" },
     notes,
   };
 }
