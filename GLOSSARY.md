@@ -186,3 +186,15 @@ _Avoid_: Change, record
 **State remote**:
 The git remote the state store syncs to: none (local-only), `origin`, or a separate repo such as a private one shared by a team.
 _Avoid_: Backend, tracker remote
+
+**Prompt set**:
+The prompts a Dryland release ships, generated from a pinned snapshot of the upstream skills plus Dryland's overlays, and tied to that release.
+_Avoid_: Skill pack, bundle
+
+**Overlay**:
+Dryland's own change to one upstream prompt: swapping tracker operations for engine commands, adding engine facts, or adding style rules. It never rewrites upstream's judgement content.
+_Avoid_: Fork, patch
+
+**Override**:
+A user's replacement of a shipped prompt, or text appended to it, at the global or repo layer. An expert feature; the engine's checks apply regardless.
+_Avoid_: Customization, plugin
