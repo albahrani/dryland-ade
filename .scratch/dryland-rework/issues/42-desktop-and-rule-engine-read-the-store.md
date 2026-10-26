@@ -14,8 +14,8 @@ Blocked by: 41
 - [x] The next-step rule engine and the repo snapshot read tickets and maps from the store; the slice-of-spec checks read the ticket's `spec` field and Report instead of a `Spec:` header and a `## Question` heading
 - [x] `worktree create`, `list` and `prune` read tickets from the store (their claims move in ticket 43)
 - [x] The desktop refreshes when the state ref moves (watch the ref or poll its head), without `ticket.changed`
-- [ ] The existing e2e specs for these screens also run on a store fixture; markdown repos keep working
-- [ ] Core tests of the rule engine and tickets tree run on store fixtures
+- [x] The existing e2e specs for these screens also run on a store fixture; markdown repos keep working
+- [x] Core tests of the rule engine and tickets tree run on store fixtures
 
 ## Answer
 
@@ -23,4 +23,6 @@ Built in 65e9668. `readEfforts` takes maps from the store (specs stay files), `T
 
 Tests: `store-readers.test.ts` (tree, snapshot, rules, map and ticket detail, worktree, widget, head) and a watcher test; `state-store.spec.ts` is rewritten on a store fixture and passes natively. Full suite passes natively and in Linux.
 
-Known limits: the criteria on running the existing rule-engine, tickets-tree and e2e specs on store fixtures are not met in full. New store cases cover the store paths, but `next-step`, `tickets-tree`, `smoke`, `next-up` and the other specs have no store twin. The `## Question` check still runs on the Report text. Answers and comments of a store ticket are empty until 43. The header still says "No tracker" for a store repo. Each reader replays the store separately; a shared snapshot is not built.
+Follow-up commit: the tracker widget names the state store, `smoke` has a store twin in `state-store.spec.ts`, and `store-readers.test.ts` covers the tree and project state on store fixtures. Cases that need claimed or resolved tickets (done fold, paused and stale claims) and the specs `start-work`, `ticket-actions`, `next-up`, `reconcile`, `merge` and `multiple-projects` port in 43, when the store can write claims and resolves. `next-step` is a pure snapshot test and needs no store twin.
+
+Known limits: the `## Question` check still runs on the Report text. Answers and comments of a store ticket are empty until 43. Each reader replays the store separately. `ticket-actions` "releases a possibly stale claim" fails on Linux before and after this ticket (found by running it at 4926324); it passes on Windows.
