@@ -6,6 +6,7 @@ import {
   claimTicket,
   commentOnTicket,
   compatPrompt,
+  createStoreTicket,
   createTicket,
   copilotPaths,
   createWorktree,
@@ -15,7 +16,9 @@ import {
   findMainCheckout,
   hookStateOf,
   indexMap,
+  initStore,
   installAgentHooks,
+  isStoreInitialised,
   linkLauncher,
   isLiveEventKind,
   launchArgs,
@@ -137,7 +140,8 @@ function formatMap(map: MapView): string {
 }
 
 const USAGE = [
-  "Usage: dryland ticket list [--json]",
+  "Usage: dryland init [--json]",
+  "       dryland ticket list [--json]",
   "       dryland ticket show <map>/<number> [--json]",
   "       dryland ticket claim <map>/<number> [--commit | --no-commit] [--json]",
   "       dryland ticket release <map>/<number> [--commit | --no-commit] [--json]",
@@ -276,6 +280,16 @@ const COMMANDS: Record<
     run: (target: string, flags: Flags) => Promise<Output>;
   }
 > = {
+  init: {
+    target: false,
+    run: async () => {
+      const { created } = await initStore(process.cwd());
+      return {
+        value: { created },
+        text: created ? "Created the Dryland state store.\n" : "The Dryland state store already exists.\n",
+      };
+    },
+  },
   "ticket list": {
     target: false,
     run: async () => {
@@ -326,6 +340,22 @@ const COMMANDS: Record<
     changed: changedTicket,
     options: ["map", "title", "type", "question", "blocked-by", "status"],
     run: async (_target, flags) => {
+      if (await isStoreInitialised(process.cwd())) {
+        const agent = currentAgentSession(AGENT_ADAPTERS, process.env) !== null || !!process.env["DRYLAND_SESSION_ID"];
+        const ticket = await createStoreTicket(
+          process.cwd(),
+          {
+            map: required(flags, "map"),
+            title: required(flags, "title"),
+            type: required(flags, "type"),
+            question: flags.values["question"],
+            status: flags.values["status"],
+            blockedBy: numberList(flags, "blocked-by"),
+          },
+          agent ? "agent" : "human",
+        );
+        return { value: ticket, text: `Created ${ticket.map}/${ticket.id}: ${ticket.title}\n` };
+      }
       const { ticket, warnings } = await createTicket(
         nodeProcessRunner,
         process.cwd(),

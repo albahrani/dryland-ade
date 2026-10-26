@@ -9,6 +9,7 @@ import { findSpecsWithoutTickets, frontierOf, type MapModel, readMapFile } from 
 import { nodeProcessRunner, type ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
 import { readTrackerKind, type TrackerKind } from "./tracker.ts";
+import { isStoreInitialised, readStoreTickets } from "./state-store.ts";
 import { readTriageVocabulary } from "./triage-labels.ts";
 
 interface LoadedTracker {
@@ -20,6 +21,12 @@ interface LoadedTracker {
 
 /** Every ticket (and, for a remote tracker, every map) of the main checkout, from the tracker its docs name. */
 async function loadTracker(runner: ProcessRunner, mainCheckout: string): Promise<LoadedTracker> {
+  if (await isStoreInitialised(mainCheckout)) {
+    const tickets = await readStoreTickets(mainCheckout);
+    const names = [...new Set(tickets.map((t) => t.map))].sort();
+    const maps = names.map((name) => ({ name, title: name, destination: "", fog: [], decisions: [], sections: [] }));
+    return { kind: "local-markdown", tickets, maps };
+  }
   const kind = await readTrackerKind(mainCheckout);
   const vocabulary = await readTriageVocabulary(mainCheckout);
   if (kind === "github") return { kind, ...(await readGithubTracker(runner, mainCheckout, vocabulary)) };

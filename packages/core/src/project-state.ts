@@ -12,6 +12,7 @@ import type { RepoSnapshot, SessionSnapshot } from "./next-step.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { readRepoSnapshot } from "./repo-snapshot.ts";
 import { readSkillSetup, type SkillSetupReport } from "./skill-setup.ts";
+import { isStoreInitialised } from "./state-store.ts";
 import { readTickets } from "./tickets.ts";
 import { TRACKER_DOC } from "./tracker.ts";
 import { buildTicketsTree, type TicketsTree } from "./tickets-tree.ts";
@@ -38,7 +39,10 @@ export async function readProjectState(
   sessions: SessionSnapshot[] | null = null,
   compatConfig: CompatConfig = NO_COMPAT_CONFIG,
 ): Promise<ProjectState> {
-  const tickets = (await exists(join(mainCheckout, TRACKER_DOC))) ? await readTickets(mainCheckout, runner) : [];
+  const tickets =
+    (await exists(join(mainCheckout, TRACKER_DOC))) || (await isStoreInitialised(mainCheckout))
+      ? await readTickets(mainCheckout, runner)
+      : [];
   const efforts = await readEfforts(mainCheckout);
   const skillSetup = await readSkillSetup(mainCheckout);
   const compatibility = await readCompatibility(mainCheckout, skillSetup, compatConfig);
