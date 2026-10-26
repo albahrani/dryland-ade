@@ -1,8 +1,7 @@
 # Rework ADRs and glossary
 
 Type: task
-Status: claimed
-<!-- dryland: {"claim":{"holder":"main","at":"2026-10-26T15:31:14.937Z","was":"ready-for-agent"}} -->
+Status: resolved
 
 ## Question
 
@@ -12,3 +11,7 @@ Status: claimed
 - [ ] Header notes mark 0001, 0003, 0008, 0009 superseded and 0004, 0005, 0006, 0007, 0010 amended; 0002 wording fixed
 - [ ] Glossary: remove, redefine and add the terms listed in the spec
 - [ ] Grep for removed terms finds nothing outside old ADR bodies
+
+## Answer
+
+Added ADRs 0011 to 0015 (engine owns state, event log and state remote, isolation ladder, prompts from pinned snapshot, CLI surface and session-state channel). Header notes: 0001, 0003, 0008, 0009 superseded; 0004 to 0007 and 0010 amended; 0002 wording fixed. Glossary: removed eight terms, redefined Live event, Ticket, Map, Fog item, Claim, Amend, Skill workflow, Ticket status, Agent adapter, Main checkout, added Report, Analysis log, Description, Solution summary, Revision, Author kind, Reopen, Unslop, Suggest (the other new terms already existed). Commit 839631e. Removed terms remain only in old ADR bodies, earlier specs and tickets, and code that later tickets delete. I also dropped 'ADE tracker' from docs/agents/issue-tracker.md. Criteria could not be ticked: the ticket has no Acceptance criteria heading.
