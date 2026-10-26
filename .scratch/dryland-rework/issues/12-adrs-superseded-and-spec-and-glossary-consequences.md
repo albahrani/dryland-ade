@@ -1,6 +1,8 @@
 # ADRs superseded and spec and glossary consequences
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-26T12:00:49.249Z","was":""}} -->
 Blocked by: 11
 
 ## Question
