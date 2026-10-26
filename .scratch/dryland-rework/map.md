@@ -36,6 +36,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Rework ADRs and glossary](issues/13-rework-adrs-and-glossary.md): ADRs 0011 to 0015 added, old ADRs noted, glossary reworked.
 - [Tracer: one ticket from CLI to desktop](issues/14-tracer-one-ticket-from-cli-to-desktop.md): Event-log state store on refs/dryland/state with a SQLite cache serves ticket create, show, list and the desktop; old reader removal deferred.
 - [Git inside the sandbox with the state ref outside](issues/39-git-inside-the-sandbox-with-state-outside.md): State moves to a separate bare git dir; Guarded denies its path, Contained mounts a clone.
+- [Cut the features that do not need the tracker](issues/40-cut-the-features-that-do-not-need-the-tracker.md): Codex and Gemini adapters, auto-submit, output-guessed status, hand-started adoption and the live-events panel are gone; hook-fed status, `ticket.changed` and the lock file stay.
 
 ## Not yet specified
 
