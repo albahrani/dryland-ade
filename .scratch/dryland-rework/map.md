@@ -13,7 +13,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - Standing preference: keep ticket titles, fog items and answers short and structured. Long, verbose prose is the problem this map is about.
 - Skills to consult as ticket types require: `grilling`, `domain-modeling`, `research`, `prototype`.
 - Research capture: findings go in `.scratch/dryland-rework/research/<name>.md`, as in the first map. No throwaway branches.
-- Tickets and map indexes change through the `dryland` CLI, not by editing files.
+- Tickets and map indexes are edited by hand during the rework; the `dryland` CLI is not used on this tracker.
 
 ## Decisions so far
 

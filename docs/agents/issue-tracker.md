@@ -12,7 +12,7 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 
 ## Writing tickets
 
-Change tickets and map indexes only through the `dryland` CLI (`dryland ticket claim`, `resolve`, `create`, `block`, `triage`; `dryland map index`), never by editing the files. Dryland shows a repo whose tracker doc never mentions `dryland` in lens mode.
+Tickets and map indexes are edited by hand as files. Keep the header lines (`Type:`, `Status:`, `Blocked by:`) and the section headings as they are.
 
 ## When a skill says "publish to the issue tracker"
 
@@ -30,9 +30,7 @@ Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
 - **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
 - **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
 - **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
-- **Claim**: `dryland ticket claim <map>/<NN>` before any work; it sets `Status: claimed`.
-- **Resolve**: `dryland ticket resolve <map>/<NN> --answer "<answer>"` appends the answer under an `## Answer` heading and sets `Status: resolved`, then `dryland map index <map> --title ... --link ... --gist ...` adds the context pointer to the map's Decisions-so-far in `map.md`.
-- **Tick**: `dryland ticket tick <map>/<NN> --criterion <n>` ticks the nth (1-based) acceptance criterion of a ticket. It fails on a number out of range, a box already ticked, or a ticket with no criteria list. Never tick a box by editing the file.
-- **Amend**: `dryland ticket resolve <map>/<NN> --answer "<answer>" --amend` replaces the `## Answer` of an already resolved ticket. Without `--amend`, resolving a resolved ticket fails.
-
-Tick and Amend work on local markdown tickets only; on a GitHub or GitLab tracker they fail with a message saying so.
+- **Claim**: set `Status: claimed` before any work.
+- **Resolve**: set `Status: resolved` and append the answer under an `## Answer` heading, then add a line to the map's Decisions-so-far in `map.md`: `- [Title](issues/NN-slug.md): one sentence`.
+- **Tick**: change the nth (1-based) acceptance criterion of a ticket from `- [ ]` to `- [x]`.
+- **Amend**: replace the `## Answer` of an already resolved ticket and note the change under `## Comments`.

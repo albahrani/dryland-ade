@@ -16,12 +16,14 @@ Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain
 
 Implementing a ticket does not close it. Once its work is committed, resolve it the way `docs/agents/issue-tracker.md` defines "Resolve":
 
-1. `dryland ticket tick <map>/<NN> --criterion <n>` for every acceptance criterion the code and tests cover; leave unticked any they do not.
-2. `dryland ticket resolve <map>/<NN> --answer "<what was built, the commits, decisions, known limits>"`.
-3. `dryland map index <map> --title "<title>" --link issues/<NN>-<slug>.md --gist "<one sentence>"`.
+1. Tick (`- [x]`) every acceptance criterion the code and tests cover in the ticket file; leave unticked any they do not.
+2. Set `Status: resolved` and append an `## Answer` stating what was built, the commits, decisions and known limits.
+3. Add a line to the map's Decisions so far: `- [Title](issues/<NN>-<slug>.md): <one sentence>`.
 4. Commit the ticket and map files as their own commit, separate from the code.
 
-The ticket is closed when its `Status:` is `resolved`, it holds an `## Answer`, and the map links it. Run `dryland` from `node packages/cli/dist/dryland.mjs` after `pnpm build` unless it is on `PATH`.
+The ticket is closed when its `Status:` is `resolved`, it holds an `## Answer`, and the map links it.
+
+Tickets and maps are edited by hand during the rework. The `dryland` CLI is not used on this repo's own tracker until the rework lets it manage tickets again, so do not run `dryland ticket` or `dryland map` here.
 
 ## Testing on Windows
 
