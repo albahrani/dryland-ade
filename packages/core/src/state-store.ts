@@ -46,6 +46,8 @@ function runGit(cwd: string, args: string[], opts: { input?: string; env?: Recor
       const raw = Buffer.concat(out);
       resolve({ stdout: raw.toString("utf8"), raw, stderr, exitCode: code ?? 1 });
     });
+    // git may exit without reading its stdin; that is not an error.
+    child.stdin.on("error", () => undefined);
     child.stdin.end(opts.input ?? "");
   });
 }

@@ -12,7 +12,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json",
-    "test:e2e": "electron-vite build && playwright test",
+    "test:e2e": "pnpm --filter @dryland/cli build && electron-vite build && playwright test",
     "package": "pnpm --filter @dryland/cli build && electron-vite build && electron-builder --config electron-builder.json --publish never"
   },
   "devDependencies": {
