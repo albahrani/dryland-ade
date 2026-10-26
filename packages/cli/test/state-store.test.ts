@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TempRepo } from "./harness.ts";
+import { createBareRepo, runDryland, TempRepo } from "./harness.ts";
 
 const REF = "refs/dryland/state";
 
@@ -324,5 +325,27 @@ describe("reads", () => {
     const malformed = await repo.run(["ticket", "show", "shop/two"]);
     expect(malformed.stderr).toContain('"shop/two" is not a ticket reference.');
     expect(malformed.stderr).toContain("Next: Write it as <map>/<number>");
+  });
+});
+
+describe("reads outside a store repo", () => {
+  it("exit non-zero and name the next action in a bare repository", async () => {
+    const result = await runDryland(["ticket", "list"], { cwd: createBareRepo() });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("no working tree");
+    expect(result.stderr).toContain("Next:");
+  });
+
+  it("exit non-zero outside a git repository", async () => {
+    const result = await runDryland(["ticket", "list"], { cwd: mkdtempSync(join(tmpdir(), "dryland-nogit-")) });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("git repository");
+    expect(result.stderr).toContain("Next:");
+  });
+
+  it("report an empty store as no tickets", async () => {
+    const repo = await TempRepo.createStore();
+    expect(JSON.parse((await repo.run(["ticket", "list"])).stdout).tickets).toEqual([]);
+    expect((await repo.run(["ticket", "list", "--text"])).stdout).toBe("No tickets.\n");
   });
 });
