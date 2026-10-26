@@ -35,6 +35,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [ADRs superseded and spec and glossary consequences](issues/12-adrs-superseded-and-spec-and-glossary-consequences.md): Five new ADRs; 0001, 0003, 0008, 0009 superseded, 0004-0007 and 0010 amended; lens mode and best-effort tier dropped.
 - [Rework ADRs and glossary](issues/13-rework-adrs-and-glossary.md): ADRs 0011 to 0015 added, old ADRs noted, glossary reworked.
 - [Tracer: one ticket from CLI to desktop](issues/14-tracer-one-ticket-from-cli-to-desktop.md): Event-log state store on refs/dryland/state with a SQLite cache serves ticket create, show, list and the desktop; old reader removal deferred.
+- [Git inside the sandbox with the state ref outside](issues/39-git-inside-the-sandbox-with-state-outside.md): State moves to a separate bare git dir; Guarded denies its path, Contained mounts a clone.
 
 ## Not yet specified
 

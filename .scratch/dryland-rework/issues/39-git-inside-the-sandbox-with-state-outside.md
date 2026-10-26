@@ -1,7 +1,7 @@
 # Git inside the sandbox with the state ref outside
 
 Type: prototype
-Status: ready-for-agent
+Status: resolved
 Blocked by: 14
 
 ## Question
@@ -20,8 +20,12 @@ Facts checked while building ticket 14:
 
 ADR 0012 ("no worktree or container mount contains state") and ADR 0013 ("in Contained, state is outside the mount") assume more than this holds.
 
-- [ ] Guarded: which deny rules (paths, git subcommands) block writes to `refs/dryland/**` and `packed-refs`, per Claude Code and Copilot CLI, and what they cost the agent's normal git use
-- [ ] Contained: a way to run git in the container without mounting the common dir (for example a clone with its own object store that the engine fetches from), and what it costs
-- [ ] The state store location changes (for example a separate git dir) if no deny set is enough, and what that changes in ticket 14's code
-- [ ] A recommendation, with the "Open" consequences of ADR 0012 and 0013 replaced by the result
-- [ ] Prototype code is thrown away; findings go in `.scratch/dryland-rework/research/`
+- [x] Guarded: which deny rules (paths, git subcommands) block writes to `refs/dryland/**` and `packed-refs`, per Claude Code and Copilot CLI, and what they cost the agent's normal git use
+- [x] Contained: a way to run git in the container without mounting the common dir (for example a clone with its own object store that the engine fetches from), and what it costs
+- [x] The state store location changes (for example a separate git dir) if no deny set is enough, and what that changes in ticket 14's code
+- [x] A recommendation, with the "Open" consequences of ADR 0012 and 0013 replaced by the result
+- [x] Prototype code is thrown away; findings go in `.scratch/dryland-rework/research/`
+
+## Answer
+
+No deny set is enough: from a linked worktree 13 routes (update-ref, push ., fetch ., symbolic-ref, fast-import, aliases, --git-dir, plain file writes) rewrote the ref, on Windows git 2.55 and Linux git 2.39. The store moves to its own bare git dir outside the repo, addressed with GIT_DIR; Guarded also denies its path as defence in depth; Contained mounts a clone with its own object store and the engine fetches the session branch out of it. Findings in research/git-and-the-state-ref.md; ADRs 0012 and 0013 amended in bc3d98f. Known limits: Claude Code and Copilot CLI rule semantics were not checked against their docs (ticket 28 re-checks); the repo-id scheme, store location per OS and shallow-clone defaults are open for the build tickets; ticket 14's state-store.ts still uses the common dir until a build ticket moves it. No throwaway branch, per the map.
