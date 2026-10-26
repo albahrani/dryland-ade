@@ -1,7 +1,8 @@
 # Tracer: one ticket from CLI to desktop
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-26T15:58:13.988Z","was":"ready-for-agent"}} -->
 Blocked by: 13
 
 ## Question
