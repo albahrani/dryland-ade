@@ -15,5 +15,7 @@ An agent that can run shell commands can also try to write the state store or re
 
 ## Consequences
 
+- **Open: state outside the mount.** In Contained a worktree's `.git` file points at the common dir outside the mount, so git does not work in the container, and mounting the common dir would expose the state ref. Guarded has the matching problem: the ref is writable from a linked worktree. How git runs in both levels with state unwritable is decided by the prototype in dryland-rework ticket 39, and this ADR is amended with the result.
+
 - Narrow user-level config writes (ADR 0005) remain allowed; its consent flags survive.
 - Deny lists, profile contents and rule translation are set during build.

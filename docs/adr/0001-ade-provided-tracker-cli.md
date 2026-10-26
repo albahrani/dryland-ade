@@ -2,7 +2,7 @@
 
 _Superseded by ADR 0011 (the engine owns structured state), ADR 0012 (state store) and ADR 0015 (CLI surface). Lens mode, file-based tracker state and the `setup-matt-pocock-skills` registration are gone._
 
-_Naming: the product is now Dryland ADE and the CLI binary is `dryland`; read `ade` in this ADR as `dryland`. The CLI surface is recorded in ADR 0008._
+_Naming: the product is now Dryland ADE and the CLI binary is `dryland`; read `ade` in this ADR as `dryland`. The CLI surface is recorded in ADR 0015._
 
 Agents work around mechanisms they don't understand, so concurrent edits to ticket files (claims, resolutions, map index) cannot be protected by the ADE watching from outside. We ship a CLI (`ade`) that is the only write path for tickets and the map index, delegating to local-markdown, GitHub (`gh`) and GitLab (`glab`) backends, and register it with `setup-matt-pocock-skills` through its "Other" tracker option so `docs/agents/issue-tracker.md` instructs agents to use it. Plain native trackers stay supported in lens mode (read and launch only, best-effort claims).
 

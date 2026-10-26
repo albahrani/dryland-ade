@@ -10,5 +10,3 @@ Blocked by: 18
 
 - [ ] Release notes output grouped by type
 - [ ] Export is read-only and never a source
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

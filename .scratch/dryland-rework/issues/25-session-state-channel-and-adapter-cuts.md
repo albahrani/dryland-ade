@@ -1,15 +1,14 @@
-# Session-state channel and adapter cuts
+# Session-state channel
 
 Type: task
 Status: ready-for-agent
-Blocked by: 15
+Blocked by: 40
 
 ## Question
 
-**What to build:** Hook-fed session states (running, waiting, idle, ended) drive badges, waiting counts, waiting-first ranking and the session index; the old live-events machinery and best-effort tier are removed.
+**What to build:** the hook-fed session states (running, waiting, idle, ended) as their own channel, feeding badges, waiting counts, waiting-first ranking and the session index. The deletions that used to be here moved to ticket 40.
 
-- [ ] Schema session id, state, timestamp; unknown states rejected
-- [ ] Removed: events panel, ticket.changed (the state-ref watcher from ticket 15 replaces it; the lock file goes with ticket 36, since markdown writes use it until then), hand-started adoption, session.started, output guessing, statusApproximate, best-effort tier, auto-submit
+- [ ] Schema is session id, state, timestamp; unknown states are rejected
+- [ ] Claude Code and Copilot hooks send it, and badges, waiting counts, waiting-first ranking and the session index `lastState` read it
+- [ ] A Live event in the code and glossary means a session state report
 - [ ] doctor reports missing hooks as an error
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

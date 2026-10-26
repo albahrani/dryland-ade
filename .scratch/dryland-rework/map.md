@@ -13,7 +13,11 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - Standing preference: keep ticket titles, fog items and answers short and structured. Long, verbose prose is the problem this map is about.
 - Skills to consult as ticket types require: `grilling`, `domain-modeling`, `research`, `prototype`.
 - Research capture: findings go in `.scratch/dryland-rework/research/<name>.md`, as in the first map. No throwaway branches.
-- Tickets and map indexes are edited by hand during the rework; the `dryland` CLI is not used on this tracker.
+- Tickets and map indexes are edited by hand during the rework; the `dryland` CLI is not used on this tracker. This repo's own tracker stays plain files, as the Matt Pocock skills intend, and is migrated only when its owner decides, after trying Dryland on other projects. No ticket depends on it.
+- Definition of done, applying to every build ticket (so tickets do not repeat it): (1) every listed criterion is ticked and none points at a later ticket; (2) behaviour is covered at the CLI seam, plus Playwright where UI changed; (3) `pnpm test` and `pnpm test:linux` pass, plus the e2e pair after desktop changes; (4) ADRs and glossary are amended if the slice found them wrong; (5) code the slice replaces is deleted in the same commit once nothing else uses it.
+- Re-slice (after the tracer, ticket 14): the tracer showed that slicing by feature on top of a live markdown path leaves no ticket fully acceptable. The tickets now first make the store the only tracker with today's behaviour (flip, 41 to 45), then add the new rules on one path. Old tickets 36 and 37 are gone: 36 became 45, and 37's commands were split between 41 and 43 (triage, ticks, release, standalone) and 21 (the HITL flag). Ticket 38 lost its prune to 46.
+- Order of work, each line after the previous unless it says "with": 39 and 40 (independent, first); flip 41, 42, 43, 44, 45; then 38, 15, 16, 17, 18, 19, 20, 21, 34, 25; then 26, 22, 23, 27, 24, 46, 31, 28, 29, 30; then 32, 33; last 35. The `Blocked by` lines are the authority.
+- During the flip a repo is either on the store (it ran `dryland init`) or on markdown. Tests that pin markdown behaviour stay green until 45 deletes them; ported behaviour gets new tests on store fixtures, following the porting list in ticket 41's Answer.
 
 ## Decisions so far
 

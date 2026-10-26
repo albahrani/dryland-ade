@@ -11,5 +11,3 @@ Blocked by: 21, 26
 - [ ] Diff view with char count against cap and three ticks (clear, dense, nothing cut)
 - [ ] Accept disabled until all ticked; Reject discards
 - [ ] Agent or workflow runs skip the screen and show an agent-authored mark in History
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

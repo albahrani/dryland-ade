@@ -1,6 +1,6 @@
 # State is an event log on a dedicated git ref, with an optional state remote
 
-The engine needs a store that no worktree or container mount contains, that merges across clones, and that keeps history. State is an append-only log of immutable event files on a dedicated ref (for example `refs/dryland/state`) that is never checked out. Current state is derived by replay into a disposable SQLite cache, bounded by periodic snapshots.
+The engine needs a store that is never part of a working tree, that merges across clones, and that keeps history. State is an append-only log of immutable event files on a dedicated ref (for example `refs/dryland/state`) that is never checked out. Current state is derived by replay into a disposable SQLite cache, bounded by periodic snapshots.
 
 Rejected: a SQLite file as the store (does not merge, sits in a mount); state on the default branch (every worktree and container would hold it, and agents could edit it); forge issues as the store (two sources of truth, tier differences between GitHub and GitLab).
 
@@ -15,6 +15,8 @@ Rejected: a SQLite file as the store (does not merge, sits in a mount); state on
 - **Forges** are reporting channels only. GitHub and GitLab issues are ingested idempotently, keyed by URL, as human-authored Reports in needs-triage. Claim, resolve and reopen are posted back to the issue. There are no two-way edits, and forge tokens stay with the engine.
 
 ## Consequences
+
+- **Open: reachability.** "Never checked out" keeps state out of the files an agent edits, not out of reach of git: a linked worktree shares the git common dir, so `git update-ref refs/dryland/state` works from inside it, and a file-level sandbox cannot deny the common dir because commits write there. Whether a deny set is enough or the store must live elsewhere is decided by the prototype in dryland-rework ticket 39, and this ADR is amended with the result.
 
 - Supersedes ADR 0008's backend mapping: there is one ticket model and no per-forge claim or blocking mapping.
 - The session index of ADR 0010 stays machine-local, now beside the cache.

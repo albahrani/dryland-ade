@@ -1,4 +1,4 @@
-# Blocking and the frontier
+# Acyclic blocking
 
 Type: task
 Status: ready-for-agent
@@ -6,10 +6,8 @@ Blocked by: 15
 
 ## Question
 
-**What to build:** Blocking edges are kept acyclic and the engine computes the frontier; the UI shows frontier and blocked tickets.
+**What to build:** blocking edges can no longer form a cycle, so the frontier that ticket 41 computes always exists.
 
-- [ ] `ticket block` adds and removes edges on the store; cycles are rejected (`ticket create --blocked-by` cannot make one, this command can)
-- [ ] Frontier lists open, unblocked, unclaimed tickets, lowest number first
-- [ ] UI shows frontier and blocked views
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass
+- [ ] `ticket block` rejects an edge that closes a cycle and names the cycle; `ticket create --blocked-by` cannot make one
+- [ ] The desktop block action shows the rejection
+- [ ] The frontier still lists open, unblocked, unclaimed tickets, lowest number first

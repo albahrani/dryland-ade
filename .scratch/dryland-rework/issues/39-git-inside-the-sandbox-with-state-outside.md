@@ -6,6 +6,8 @@ Blocked by: 14
 
 ## Question
 
+This runs first: if no deny set is enough, the store location changes, and tickets 41 onward build on it.
+
 **What to build:** a throwaway prototype that answers one question before tickets 28 and 30 build on it: how can an agent run git in its worktree, including commits, when the state ref must be unwritable by it?
 
 Facts checked while building ticket 14:
@@ -19,5 +21,5 @@ ADR 0012 ("no worktree or container mount contains state") and ADR 0013 ("in Con
 - [ ] Guarded: which deny rules (paths, git subcommands) block writes to `refs/dryland/**` and `packed-refs`, per Claude Code and Copilot CLI, and what they cost the agent's normal git use
 - [ ] Contained: a way to run git in the container without mounting the common dir (for example a clone with its own object store that the engine fetches from), and what it costs
 - [ ] The state store location changes (for example a separate git dir) if no deny set is enough, and what that changes in ticket 14's code
-- [ ] A recommendation, with ADR 0012 and 0013 amended where they are wrong
+- [ ] A recommendation, with the "Open" consequences of ADR 0012 and 0013 replaced by the result
 - [ ] Prototype code is thrown away; findings go in `.scratch/dryland-rework/research/`

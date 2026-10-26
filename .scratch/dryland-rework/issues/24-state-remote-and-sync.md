@@ -14,5 +14,3 @@ Blocked by: 18, 20
 - [ ] An attach command stores an attachment in the state store, size-capped, with a warning when the remote is public; ticket 32 uses it for originals
 - [ ] The sync tests cover every event kind the earlier tickets added
 - [ ] Two-clone test against a local bare remote
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

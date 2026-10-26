@@ -11,5 +11,3 @@ Blocked by: 21, 26
 - [ ] Draft appears in resolve-by-hand, amend, and reopen or edit reason fields
 - [ ] Saving counts as human-authored; no suggestion tracking
 - [ ] Draft respects the cap
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

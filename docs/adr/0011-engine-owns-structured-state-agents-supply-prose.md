@@ -8,6 +8,7 @@ Rejected: keeping `.scratch` markdown as truth with the app as a lens (agents ca
 
 - **Atomic commands**: every command is a compare-and-set within one repo and returns its write-time rejections and violation notices to the agent.
 - **Ticket**: has a Report, an Analysis log, a Description and a Solution summary. Statuses are open, claimed and resolved only. The Report is fixed once claimed and edits to it are human-only. Resolved tickets change only by amend or reopen. Every edit appends a revision with time, author kind and reason.
+- **Ticket fields**: type, status, a triage role (one of the five in `docs/agents/triage-labels.md`), acceptance criteria with ticks, blockers, the map or none (a standalone ticket) and a human-in-the-loop flag. Statuses stay open, claimed and resolved; the triage role is a separate field, not a status. The flag is set at creation and the gate below reads it.
 - **Gates**: claim before work, one resolve per session (research excepted), blocking edges acyclic, a human-in-the-loop ticket resolves only after confirmation in the UI, Destination edits are human-only.
 - **Caps and lint**: each field kind has a cap, and over-cap text is rejected with the cap stated, never truncated. Lint rejects hedges, filler, long sentences, file paths, line numbers and bare ids. Ballparks are in the rework spec; exact numbers are set during build.
 - **Derived views**: the frontier, Decisions so far and the ticket kind and status are computed, never stored.

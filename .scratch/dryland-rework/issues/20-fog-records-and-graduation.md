@@ -13,5 +13,3 @@ Blocked by: 19
 - [ ] Dropped needs a one-line reason
 - [ ] Mark done is a plain human confirmation, offered only with no open tickets or fog
 - [ ] UI shows fog records
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

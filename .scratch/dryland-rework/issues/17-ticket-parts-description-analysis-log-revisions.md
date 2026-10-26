@@ -13,5 +13,3 @@ Blocked by: 15
 - [ ] Log entries typed finding, failed-attempt, correction, retraction; corrections point at an earlier entry with a reason; target never deleted
 - [ ] ticket show, --log and --history behave as specified
 - [ ] UI: log collapsed with count, retractions struck, History toggle with author kind, time and reason
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

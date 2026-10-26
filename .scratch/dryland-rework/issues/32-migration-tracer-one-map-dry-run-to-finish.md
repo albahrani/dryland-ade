@@ -2,7 +2,7 @@
 
 Type: task
 Status: ready-for-agent
-Blocked by: 20, 24, 26, 37
+Blocked by: 20, 21, 24, 26
 
 ## Question
 
@@ -13,5 +13,3 @@ Blocked by: 20, 24, 26, 37
 - [ ] Type, status, blocking, ticks, triage roles, Destination, Notes and fog carry over
 - [ ] Deterministic ids, idempotent resume
 - [ ] --finish verifies counts and round-trip before merging the staging ref; --abort removes branch and ref
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

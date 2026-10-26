@@ -12,5 +12,3 @@ Blocked by: 26, 39
 - [ ] Detected bypass reverted from the log, violation event recorded, agent told in the next result, second violation pauses the session
 - [ ] Profile derived from ticket type; secrets scrubbed from env
 - [ ] UI shows violations
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass

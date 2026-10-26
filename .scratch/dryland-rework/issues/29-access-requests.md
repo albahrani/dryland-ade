@@ -11,5 +11,3 @@ Blocked by: 28
 - [ ] One rule store translated into each CLI's native rules, checked against the current Claude Code and Copilot CLI rule formats first
 - [ ] Repo layer can only narrow; settings screen lists and revokes
 - [ ] AFK: pre-approval at launch, denial ends the agent blocked without workarounds, request recorded on the ticket
-- [ ] ADRs and glossary amended in the same commit if this slice finds them wrong
-- [ ] Covered by tests at the CLI seam (and Playwright e2e where UI is touched); pnpm test and pnpm test:linux pass
