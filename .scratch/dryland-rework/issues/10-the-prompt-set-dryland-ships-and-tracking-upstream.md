@@ -1,6 +1,8 @@
 # The prompt set Dryland ships and tracking upstream releases
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-26T11:04:56.029Z","was":""}} -->
 Blocked by: 08
 
 ## Question
