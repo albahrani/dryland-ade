@@ -2,7 +2,7 @@
 
 Type: task
 Status: ready-for-agent
-Blocked by: 20, 24, 26
+Blocked by: 20, 24, 26, 37
 
 ## Question
 
@@ -10,6 +10,7 @@ Blocked by: 20, 24, 26
 
 - [ ] Dry-run preview
 - [ ] Question to Report, Comments to finding entries, Answer to summary; originals kept as attachments
+- [ ] Type, status, blocking, ticks, triage roles, Destination, Notes and fog carry over
 - [ ] Deterministic ids, idempotent resume
 - [ ] --finish verifies counts and round-trip before merging the staging ref; --abort removes branch and ref
 - [ ] ADRs and glossary amended in the same commit if this slice finds them wrong

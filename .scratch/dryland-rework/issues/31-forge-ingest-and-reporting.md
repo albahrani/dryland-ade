@@ -8,6 +8,7 @@ Blocked by: 24
 
 **What to build:** GitHub and GitLab issues are ingested idempotently as human-authored Reports linked by URL into needs-triage; claim, resolve and reopen post progress back.
 
+- [ ] Ingest is new code on the engine; the old GitHub and GitLab tracker backends are gone after ticket 36
 - [ ] Re-ingest creates no duplicates
 - [ ] No two-way edits
 - [ ] Forge tokens stay with the engine
