@@ -1,6 +1,6 @@
 import { type FSWatcher, watch } from "node:fs";
 import { join } from "node:path";
-import { SKILL_ROOTS } from "@dryland/core";
+import { readStoreHead, SKILL_ROOTS } from "@dryland/core";
 
 /** Where tracker files and skills live, relative to the main checkout. */
 const WATCHED = [".scratch", join("docs", "agents"), ...SKILL_ROOTS];
@@ -8,10 +8,11 @@ const WATCHED = [".scratch", join("docs", "agents"), ...SKILL_ROOTS];
 const PARENTS = ["docs", ".claude", ".agents"];
 
 /**
- * Calls `onChange` once after a burst of changes under the tracker and skill directories of `mainCheckout`.
+ * Calls `onChange` once after a burst of changes under the tracker and skill directories of `mainCheckout`, or when
+ * the head of the state ref moves (polled every `pollMs`, since the store sits outside the checkout).
  * A directory that does not exist yet is picked up when it appears. Returns a stop function.
  */
-export function watchProject(mainCheckout: string, onChange: () => void, debounceMs = 100): () => void {
+export function watchProject(mainCheckout: string, onChange: () => void, debounceMs = 100, pollMs = 1000): () => void {
   let timer: NodeJS.Timeout | undefined;
   const fire = () => {
     clearTimeout(timer);
@@ -51,8 +52,26 @@ export function watchProject(mainCheckout: string, onChange: () => void, debounc
   });
   top.on("error", () => undefined);
   watchers.push(top);
+  let head: string | null | undefined;
+  let polling = false;
+  const tick = () => {
+    if (polling) return;
+    polling = true;
+    readStoreHead(mainCheckout)
+      .then((next) => {
+        if (head !== undefined && next !== head) fire();
+        head = next;
+      })
+      .catch(() => undefined) // an unreadable store is retried on the next tick
+      .finally(() => {
+        polling = false;
+      });
+  };
+  tick(); // the baseline, so a write just after the watch began is seen
+  const poll = setInterval(tick, pollMs);
   return () => {
     clearTimeout(timer);
+    clearInterval(poll);
     for (const watcher of watchers) watcher.close();
   };
 }

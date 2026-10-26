@@ -180,6 +180,7 @@ function TicketContent({
       >
         <Field name="Status">{ticket.status}</Field>
         <Field name="Type">{ticket.type}</Field>
+        {ticket.triageRole !== null && <Field name="Triage">{ticket.triageRole}</Field>}
         <Field name="Claimant">
           {ticket.claimant ?? (ticket.status === "in-progress" ? "unknown" : "none")}
           {stale && " (possibly stale)"}

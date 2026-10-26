@@ -16,6 +16,7 @@ import {
 import type { ProcessRunner } from "./process-runner.ts";
 import { findPullRequestCached, type Forge, forgeOf, type PullRequest } from "./pull-request.ts";
 import { readSessionIndex, sessionsOf } from "./session-index.ts";
+import { isStoreInitialised } from "./state-store.ts";
 import type { Ticket } from "./ticket.ts";
 import { readTrackerKind, TRACKER_DOC } from "./tracker.ts";
 import { readTicketWorktreeStates, type TicketWorktreeState } from "./worktree.ts";
@@ -35,7 +36,7 @@ export async function readRepoSnapshot(
 ): Promise<RepoSnapshot> {
   const adrs = await readdir(join(mainCheckout, "docs", "adr")).catch(() => []);
   return {
-    setupConfigPresent: await exists(join(mainCheckout, TRACKER_DOC)),
+    setupConfigPresent: (await isStoreInitialised(mainCheckout)) || (await exists(join(mainCheckout, TRACKER_DOC))),
     efforts: efforts ?? (await readEfforts(mainCheckout)),
     tickets,
     hasGlossary: await exists(join(mainCheckout, "GLOSSARY.md")),

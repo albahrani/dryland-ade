@@ -96,8 +96,9 @@ export async function createWorktree(
       );
     }
     const found = findTicket(await readTickets(mainCheckout), parseTicketReference(options.ticket));
+    // A markdown ticket is named after its file; a store ticket has none, so its title names it.
     const file = await ticketFile(mainCheckout, found.map, found.id);
-    const stem = basename(file ?? "", ".md").replace(/^\d+-/, "");
+    const stem = file === null ? "" : basename(file, ".md").replace(/^\d+-/, "");
     base = `${found.map}/${found.id}-${slugify(stem) || slugify(found.title) || "ticket"}`;
     ticket = `${found.map}/${found.id}`;
   } else {

@@ -25,6 +25,10 @@ export interface Ticket {
   /** What `## Answer` records; `null` while unanswered. */
   answer: string | null;
   comments: string[];
+  /** Repo-relative path of the effort's spec the ticket links to; only a store ticket carries it. */
+  spec?: string | null;
+  /** The acceptance criteria with their ticks, when the tracker holds them as data (the store). */
+  criteria?: { text: string; done: boolean }[];
   /** Backend extras the rules never read; for local markdown, the header fields Dryland does not interpret. */
   raw: Record<string, string>;
 }

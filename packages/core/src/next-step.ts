@@ -121,12 +121,13 @@ const specFile = (map: string) => `.scratch/${map}/spec.md`;
 const ticketRef = (t: Ticket) => `${t.map}/${t.id}`;
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-/** Whether the ticket has a `Spec:` header, the link a sliced ticket carries back to its spec. */
-const linksToSpec = (ticket: Ticket): boolean => Object.keys(ticket.raw).some((key) => key.toLowerCase() === "spec");
+/** Whether the ticket links to its spec: a store ticket's `spec` field, or a markdown ticket's `Spec:` header. */
+const linksToSpec = (ticket: Ticket): boolean =>
+  (ticket.spec ?? null) !== null || Object.keys(ticket.raw).some((key) => key.toLowerCase() === "spec");
 
 /**
- * Whether a ticket is slice-of-the-spec work rather than a wayfinding decision. A `Spec:` header or a triage
- * role says so outright. Failing both, a `task` is once its effort has a spec, unless it poses a
+ * Whether a ticket is slice-of-the-spec work rather than a wayfinding decision. A spec link or a triage
+ * role says so outright. Failing both, a `task` is once its effort has a spec, unless its Report poses a
  * `## Question`: that is how wayfinding writes its decision tickets, and before a spec a task only unblocks
  * a decision.
  */

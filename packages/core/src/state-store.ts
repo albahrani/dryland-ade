@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { type Diagnostic, parseDocument, WriteFailure } from "./documents.ts";
 import { DrylandError } from "./errors.ts";
 import { gitOk as gitOkIn, runGit as runGitIn } from "./git-exec.ts";
-import { assertMapName } from "./map.ts";
+import { assertMapName, type MapModel } from "./map.ts";
 import { type BindOptions, bindStore, CopiedRepoError, storeDir } from "./store-dir.ts";
 import { MAP_INPUT, TICKET_INPUT } from "./store-schemas.ts";
 import type { Ticket, TicketState, TicketType, TriageRole } from "./ticket.ts";
@@ -301,8 +301,21 @@ export function toTicket(t: StoreTicket): Ticket {
     body: t.report,
     answer: null,
     comments: [],
+    spec: t.spec,
+    criteria: t.criteria,
     raw: {},
   };
+}
+
+/** A store map record as the map model the tree and the rules read; Decisions so far is derived in ticket 44. */
+export function toMapModel(m: StoreMap): MapModel {
+  return { name: m.effort, title: m.title, destination: m.destination, fog: m.fog, decisions: [], sections: [] };
+}
+
+/** The commit the state ref points at; `null` when the repo has no store. A cheap change signal for watchers. */
+export async function readStoreHead(cwd: string): Promise<string | null> {
+  const dir = await storeDir(cwd).catch(notCopied);
+  return dir === null ? null : stateHead(inStore(dir));
 }
 
 /** Every ticket in the store. */

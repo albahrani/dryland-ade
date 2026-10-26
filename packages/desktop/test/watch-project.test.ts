@@ -1,6 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createStoreTicket, seedStore } from "@dryland/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { watchProject } from "../src/main/watch-project.ts";
 
@@ -31,6 +33,22 @@ describe("watchProject", () => {
     stop = watchProject(root, onChange, 20);
 
     writeFileSync(join(root, ".claude", "skills", "tdd", "SKILL.md"), "# changed\n");
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+  });
+
+  it("reports a write to the state store, which sits outside the checkout", async () => {
+    process.env["DRYLAND_DATA_DIR"] ??= mkdtempSync(join(tmpdir(), "dryland-watch-data-"));
+    const root = tempRoot();
+    execFileSync("git", ["init", "--quiet"], { cwd: root });
+    await seedStore(root, [{ effort: "shop", tickets: [{ title: "Pick a cart" }] }]);
+    const onChange = vi.fn();
+    stop = watchProject(root, onChange, 20, 20);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(onChange).not.toHaveBeenCalled();
+
+    await createStoreTicket(root, JSON.stringify({ effort: "shop", title: "More", type: "task" }), {
+      author: "engine",
+    });
     await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
   });
 });
