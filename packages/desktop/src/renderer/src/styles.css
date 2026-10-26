@@ -219,29 +219,6 @@ ul {
   background: var(--bg-bar);
 }
 
-.live-events {
-  flex: 1;
-  overflow-y: auto;
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 12px;
-}
-
-.live-events .empty {
-  margin: 0;
-  padding: 2px 12px;
-}
-
-.live-events ul {
-  padding: 0 12px 4px;
-}
-
-.live-events li {
-  display: flex;
-  gap: 12px;
-  white-space: nowrap;
-}
-
-.live-events time,
 .live-session {
   color: var(--fg-dim);
 }
@@ -1026,11 +1003,6 @@ ul {
   margin-left: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.session-row .approximate-mark {
-  margin-right: 4px;
-  cursor: help;
 }
 
 .session-badge.paused .badge {

@@ -67,9 +67,7 @@ function TicketRow({
       {paused !== undefined ? (
         <PausedBadge agent={paused.agent} was={paused.was} />
       ) : (
-        session !== undefined && (
-          <SessionBadge agent={session.agent} state={session.state} approximate={session.approximate} />
-        )
+        session !== undefined && <SessionBadge agent={session.agent} state={session.state} />
       )}
       <span className="ticket-id">{ticket.id}</span>
       <button

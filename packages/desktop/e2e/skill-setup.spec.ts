@@ -75,18 +75,10 @@ test("the Agent CLIs tab lists the adapters and installs, inspects and removes C
   await openSettings(app, window, "Agent CLIs");
   const settings = window.getByRole("dialog", { name: "Settings" });
 
-  // Every adapter, with its tier.
-  await expect(settings.getByRole("listitem", { name: "Claude Code" })).toContainText("First-class");
-  await expect(settings.getByRole("listitem", { name: "Codex CLI" })).toContainText("Best-effort");
+  // Every adapter, and whether it is installed.
+  await expect(settings.getByRole("list", { name: "Agent CLIs" }).getByRole("listitem")).toHaveCount(2);
+  await expect(settings.getByRole("listitem", { name: "Claude Code" })).toBeVisible();
   await expect(settings.getByRole("listitem", { name: "GitHub Copilot CLI" })).toContainText("Hook file not installed");
-
-  // Auto-submit is set here, globally and for this project.
-  const global = settings.getByLabel("Submit the pre-typed command (auto-submit)");
-  await global.click();
-  await expect(global).toBeChecked();
-  const perProject = settings.getByLabel(/^Auto-submit in/);
-  await perProject.selectOption("off");
-  await expect(perProject).toHaveValue("off");
 
   // The first install asks; cancelling writes nothing, confirming writes the hook file.
   const confirm = window.getByRole("dialog", { name: "Confirm write" });

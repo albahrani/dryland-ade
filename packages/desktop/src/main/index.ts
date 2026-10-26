@@ -7,7 +7,6 @@ import {
   readSkillSetup,
   type MergeStrategy,
   AGENT_ADAPTERS,
-  hasStatusHooks,
   DrylandError,
   findMainCheckout,
   type LiveEvent,
@@ -33,12 +32,10 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, powerMonitor, s
 import {
   type AppSettings,
   type AppState,
-  isLiveEventsPanelMode,
   type ItemContent,
   type MenuCommand,
   type ProjectView,
   type ResumedAllResult,
-  type SessionInfo,
   type StartWorkResult,
   type TicketActionResult,
   type TreeLoad,
@@ -62,7 +59,7 @@ import {
 import { createDrylandCli } from "./dryland-cli.ts";
 import { latestOnly } from "./latest-only.ts";
 import { installLayout, removeStaleLauncher } from "./install-layout.ts";
-import { writeLauncher } from "./launcher.ts";
+import { removeAgentShims, writeLauncher } from "./launcher.ts";
 import {
   quitConfirmation,
   quitListing,
@@ -82,14 +79,13 @@ import { runTrackerWidgetAction } from "./tracker-widget-action.ts";
 import { pausedTickets } from "../shared/paused-session.ts";
 import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
-import { ACTIVITY_QUIET_MS, createActivityStatus } from "./activity-status.ts";
 import { createSessionStatus } from "./session-status.ts";
 import { createElectronUpdateSource } from "./electron-update-source.ts";
 import { createUpdater } from "./updates.ts";
 import { isUpdateChannel, updateMode } from "../shared/updates.ts";
 import { createUiStateStore, type UiState } from "./ui-state.ts";
 import { createUnseenOutput } from "./unseen-output.ts";
-import { autoSubmitFor, isSettingsChange, settingsPatch } from "../shared/settings-change.ts";
+import { isSettingsChange, settingsPatch } from "../shared/settings-change.ts";
 import { createExplorer } from "./explorer.ts";
 import { createExplorerWatcher } from "./explorer-watch.ts";
 import { createSourceControl } from "./source-control.ts";
@@ -117,7 +113,6 @@ const terminals = createTerminalManager({
   onData: (id, data) => {
     sendToWindow("terminal:data", id, data);
     const session = sessionIn(id);
-    if (session?.statusApproximate) activity.output(session.id);
     if (session !== undefined && unseen.output(session.id)) sendUnseen();
   },
   onExit: (id, exitCode) => {
@@ -168,7 +163,6 @@ const updater = createUpdater({
   },
 });
 const autoCommit = (projectPath: string) => autoCommitFor(store.read(), projectPath);
-const autoSubmit = (projectPath: string) => autoSubmitFor(store.read(), projectPath);
 const compatConfig = (projectPath: string) => store.read().compat[projectPath] ?? NO_COMPAT_CONFIG;
 const work = createWorkStarter({
   terminals,
@@ -178,7 +172,6 @@ const work = createWorkStarter({
   hooksDir: join(app.getPath("userData"), "hooks"),
   dryland,
   autoCommit,
-  autoSubmit,
   compatConfig,
 });
 const agentHooks = createAgentHooksControl({
@@ -192,15 +185,6 @@ let stopWatching: (() => void) | null = null;
 let live: LiveListener | null = null;
 
 const status = createSessionStatus();
-// A CLI without hooks reports no state of its own: it is guessed from its output and shown as approximate.
-const activity = createActivityStatus({
-  quietMs: ACTIVITY_QUIET_MS,
-  report: (sessionId, state) => {
-    if (!status.observe(sessionId, state)) return;
-    sendSessionStates();
-    void refresh();
-  },
-});
 // The session index is a cache: a write that fails is logged, never shown as an error.
 const recorder = createSessionRecorder({
   runner: nodeProcessRunner,
@@ -224,9 +208,6 @@ function settings(): AppSettings {
     autoCommit: project === null ? saved.autoCommit : autoCommitFor(saved, project.path),
     globalAutoCommit: saved.autoCommit,
     projectAutoCommit: project === null ? null : (saved.projectAutoCommit[project.path] ?? null),
-    autoSubmit: project === null ? saved.autoSubmit : autoSubmitFor(saved, project.path),
-    globalAutoSubmit: saved.autoSubmit,
-    projectAutoSubmit: project === null ? null : (saved.projectAutoSubmit[project.path] ?? null),
     dontAsk: saved.dontAsk,
     stopConfirmation: saved.stopConfirmation,
     resumeOnStart: saved.resumeOnStart,
@@ -273,7 +254,6 @@ async function resumeAllPaused(map: string | null): Promise<ResumedAllResult> {
 function terminalEnded(id: string): void {
   const session = sessionIn(id);
   if (session === undefined) return;
-  activity.forget(session.id);
   status.exited(session.id);
   sendSessionStates();
   if (unseen.forget(session.id)) sendUnseen();
@@ -281,35 +261,8 @@ function terminalEnded(id: string): void {
   void refresh();
 }
 
-/** Live events in the order they came, so one that adopts a hand-started session finishes before the next. */
-let liveEvents = Promise.resolve();
-
-/** Shows every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
+/** Applies every live event; a ticket change also re-reads the tree, even where the file watcher missed it. */
 function onLiveEvent(event: LiveEvent): void {
-  sendToWindow("live:event", event);
-  liveEvents = liveEvents.then(() => applyLiveEvent(event)).catch((error: unknown) => console.warn(error));
-}
-
-/**
- * A CLI started by hand in a Dryland terminal reports from a session Dryland did not start; the first event it sends
- * makes it one, linked by its working directory.
- */
-async function adoptHandStarted(event: LiveEvent): Promise<void> {
-  if (project === null || event.pane === undefined) return;
-  // The current project first; the shell may as well run in another open project.
-  let session: SessionInfo | null = null;
-  for (const path of [project.path, ...store.read().openProjects.filter((p) => p !== project?.path)]) {
-    session = await work.adoptManual(path, event);
-    if (session !== null) break;
-  }
-  if (session === null) return;
-  status.launched(session.id);
-  sendToWindow("sessions:started", [session]);
-  sendSessionStates();
-}
-
-async function applyLiveEvent(event: LiveEvent): Promise<void> {
-  await adoptHandStarted(event);
   recorder.apply(event);
   const stateChanged = status.apply(event);
   if (stateChanged) sendSessionStates();
@@ -379,13 +332,12 @@ async function projectView(): Promise<{ view: ProjectView; mainCheckout: string 
 }
 
 async function currentState(): Promise<AppState> {
-  const { legendDismissed, tabs, sessionsLayout, liveEventsPanel, panelWidths, panelFolded } = store.read();
+  const { legendDismissed, tabs, sessionsLayout, panelWidths, panelFolded } = store.read();
   const view = (await projectView())?.view ?? null;
   return {
     project: view,
     openProjects: store.read().openProjects.map((path) => ({ path, name: basename(path) })),
     legendDismissed,
-    liveEventsPanel,
     panelWidths,
     panelFolded,
     tabs: (view && tabs[view.path]) || EMPTY_TABS,
@@ -741,9 +693,6 @@ ipcMain.handle("source-control:hand-to-agent", (_event, root: unknown) =>
   sourceControlFor().handConflictsToAgent(text(root, "root")),
 );
 ipcMain.handle("legend:dismiss", () => void store.update({ legendDismissed: true }));
-ipcMain.handle("live-events:mode", (_event, mode: unknown) => {
-  if (isLiveEventsPanelMode(mode)) store.update({ liveEventsPanel: mode });
-});
 ipcMain.handle(
   "panel-widths:save",
   (_event, widths: unknown) => void store.update({ panelWidths: parsePanelWidths(widths) }),
@@ -874,11 +823,8 @@ ipcMain.on("terminal:write", (_event, id: string, data: string) => {
 ipcMain.on("terminal:resize", (_event, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows));
 ipcMain.on("terminal:close", (_event, id: string) => {
   // Closing a session's tab hides the session: its CLI keeps running until the session is stopped.
-  // A session started by hand is its terminal's shell: that ends with the tab.
-  const session = sessionIn(id);
-  if (session !== undefined && session.manual !== true) return;
+  if (sessionIn(id) !== undefined) return;
   terminals.close(id);
-  if (session !== undefined) terminalEnded(id);
 });
 ipcMain.on("terminal:view", (_event, id: unknown) => {
   const session = typeof id === "string" ? sessionIn(id) : undefined;
@@ -907,17 +853,12 @@ app.on("second-instance", () => {
 void app.whenReady().then(async () => {
   if (!primary) return;
   // An installed app ships its launcher; one an earlier version wrote here would shadow it.
-  if (!layout.writeLauncher) removeStaleLauncher(shimDir);
-  writeLauncher(
+  if (layout.writeLauncher) writeLauncher(shimDir, { runtime: process.execPath, cli: layout.cli });
+  else removeStaleLauncher(shimDir);
+  // Earlier versions wrote a shim per Agent CLI here, which now would stand in for the real CLI.
+  removeAgentShims(
     shimDir,
-    { runtime: process.execPath, cli: layout.cli },
-    // The shim adds only the status-hooks flag; a CLI with launch arguments of its own needs a richer one.
-    // Only CLIs with status hooks get one: a shim for a hookless CLI would report nothing.
-    AGENT_ADAPTERS.filter((a) => a.launchArgs.length === 0 && hasStatusHooks(a)).map(({ id, binary }) => ({
-      id,
-      binary,
-    })),
-    { launcher: layout.writeLauncher },
+    AGENT_ADAPTERS.map(({ binary }) => binary),
   );
   ptyEnv[SESSION_RETENTION_ENV] = String(store.read().sessionRetentionDays);
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.

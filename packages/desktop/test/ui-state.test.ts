@@ -11,8 +11,6 @@ const stateFile = () => join(mkdtempSync(join(tmpdir(), "dryland-ui-")), "nested
 const SETTINGS_DEFAULTS = {
   autoCommit: true,
   projectAutoCommit: {},
-  autoSubmit: false,
-  projectAutoSubmit: {},
   dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
   stopConfirmation: "busy-or-unseen",
   resumeOnStart: false,
@@ -57,7 +55,6 @@ describe("ui state store", () => {
       legendDismissed: false,
       tabs: {},
       sessionsLayout: {},
-      liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
   });
@@ -73,7 +70,6 @@ describe("ui state store", () => {
       legendDismissed: true,
       tabs: {},
       sessionsLayout: {},
-      liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
   });
@@ -87,7 +83,6 @@ describe("ui state store", () => {
       legendDismissed: false,
       tabs: {},
       sessionsLayout: {},
-      liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
 
@@ -97,7 +92,6 @@ describe("ui state store", () => {
       legendDismissed: false,
       tabs: {},
       sessionsLayout: {},
-      liveEventsPanel: "expanded",
       ...SETTINGS_DEFAULTS,
     });
   });
@@ -131,17 +125,6 @@ describe("ui state store", () => {
       collapsed: { hidden: false, paused: false, open: false },
       shares: { hidden: 0.35, paused: 0.25, open: 0.4 },
     });
-  });
-
-  it("remembers the live-events panel mode and falls back to expanded for an unknown one", () => {
-    const file = stateFile();
-    createUiStateStore(file).update({ liveEventsPanel: "line" });
-    expect(createUiStateStore(file).read().liveEventsPanel).toBe("line");
-    createUiStateStore(file).update({ liveEventsPanel: "hidden" });
-    expect(createUiStateStore(file).read().liveEventsPanel).toBe("hidden");
-
-    writeFileSync(file, JSON.stringify({ liveEventsPanel: "sideways" }));
-    expect(createUiStateStore(file).read().liveEventsPanel).toBe("expanded");
   });
 
   it("remembers the side panel widths and clamps a saved one that is out of range", () => {
@@ -219,22 +202,6 @@ describe("ui state store", () => {
     expect(createUiStateStore(file).read()).toMatchObject({
       autoCommit: true,
       projectAutoCommit: { "/repos/shop": false },
-    });
-  });
-
-  it("remembers auto-submit globally and per project, off unless it was turned on", () => {
-    const file = stateFile();
-    expect(createUiStateStore(file).read()).toMatchObject({ autoSubmit: false, projectAutoSubmit: {} });
-    createUiStateStore(file).update({ autoSubmit: true, projectAutoSubmit: { "/repos/shop": false } });
-    expect(createUiStateStore(file).read()).toMatchObject({
-      autoSubmit: true,
-      projectAutoSubmit: { "/repos/shop": false },
-    });
-
-    writeFileSync(file, JSON.stringify({ autoSubmit: "yes", projectAutoSubmit: { "/repos/shop": true, "/a": 1 } }));
-    expect(createUiStateStore(file).read()).toMatchObject({
-      autoSubmit: false,
-      projectAutoSubmit: { "/repos/shop": true },
     });
   });
 });

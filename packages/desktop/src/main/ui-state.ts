@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type CompatConfig, DEFAULT_SESSION_RETENTION_DAYS } from "@dryland/core";
-import { isLiveEventsPanelMode, type LiveEventsPanelMode } from "../shared/api.ts";
 import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
 import { isRetentionDays } from "../shared/settings-change.ts";
 import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
@@ -29,7 +28,6 @@ export interface UiState {
   tabs: Record<string, TabsState>;
   /** The Sessions view's grouping, collapsed panes and sash position in each project, by project path. */
   sessionsLayout: Record<string, SessionsLayout>;
-  liveEventsPanel: LiveEventsPanelMode;
   /** The widths of the left and right side panels. */
   panelWidths: PanelWidths;
   /** Which side panels are folded away. */
@@ -38,10 +36,6 @@ export interface UiState {
   autoCommit: boolean;
   /** Auto-commit overrides, by project path. */
   projectAutoCommit: Record<string, boolean>;
-  /** Whether a session's pre-typed command is submitted, unless a project overrides it. */
-  autoSubmit: boolean;
-  /** Auto-submit overrides, by project path. */
-  projectAutoSubmit: Record<string, boolean>;
   /** Each confirmation type's "do not ask again" flag. */
   dontAsk: DontAsk;
   /** When stopping a session asks first. */
@@ -64,13 +58,10 @@ const DEFAULTS: UiState = {
   legendDismissed: false,
   tabs: {},
   sessionsLayout: {},
-  liveEventsPanel: "expanded",
   panelWidths: DEFAULT_PANEL_WIDTHS,
   panelFolded: DEFAULT_PANEL_FOLDED,
   autoCommit: true,
   projectAutoCommit: {},
-  autoSubmit: false,
-  projectAutoSubmit: {},
   dontAsk: ASK_ALWAYS,
   stopConfirmation: DEFAULT_STOP_CONFIRMATION,
   resumeOnStart: false,
@@ -136,13 +127,10 @@ function parse(text: string): UiState {
     legendDismissed: typeof raw.legendDismissed === "boolean" ? raw.legendDismissed : DEFAULTS.legendDismissed,
     tabs: parseAllTabs(raw.tabs),
     sessionsLayout: parseAllLayouts(raw.sessionsLayout),
-    liveEventsPanel: isLiveEventsPanelMode(raw.liveEventsPanel) ? raw.liveEventsPanel : DEFAULTS.liveEventsPanel,
     panelWidths: parsePanelWidths(raw.panelWidths),
     panelFolded: parsePanelFolded(raw.panelFolded),
     autoCommit: typeof raw.autoCommit === "boolean" ? raw.autoCommit : DEFAULTS.autoCommit,
     projectAutoCommit: parseOverrides(raw.projectAutoCommit),
-    autoSubmit: typeof raw.autoSubmit === "boolean" ? raw.autoSubmit : DEFAULTS.autoSubmit,
-    projectAutoSubmit: parseOverrides(raw.projectAutoSubmit),
     dontAsk: parseDontAsk(raw.dontAsk),
     stopConfirmation: isStopConfirmation(raw.stopConfirmation) ? raw.stopConfirmation : DEFAULTS.stopConfirmation,
     resumeOnStart: typeof raw.resumeOnStart === "boolean" ? raw.resumeOnStart : DEFAULTS.resumeOnStart,

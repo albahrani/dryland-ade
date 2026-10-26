@@ -89,25 +89,21 @@ async function openSettings(app: ElectronApplication, window: Page, tab: string)
   return dialog;
 }
 
-test("claims, unblocks and resolves from a ticket at once, each shown in the live-events panel", async () => {
+test("claims, unblocks and resolves from a ticket at once, each shown on the ticket", async () => {
   const { app, window, repo } = await openProject();
-  const panel = window.getByRole("log", { name: "Live events" });
   const actions = window.getByRole("region", { name: "Ticket actions" });
   await window.getByRole("button", { name: "Take payments" }).click();
 
   await actions.getByRole("button", { name: "Unblock from 02" }).click();
-  await expect(panel).toContainText("ticket block shop/03");
   await expect(actions.getByRole("button", { name: "Unblock from 02" })).toBeHidden();
 
   await actions.getByRole("button", { name: "Claim" }).click();
-  await expect(panel).toContainText("ticket claim shop/03");
   // Claimed from the app with no session, so no live session holds it.
   await expect(actions).toContainText("Claimed by main, possibly stale");
 
   await actions.getByRole("button", { name: "Resolve..." }).click();
   await actions.getByLabel("Answer").fill("Payments go through the shop's provider.");
   await actions.getByRole("button", { name: "Resolve", exact: true }).click();
-  await expect(panel).toContainText("ticket resolve shop/03");
   await expect(window.getByRole("region", { name: "Answer" })).toContainText("Payments go through");
 
   // Started from the ticket, none of them asked, and each was committed.
@@ -120,7 +116,6 @@ test("claims, unblocks and resolves from a ticket at once, each shown in the liv
 test("releases a possibly stale claim from the Tickets view only after a confirmation the user can turn off and back on", async () => {
   const { app, window, repo } = await openProject();
   const tickets = window.getByRole("region", { name: "Tickets" });
-  const panel = window.getByRole("log", { name: "Live events" });
   const dialog = window.getByRole("dialog", { name: "Confirm write" });
   const release = tickets.getByRole("button", { name: "Release shop/02" });
 
@@ -141,7 +136,6 @@ test("releases a possibly stale claim from the Tickets view only after a confirm
   await release.click();
   await dialog.getByLabel("Don't ask again for tracker metadata writes from a button").check();
   await dialog.getByRole("button", { name: "Confirm" }).click();
-  await expect(panel).toContainText("ticket release shop/02");
   await expect(release).toBeHidden();
   expect(readFileSync(join(repo, CART), "utf8")).toContain("Status: ready-for-agent");
 
@@ -171,7 +165,7 @@ test("with auto-commit off for the project, writes change the files without comm
 
   await window.getByRole("button", { name: "Build the cart" }).click();
   await window.getByRole("region", { name: "Ticket actions" }).getByRole("button", { name: "Claim" }).click();
-  await expect(window.getByRole("log", { name: "Live events" })).toContainText("ticket claim shop/02");
+  await expect(window.getByRole("region", { name: "Ticket actions" })).toContainText("Claimed by main");
 
   expect(readFileSync(join(repo, CART), "utf8")).toContain("Status: claimed");
   expect(git(repo, "rev-parse", "HEAD")).toBe(head);
@@ -197,7 +191,7 @@ test("Settings shows a project override over the global auto-commit, clears it, 
   await settings.getByRole("button", { name: "Close" }).click();
   await window.getByRole("button", { name: "Build the cart" }).click();
   await window.getByRole("region", { name: "Ticket actions" }).getByRole("button", { name: "Claim" }).click();
-  await expect(window.getByRole("log", { name: "Live events" })).toContainText("ticket claim shop/02");
+  await expect(window.getByRole("region", { name: "Ticket actions" })).toContainText("Claimed by main");
   expect(git(repo, "rev-parse", "HEAD")).not.toBe(head);
 
   // Clearing the override falls back to the global setting, which is off.

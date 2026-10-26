@@ -31,9 +31,9 @@ export function LiveSessions({ sessions, handlers }: { sessions: SessionInfo[]; 
         const state = handlers.state(session);
         return (
           <div key={session.id} className="live-session">
-            <SessionBadge agent={session.agent.name} state={state} approximate={session.statusApproximate} />
+            <SessionBadge agent={session.agent.name} state={state} />
             <span>{sessionTitle(session)}</span>
-            <span className="session-state">{stateLabel(state, session.statusApproximate)}</span>
+            <span className="session-state">{stateLabel(state)}</span>
             {handlers.unseen(session) && <UnseenMark />}
             <button onClick={() => handlers.show(session)}>Show session</button>
             <button onClick={() => handlers.stop(session)}>Stop session</button>

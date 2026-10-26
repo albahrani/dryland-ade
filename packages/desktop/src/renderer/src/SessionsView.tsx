@@ -1,7 +1,7 @@
 import type { SessionState, TicketRef } from "@dryland/core";
 import { type PointerEvent, type ReactNode, useRef, useState } from "react";
 import type { SessionInfo } from "../../shared/api.ts";
-import { approximateMark, stateLabel } from "../../shared/session-meta.ts";
+import { stateLabel } from "../../shared/session-meta.ts";
 import {
   dragSash,
   groupCount,
@@ -172,12 +172,12 @@ function HiddenRow({
 }) {
   return (
     <li className={selected ? "session-row active" : "session-row"} aria-current={selected}>
-      <SessionBadge agent={session.agent.name} state={state} approximate={session.statusApproximate} />
+      <SessionBadge agent={session.agent.name} state={state} />
       <button className="session-title" title={title} onClick={() => handlers.show(session)}>
         {title}
       </button>
       <span className="meta">
-        {stateLabel(state, session.statusApproximate)}
+        {stateLabel(state)}
         {since !== undefined && ` · ${shortAge(since, now)}`}
       </span>
       {unseen && <UnseenMark />}
@@ -412,26 +412,18 @@ export function SessionsView({
               const state = stateOf(session);
               const title = lookups.title(session);
               const line = lookups.lastLine(session);
-              const mark = line === undefined ? undefined : approximateMark(state, session.statusApproximate);
               return (
                 <li
                   key={session.id}
                   className={session.id === selected ? "session-row two-line active" : "session-row two-line"}
                   aria-current={session.id === selected}
                 >
-                  <SessionBadge agent={session.agent.name} state={state} approximate={session.statusApproximate} />
+                  <SessionBadge agent={session.agent.name} state={state} />
                   <span className="session-lines">
                     <button className="session-title" title={title} onClick={() => handlers.show(session)}>
                       {title}
                     </button>
-                    <span className="meta last-line">
-                      {mark && (
-                        <span className="approximate-mark" title={stateLabel(state, true)}>
-                          {mark}
-                        </span>
-                      )}
-                      {line ?? stateLabel(state, session.statusApproximate)}
-                    </span>
+                    <span className="meta last-line">{line ?? stateLabel(state)}</span>
                   </span>
                   {handlers.unseen(session) && <UnseenMark />}
                 </li>

@@ -1,4 +1,4 @@
-import type { LiveEvent, SessionState } from "@dryland/core";
+import type { SessionState } from "@dryland/core";
 import { contextBridge, ipcRenderer } from "electron";
 import type { UpdateState } from "../shared/updates.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "../shared/quit.ts";
@@ -12,7 +12,6 @@ const api: DrylandApi = {
   projectSummaries: () => ipcRenderer.invoke("projects:summaries"),
   trackerWidgetAction: (kind) => ipcRenderer.invoke("tracker:widget-action", kind),
   dismissLegend: () => ipcRenderer.invoke("legend:dismiss"),
-  setLiveEventsPanel: (mode) => ipcRenderer.invoke("live-events:mode", mode),
   setPanelFolded: (folded) => ipcRenderer.invoke("panel-folded:save", folded),
   setPanelWidths: (widths) => ipcRenderer.invoke("panel-widths:save", widths),
   saveTabs: (tabs) => ipcRenderer.invoke("tabs:save", tabs),
@@ -95,11 +94,6 @@ const api: DrylandApi = {
     const listener = (_event: unknown, project: ProjectView) => callback(project);
     ipcRenderer.on("project:changed", listener);
     return () => ipcRenderer.removeListener("project:changed", listener);
-  },
-  onLiveEvent(callback) {
-    const listener = (_event: unknown, event: LiveEvent) => callback(event);
-    ipcRenderer.on("live:event", listener);
-    return () => ipcRenderer.removeListener("live:event", listener);
   },
   onExplorerChanged(callback) {
     const listener = () => callback();

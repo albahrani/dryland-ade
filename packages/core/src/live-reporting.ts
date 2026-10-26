@@ -9,7 +9,6 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 /** Every kind of live event: a session's state changes, and `ticket.changed` for any Dryland write. */
 export const LIVE_EVENT_KINDS = [
-  "session.started",
   "session.running",
   "session.waiting",
   "session.idle",
@@ -31,13 +30,6 @@ export interface LiveEvent {
   timestamp: string;
   /** The Agent CLI's own id of the session it came from, when the CLI set one for its hooks (ADR 0010). */
   agent_session_id?: string;
-  /**
-   * Set only by a CLI started by hand in a Dryland terminal (`dryland agent`): its adapter id, its working directory,
-   * and `DRYLAND_PANE_KEY` of the terminal it runs in.
-   */
-  agent?: string;
-  cwd?: string;
-  pane?: string;
   payload?: unknown;
 }
 
@@ -68,17 +60,14 @@ function appDir(env: Env, platform: NodeJS.Platform, home: string): string {
 /** The event `value` describes, or `null` when it is not a well-formed live event. */
 export function parseLiveEvent(value: unknown): LiveEvent | null {
   if (value === null || typeof value !== "object") return null;
-  const { session_id, kind, timestamp, agent_session_id, agent, cwd, pane, payload } = value as Record<string, unknown>;
+  const { session_id, kind, timestamp, agent_session_id, payload } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || typeof timestamp !== "string") return null;
   if (!isLiveEventKind(kind)) return null;
-  for (const optional of [agent_session_id, agent, cwd, pane]) {
+  for (const optional of [agent_session_id]) {
     if (optional !== undefined && typeof optional !== "string") return null;
   }
   const event: LiveEvent = { session_id, kind, timestamp };
   if (agent_session_id) event.agent_session_id = agent_session_id as string;
-  if (agent) event.agent = agent as string;
-  if (cwd) event.cwd = cwd as string;
-  if (pane) event.pane = pane as string;
   return payload === undefined ? event : { ...event, payload };
 }
 

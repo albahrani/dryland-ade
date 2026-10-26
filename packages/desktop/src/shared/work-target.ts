@@ -77,9 +77,8 @@ export function sessionTitle(session: {
   ticket: TicketRef | null;
   map: string | null;
   worktree?: { branch: string };
-  manual?: true;
 }): string {
-  const unnamed = isScratch(session) ? "scratch" : session.manual ? "unlinked" : "new map";
+  const unnamed = isScratch(session) ? "scratch" : "new map";
   const on = session.ticket !== null ? ticketKey(session.ticket) : (session.map ?? unnamed);
   return `${session.agent.name} ${on}`;
 }

@@ -5,7 +5,7 @@ import { AgentClisTab } from "./AgentClisTab.tsx";
 import { SkillsTab } from "./SkillsTab.tsx";
 import { UpdatesTab } from "./UpdatesTab.tsx";
 import type { StartHandler } from "./StartWork.tsx";
-import { LIVE_EVENTS_PANEL_MODES, type AppSettings, type LiveEventsPanelMode } from "../../shared/api.ts";
+import type { AppSettings } from "../../shared/api.ts";
 import type { SettingsChange } from "../../shared/settings-change.ts";
 import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../../shared/stop-session.ts";
 import { CONFIRMATION_LABELS, CONFIRMATION_TYPES } from "../../shared/tracker-actions.ts";
@@ -13,22 +13,14 @@ import { CONFIRMATION_LABELS, CONFIRMATION_TYPES } from "../../shared/tracker-ac
 const TABS = ["General", "Agent CLIs", "Tracker", "Skills", "Write confirmations", "Updates"] as const;
 type SettingsTab = (typeof TABS)[number];
 
-const PANEL_LABELS: Record<LiveEventsPanelMode, string> = {
-  expanded: "Expanded",
-  line: "Newest line only",
-  hidden: "Hidden",
-};
-
 /** The Settings modal: app-wide preferences by tab, saying which level, global or this project's, a setting sits at. */
 export function SettingsDialog({
   settings,
   projectName,
-  liveEventsPanel,
   legendDismissed,
   skillSetup,
   hooksRevision,
   onChange,
-  onLiveEventsPanel,
   onHooks,
   onRunCheck,
   onRevokeDeviations,
@@ -37,13 +29,11 @@ export function SettingsDialog({
   settings: AppSettings;
   /** The open project; `null` when none is open, so there is nothing to override. */
   projectName: string | null;
-  liveEventsPanel: LiveEventsPanelMode;
   legendDismissed: boolean;
   /** The open project's Skill setup and Compatibility verdict; `null` when none is open or it cannot be read. */
   skillSetup: { report: SkillSetupReport; compatibility: Compatibility } | null;
   hooksRevision: number;
   onChange: (change: SettingsChange) => void;
-  onLiveEventsPanel: (mode: LiveEventsPanelMode) => void;
   onHooks: (agentId: string, action: AgentHooksAction) => void;
   onRunCheck: StartHandler;
   onRevokeDeviations: () => void;
@@ -73,19 +63,6 @@ export function SettingsDialog({
           {tab === "General" && (
             <>
               <p className="dim">These apply to the whole app.</p>
-              <label>
-                Live-events panel{" "}
-                <select
-                  value={liveEventsPanel}
-                  onChange={(event) => onLiveEventsPanel(event.target.value as LiveEventsPanelMode)}
-                >
-                  {LIVE_EVENTS_PANEL_MODES.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {PANEL_LABELS[mode]}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label>
                 Ask before stopping a session{" "}
                 <select
@@ -133,15 +110,7 @@ export function SettingsDialog({
               </div>
             </>
           )}
-          {tab === "Agent CLIs" && (
-            <AgentClisTab
-              settings={settings}
-              projectName={projectName}
-              hooksRevision={hooksRevision}
-              onChange={onChange}
-              onHooks={onHooks}
-            />
-          )}
+          {tab === "Agent CLIs" && <AgentClisTab hooksRevision={hooksRevision} onHooks={onHooks} />}
           {tab === "Skills" && (
             <SkillsTab skillSetup={skillSetup} onRunCheck={onRunCheck} onRevoke={onRevokeDeviations} />
           )}

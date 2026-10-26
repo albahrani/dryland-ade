@@ -31,7 +31,6 @@ describe("session status", () => {
     expect(status.apply(event("stranger", "session.running"))).toBe(false);
     expect(status.apply(event("", "session.running"))).toBe(false);
     expect(status.apply(event("a", "ticket.changed"))).toBe(false);
-    expect(status.apply(event("a", "session.started"))).toBe(false);
     expect(status.states()).toEqual({ a: "launched" });
   });
 

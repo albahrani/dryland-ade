@@ -1,13 +1,6 @@
-import type { LiveEvent, TicketRef, TreeTicket } from "@dryland/core";
+import type { TicketRef, TreeTicket } from "@dryland/core";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-import type {
-  AppState,
-  LiveEventsPanelMode,
-  MenuCommand,
-  ProjectView,
-  ResumeMode,
-  SessionInfo,
-} from "../../shared/api.ts";
+import type { AppState, MenuCommand, ProjectView, ResumeMode, SessionInfo } from "../../shared/api.ts";
 import {
   mapSessionCounts,
   mapTitle,
@@ -57,7 +50,6 @@ import { type PausedSession, pausedSessions } from "../../shared/paused-session.
 import { NewMapDialog, NewScratchDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
-import { LiveEventsPanel } from "./LiveEventsPanel.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
 import { PANEL_SIDES, type PanelSide } from "../../shared/panel-widths.ts";
 import { MapsView } from "./MapsView.tsx";
@@ -78,9 +70,6 @@ import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts
 import { type ActionSource, commandLine, type TicketAction, trackerArgs } from "../../shared/tracker-actions.ts";
 
 type ActivityView = "tickets" | "maps" | "sessions";
-
-/** The panel keeps the newest events only, so a long day does not grow the window's memory without bound. */
-const MAX_LIVE_EVENTS = 500;
 
 const ACTIVITIES: { id: ActivityView; label: string; glyph: string }[] = [
   { id: "tickets", label: "Tickets", glyph: "☰" },
@@ -218,10 +207,6 @@ function SessionHeader({ session, live, onStop }: { session: SessionInfo; live: 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [activity, setActivity] = useState<ActivityView>("tickets");
-  // Live events since this window opened; never stored (ADR 0008).
-  const [liveEvents, setLiveEvents] = useState<readonly LiveEvent[]>([]);
-  // The panel mode the status bar's "Show" returns to.
-  const lastVisiblePanel = useRef<LiveEventsPanelMode>("expanded");
   // Tabs whose details header the user collapsed; not persisted.
   const [collapsedHeaders, setCollapsedHeaders] = useState<Set<string>>(new Set());
   // Titles of terminals, numbered in the order they were opened.
@@ -314,9 +299,6 @@ export function App() {
     const stopUnseen = window.dryland.onUnseenSessions((unseenSessions) =>
       setState((current) => current && { ...current, unseenSessions }),
     );
-    const stopLive = window.dryland.onLiveEvent((event) =>
-      setLiveEvents((current) => [...current.slice(1 - MAX_LIVE_EVENTS), event]),
-    );
     const stopMenu = window.dryland.onMenuCommand(setDialog);
     const stopExplorer = window.dryland.onExplorerChanged(() => setExplorerRevision((revision) => revision + 1));
     return () => {
@@ -327,7 +309,6 @@ export function App() {
       stopMenu();
       stopProject();
       stopTerminals();
-      stopLive();
       stopSessionStates();
       stopUnseen();
       stopSettings();
@@ -335,17 +316,7 @@ export function App() {
   }, []);
 
   if (state === null) return null;
-  const {
-    project,
-    legendDismissed,
-    tabs,
-    liveEventsPanel,
-    panelWidths,
-    panelFolded,
-    sessionStates,
-    unseenSessions,
-    settings,
-  } = state;
+  const { project, legendDismissed, tabs, panelWidths, panelFolded, sessionStates, unseenSessions, settings } = state;
   // Sessions of other projects keep running and reporting; the views show the current project's.
   const everySession = [...sessions.values()];
   const projectOnly = projectSessions(everySession, project?.path ?? null);
@@ -353,11 +324,6 @@ export function App() {
   const isUnseen = (session: SessionInfo) => unseenSessions.includes(session.id);
   const ticketSessionMap = ticketSessions(projectOnly, sessionStates);
   const pausedMap = pausedSessions(project?.tree.ok ? project.tree.pausedClaims : {}, projectOnly, sessionStates);
-  if (liveEventsPanel !== "hidden") lastVisiblePanel.current = liveEventsPanel;
-  const setLiveEventsPanel = (mode: LiveEventsPanelMode) => {
-    setState({ ...state, liveEventsPanel: mode });
-    void window.dryland.setLiveEventsPanel(mode);
-  };
   const resizePanel = (side: PanelSide, width: number) =>
     setState({ ...state, panelWidths: { ...panelWidths, [side]: width } });
   const togglePanel = (side: PanelSide) => {
@@ -373,9 +339,7 @@ export function App() {
   const closeItem = (ref: ItemRef) => {
     if (ref.kind === "terminal") {
       // A plain terminal ends; a session is only hidden, and its output stays in the main process for replay.
-      // A session started by hand is its terminal's shell: it ends with the tab.
-      const session = sessions.get(ref.id);
-      if (session === undefined || session.manual === true) window.dryland.closeTerminal(ref.id);
+      if (!sessions.has(ref.id)) window.dryland.closeTerminal(ref.id);
       disposeTerminal(ref.id);
     }
     setTabs(closeTab(tabs, tabKey(ref)));
@@ -900,7 +864,6 @@ export function App() {
         <SettingsDialog
           settings={settings}
           projectName={project?.name ?? null}
-          liveEventsPanel={liveEventsPanel}
           legendDismissed={legendDismissed}
           skillSetup={
             project?.tree.ok ? { report: project.tree.skillSetup, compatibility: project.tree.compatibility } : null
@@ -921,7 +884,6 @@ export function App() {
             if (change.kind === "reset-legend") setState({ ...state, legendDismissed: false });
             void window.dryland.changeSetting(change);
           }}
-          onLiveEventsPanel={setLiveEventsPanel}
           onClose={() => setDialog(null)}
         />
       )}
@@ -967,37 +929,16 @@ export function App() {
           onCancel={() => setStopping(null)}
         />
       )}
-      <LiveEventsPanel events={liveEvents} mode={liveEventsPanel} onMode={setLiveEventsPanel} />
       <footer className="statusbar">
         {PANEL_SIDES.map((side) => (
           <button key={side} onClick={() => togglePanel(side)}>
             {panelFolded[side] ? `Show ${side} panel` : `Hide ${side} panel`}
           </button>
         ))}
-        <button
-          className="icon-button"
-          aria-label={liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
-          title={liveEventsPanel === "hidden" ? "Show live events" : "Hide live events"}
-          aria-expanded={liveEventsPanel !== "hidden"}
-          onClick={() => setLiveEventsPanel(liveEventsPanel === "hidden" ? lastVisiblePanel.current : "hidden")}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M1 8h3l2-5 4 10 2-5h3" />
-          </svg>
-        </button>
         <span>{project === null ? "No project" : project.path}</span>
         {selected !== undefined && (
           <span aria-label="Selected session" title={selected.worktree.path}>
-            {selected.agent.name}: {stateLabel(sessionState(selected), selected.statusApproximate)} ·{" "}
-            {selected.worktree.branch}
+            {selected.agent.name}: {stateLabel(sessionState(selected))} · {selected.worktree.branch}
           </span>
         )}
         <span aria-label="Session counts">

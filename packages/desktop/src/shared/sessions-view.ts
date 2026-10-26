@@ -134,17 +134,11 @@ export const mapTitle = (tree: TicketsTree | null, name: string): string =>
  */
 export function sessionItemTitle(
   tree: TicketsTree | null,
-  session: Pick<ViewSession, "ticket" | "map"> & { worktree?: { branch: string }; manual?: true },
+  session: Pick<ViewSession, "ticket" | "map"> & { worktree?: { branch: string } },
 ): string {
   const { ticket } = session;
   if (ticket === null)
-    return session.map === null
-      ? isScratch(session)
-        ? "Scratch"
-        : session.manual
-          ? "Unlinked"
-          : "New map"
-      : mapTitle(tree, session.map);
+    return session.map === null ? (isScratch(session) ? "Scratch" : "New map") : mapTitle(tree, session.map);
   const map = tree?.maps.find((m) => m.name === ticket.map);
   const found = map && [...map.planning, ...map.implementation, ...map.done].find((t) => t.id === ticket.id);
   return found?.title ?? ticketKey(ticket);

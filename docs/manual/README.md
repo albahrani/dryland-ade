@@ -30,7 +30,6 @@ Alongside the side panel:
 
 - **Explorer** browses the files of the worktree for the tab you are looking at, and opens files and diffs as tabs. **Source Control** shows that worktree's branch and changes, local merge and prune, and opens or links a pull or merge request through `gh` or `glab`.
 - **Tabs** in the middle hold tickets, maps, files, diffs, terminals and sessions. A **terminal** tab is a plain shell; use **New terminal** in the top bar.
-- The **live-events panel** at the bottom shows what the CLI reported just now: a session changing state, a ticket changing. It can be expanded, reduced to the newest line, or hidden.
 - The **status bar** summarises the sessions that need you.
 
 ## Starting work

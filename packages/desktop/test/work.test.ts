@@ -36,13 +36,7 @@ function stubBin(others: string[] = []): { dir: string; claude: string } {
 /** The real `dryland` bundle, built by the test suite's global setup; Node stands in for the app's Electron. */
 const CLI = fileURLToPath(new URL("../../cli/dist/dryland.mjs", import.meta.url));
 
-function setup(
-  path = stubBin().dir,
-  inherited: Record<string, string> = {},
-  autoCommit = true,
-  autoSubmit = false,
-  submitFor?: (project: string) => boolean,
-) {
+function setup(path = stubBin().dir, inherited: Record<string, string> = {}, autoCommit = true) {
   // The app hands terminals and the work starter the same environment, its own.
   const env = { PATH: path, HOME: "/home/test", ...inherited };
   // `dryland` runs with the test's own environment, which finds git; no app listens for it.
@@ -73,7 +67,6 @@ function setup(
     hooksDir,
     dryland,
     autoCommit: () => autoCommit,
-    autoSubmit: submitFor ?? (() => autoSubmit),
     pretype: { quietMs: 20, charDelayMs: 0 },
   });
   return { provider, starter, hooksDir, dryland };
@@ -244,24 +237,16 @@ describe("starting work on a ticket", () => {
       {
         id: "claude-code",
         name: "Claude Code",
-        tier: "first-class",
+
         available: false,
         reason: "`claude` is not on PATH.",
       },
       {
         id: "copilot-cli",
         name: "GitHub Copilot CLI",
-        tier: "first-class",
+
         available: false,
         reason: "`copilot` is not on PATH.",
-      },
-      { id: "codex-cli", name: "Codex CLI", tier: "best-effort", available: false, reason: "`codex` is not on PATH." },
-      {
-        id: "gemini-cli",
-        name: "Gemini CLI",
-        tier: "best-effort",
-        available: false,
-        reason: "`gemini` is not on PATH.",
       },
     ]);
     await expect(starter.startWork(repo, onTicket("02"), "claude-code")).rejects.toThrow(DrylandError);
@@ -337,21 +322,13 @@ describe("starting work on a ticket", () => {
   it("lists an installed Agent CLI as available", async () => {
     const { starter } = setup();
     expect(await starter.listAgents()).toEqual([
-      { id: "claude-code", name: "Claude Code", tier: "first-class", available: true, reason: null },
+      { id: "claude-code", name: "Claude Code", available: true, reason: null },
       {
         id: "copilot-cli",
         name: "GitHub Copilot CLI",
-        tier: "first-class",
+
         available: false,
         reason: "`copilot` is not on PATH.",
-      },
-      { id: "codex-cli", name: "Codex CLI", tier: "best-effort", available: false, reason: "`codex` is not on PATH." },
-      {
-        id: "gemini-cli",
-        name: "Gemini CLI",
-        tier: "best-effort",
-        available: false,
-        reason: "`gemini` is not on PATH.",
       },
     ]);
   });
@@ -616,92 +593,18 @@ describe("resuming a paused session", () => {
   });
 });
 
-describe("sessions started by hand in a terminal", () => {
-  const byHand = (pane: string, cwd: string, session = "by-hand-1") => ({
-    session_id: session,
-    kind: "session.started" as const,
-    timestamp: "2026-10-19T12:00:00.000Z",
-    agent: "claude-code",
-    cwd,
-    pane,
-  });
+describe("a plain terminal", () => {
+  it("opens with the launcher on PATH and no session of its own", () => {
+    const { provider, starter } = setup();
 
-  it("opens a plain terminal that knows its pane and where Dryland keeps the status hooks", () => {
-    const { provider, starter, hooksDir } = setup();
-
-    const terminalId = starter.openShell("/repo");
+    starter.openShell("/repo");
 
     const options = provider.spawned[0]?.options;
     expect(options).toMatchObject({ file: "/bin/fake-sh", cwd: "/repo" });
-    expect(options?.env).toMatchObject({ DRYLAND_PANE_KEY: terminalId, DRYLAND_HOOKS_DIR: hooksDir });
     expect(options?.env.PATH?.split(delimiter)[0]).toBe("/opt/dryland/bin");
     expect(options?.env).not.toHaveProperty("DRYLAND_SESSION_ID");
-  });
-
-  it("links a CLI started anywhere inside a ticket's worktree to that ticket", async () => {
-    const repo = fixtureRepo();
-    const { starter } = setup();
-    const { session: started } = await starter.startWork(repo, onTicket("02"), "claude-code");
-    const shell = starter.openShell(repo);
-    const inside = join(started.worktree.path, ".scratch", "shop");
-
-    const adopted = await starter.adoptManual(repo, byHand(shell, inside));
-
-    expect(adopted).toMatchObject({
-      id: "by-hand-1",
-      terminalId: shell,
-      manual: true,
-      project: repo,
-      agent: { id: "claude-code" },
-      ticket: { map: "shop", id: "02" },
-      map: "shop",
-      worktree: { branch: "shop/02-grill", path: started.worktree.path },
-    });
-    expect(starter.sessions()).toContainEqual(adopted);
-  });
-
-  it("leaves a CLI started in a directory Dryland did not create unlinked", async () => {
-    const repo = fixtureRepo();
-    const { starter } = setup();
-    const shell = starter.openShell(repo);
-
-    const adopted = await starter.adoptManual(repo, byHand(shell, repo));
-
-    expect(adopted).toMatchObject({ manual: true, ticket: null, map: null });
-  });
-
-  it("takes a CLI in a scratch worktree as scratch work, with no ticket and no map", async () => {
-    const repo = fixtureRepo();
-    const { starter } = setup();
-    const { session: scratch } = await starter.startWork(repo, { kind: "scratch" }, "claude-code");
-    const shell = starter.openShell(repo);
-
-    const adopted = await starter.adoptManual(repo, byHand(shell, scratch.worktree.path));
-
-    expect(adopted).toMatchObject({ ticket: null, map: null, worktree: { branch: "scratch/scratch-session" } });
-  });
-
-  it("replaces the session a terminal's CLI ended with the next one run in the same terminal", async () => {
-    const repo = fixtureRepo();
-    const { starter } = setup();
-    const shell = starter.openShell(repo);
-
-    await starter.adoptManual(repo, byHand(shell, repo, "first"));
-    await starter.adoptManual(repo, byHand(shell, repo, "second"));
-
-    expect(starter.sessions().map((s) => s.id)).toEqual(["second"]);
-  });
-
-  it("adopts a session once, and only from a terminal it opened that is still running", async () => {
-    const repo = fixtureRepo();
-    const { starter } = setup();
-    const shell = starter.openShell(repo);
-
-    expect(await starter.adoptManual(repo, byHand("not-a-terminal", repo))).toBeNull();
-    expect(await starter.adoptManual(repo, { ...byHand(shell, repo), agent: "no-such-cli" })).toBeNull();
-    expect(await starter.adoptManual(repo, byHand(shell, repo))).not.toBeNull();
-    expect(await starter.adoptManual(repo, byHand(shell, repo))).toBeNull();
-    expect(starter.sessions()).toHaveLength(1);
+    expect(options?.env).not.toHaveProperty("DRYLAND_PANE_KEY");
+    expect(starter.sessions()).toEqual([]);
   });
 });
 
@@ -758,59 +661,20 @@ describe("starting work with Copilot CLI", () => {
   });
 });
 
-describe("best-effort Agent CLIs and auto-submit", () => {
-  const withCodex = () => setup(stubBin(["codex", "gemini"]).dir);
-
-  it("lists a best-effort CLI as available when its binary is installed", async () => {
-    const { starter } = withCodex();
-    const agents = await starter.listAgents();
-    expect(agents.filter((a) => a.available).map((a) => a.id)).toEqual(["claude-code", "codex-cli", "gemini-cli"]);
-  });
-
-  it("opens it with the command typed in its own syntax, launched with no hooks and no session id", async () => {
-    const { provider, starter, hooksDir } = withCodex();
-    const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "codex-cli");
+describe("pre-typing the command", () => {
+  it("types the command and never presses Enter", async () => {
+    const { provider, starter } = setup();
+    await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     const pty = provider.spawned[0];
 
-    expect(pty?.options.args).toEqual([]);
-    expect(session.agentSessionId).toBeNull();
-    expect(session.statusApproximate).toBe(true);
-    expect(existsSync(join(hooksDir, "codex-cli.json"))).toBe(false);
-    pty?.emit("› Ask Codex");
-    await vi.waitFor(() => expect(typed(pty)).toBe("$implement shop/02"));
+    pty?.emit("❯ ");
+    await vi.waitFor(() => expect(typed(pty)).toBe("/implement shop/02"));
     await pause(50);
     expect(typed(pty)).not.toContain("\r");
   });
 
-  it("marks a hooked CLI's status as exact", async () => {
-    const { session } = await withCodex().starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
-    expect(session.statusApproximate).toBeUndefined();
-  });
-
-  it("submits the command when auto-submit is on", async () => {
-    const { provider, starter } = setup(stubBin(["codex"]).dir, {}, true, true);
-    await starter.startWork(fixtureRepo(), onTicket("02"), "codex-cli");
-    const pty = provider.spawned[0];
-    pty?.emit("› ");
-    await vi.waitFor(() => expect(typed(pty)).toBe("$implement shop/02\r"));
-  });
-
-  it("asks the auto-submit setting for the project the session starts in", async () => {
-    const repo = fixtureRepo();
-    const asked: string[] = [];
-    const { provider, starter } = setup(undefined, {}, true, true, (project) => {
-      asked.push(project);
-      return false;
-    });
-    await starter.startWork(repo, onTicket("02"), "claude-code");
-    provider.spawned[0]?.emit("❯ ");
-    await pause(80);
-    expect(asked).toEqual([repo]);
-    expect(typed(provider.spawned[0])).toBe("/implement shop/02");
-  });
-
-  it("types nothing, and submits nothing, when the user typed before pre-typing started", async () => {
-    const { provider, starter } = setup(undefined, {}, true, true);
+  it("types nothing when the user typed before pre-typing started", async () => {
+    const { provider, starter } = setup();
     const { session } = await starter.startWork(fixtureRepo(), onTicket("02"), "claude-code");
     const pty = provider.spawned[0];
 

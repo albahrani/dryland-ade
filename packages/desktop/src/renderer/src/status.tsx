@@ -5,18 +5,9 @@ import { type MapSessionCounts, mapCountsLabel } from "../../shared/sessions-vie
 import { STATUS_META } from "../../shared/status-meta.ts";
 
 /** A session's agent icon with its state as a badge (working arc, waiting bubble, idle dash, ended square). */
-export function SessionBadge({
-  agent,
-  state,
-  approximate,
-}: {
-  agent: string;
-  state: SessionState;
-  /** The state was guessed from the CLI's output, and the tooltip says so. */
-  approximate?: boolean;
-}) {
+export function SessionBadge({ agent, state }: { agent: string; state: SessionState }) {
   const { glyph } = SESSION_META[state];
-  const text = `${agent}: ${stateLabel(state, approximate)}`;
+  const text = `${agent}: ${stateLabel(state)}`;
   return (
     <span className={`session-badge ${state}`} title={text} role="img" aria-label={text}>
       <span className="agent-icon">{agent.charAt(0)}</span>

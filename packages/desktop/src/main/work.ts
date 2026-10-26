@@ -12,7 +12,6 @@ import {
   envKey,
   findExecutable,
   findMainCheckout,
-  hasStatusHooks,
   launchArgs,
   installedSkills,
   nextSteps,
@@ -21,7 +20,6 @@ import {
   readCompatibility,
   readSkillSetup,
   skillSetupSnapshot,
-  type LiveEvent,
   type ProcessRunner,
   type Ticket,
   readRepoSnapshot,
@@ -40,7 +38,6 @@ import {
   type TicketRef,
   skillCommand,
   worktreeForScratch,
-  worktreeAt,
   worktreeForTicket,
 } from "@dryland/core";
 import type { AgentAvailability, SessionInfo } from "../shared/api.ts";
@@ -63,7 +60,7 @@ export interface WorkStarterOptions {
   runner: ProcessRunner;
   /** The environment sessions inherit and Agent CLIs are looked up in. */
   env: Record<string, string | undefined>;
-  /** The directories holding the `dryland` launcher and the Agent CLI shims, put first on every session's `PATH`. */
+  /** The directories holding the `dryland` launcher, put first on every session's `PATH`. */
   launcherDirs: string[];
   /** Dryland's own directory for the settings files that inject status hooks; never the user's CLI config. */
   hooksDir: string;
@@ -71,8 +68,6 @@ export interface WorkStarterOptions {
   dryland: DrylandCli;
   /** Whether tracker writes in the project are committed. */
   autoCommit: (projectPath: string) => boolean;
-  /** Whether the pre-typed command is submitted in the project: the project override, else the global setting. */
-  autoSubmit: (projectPath: string) => boolean;
   /** What the user decided about the project's modified skill setup; without it nothing is accepted or overridden. */
   compatConfig?: (projectPath: string) => CompatConfig;
   pretype?: PretypeTiming;
@@ -113,22 +108,12 @@ export interface WorkStarter {
    * cannot resume, or a session of it is already running.
    */
   resumeSession(projectPath: string, ticket: TicketRef, mode: "resume" | "pick"): Promise<StartedWork>;
-  /**
-   * Opens a plain terminal in `cwd` where an Agent CLI typed by hand reports like a session: the launcher's shims
-   * on `PATH`, and the terminal's own id as `DRYLAND_PANE_KEY`. Returns the terminal's id.
-   */
+  /** Opens a plain terminal in `cwd`, with the launcher's `dryland` on `PATH`. Returns the terminal's id. */
   openShell(cwd: string): string;
   /**
-   * Takes the CLI that sent `event` for a session of its own, when it was started by hand in a terminal opened by
-   * `openShell` that still runs: linked by its working directory to the ticket of the Dryland-created worktree it
-   * runs in, or to none when the directory is not one (unlinked, or scratch work in a scratch worktree). Returns the
-   * new session; `null` when the event is not from such a CLI or its session is already taken.
-   */
-  adoptManual(projectPath: string, event: LiveEvent): Promise<SessionInfo | null>;
-  /**
    * Tells the session in terminal `terminalId` that `data` came from the user's keyboard. A key stands the pre-typer
-   * down, typing and auto-submit both, so nothing the user did not see is ever submitted. A terminal's own replies
-   * to the CLI's queries, which travel the same way, are not keys.
+   * down, so nothing the user did not see is ever typed over their own keys. A terminal's own replies to the CLI's
+   * queries, which travel the same way, are not keys.
    */
   userTyped(terminalId: string, data: string): void;
   /** The live session whose worktree is the directory `path`, if one is still running. */
@@ -160,12 +145,6 @@ export function homeOf(env: Record<string, string | undefined>): string | null {
   return null;
 }
 
-/** The ticket reference of a `<map>/<id>` string. */
-function refOf(ticket: string): TicketRef {
-  const slash = ticket.lastIndexOf("/");
-  return { map: ticket.slice(0, slash), id: ticket.slice(slash + 1) };
-}
-
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
   const {
     terminals,
@@ -175,7 +154,6 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
     hooksDir,
     dryland,
     autoCommit,
-    autoSubmit,
     compatConfig = () => NO_COMPAT_CONFIG,
     pretype = PRETYPE_TIMING,
   } = options;
@@ -246,9 +224,9 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
 
     async listAgents() {
       return Promise.all(
-        AGENT_ADAPTERS.map(async ({ id, name, binary, tier }) => {
+        AGENT_ADAPTERS.map(async ({ id, name, binary }) => {
           const available = (await findExecutable(binary, env)) !== null;
-          return { id, name, tier, available, reason: available ? null : `\`${binary}\` is not on PATH.` };
+          return { id, name, available, reason: available ? null : `\`${binary}\` is not on PATH.` };
         }),
       );
     },
@@ -331,7 +309,6 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
               text: typed,
               write: (key) => terminals.write(terminalId, key),
               blocks: (output) => blocksInput(adapter, output),
-              submit: autoSubmit(projectPath),
               timing: pretype,
             });
       terminalId = terminals.open({
@@ -360,7 +337,6 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         worktree: { branch: worktree.branch, path: worktree.path },
         command: typed,
         startedAt: new Date().toISOString(),
-        ...(hasStatusHooks(adapter) ? {} : { statusApproximate: true as const }),
       };
       started.push(session);
       return { session, warnings };
@@ -431,44 +407,15 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
     openShell: (cwd) =>
       terminals.open({
         cwd,
-        env: (id) => {
+        env: () => {
           const pathKey = envKey(env, "PATH");
           const path = [...launcherDirs, env[pathKey]].filter((dir) => dir !== undefined && dir !== "").join(delimiter);
           const inherited = Object.fromEntries(
             Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
           );
-          return { ...inherited, [pathKey]: path, DRYLAND_PANE_KEY: id, DRYLAND_HOOKS_DIR: hooksDir };
+          return { ...inherited, [pathKey]: path };
         },
       }),
-
-    async adoptManual(projectPath, event) {
-      const { agent, cwd, pane } = event;
-      if (agent === undefined || cwd === undefined || pane === undefined) return null;
-      const adapter = AGENT_ADAPTERS.find((a) => a.id === agent);
-      if (adapter === undefined || !terminals.liveIds().includes(pane)) return null;
-      if (started.some((s) => s.id === event.session_id)) return null;
-      const entry = await worktreeAt(runner, await findMainCheckout(runner, projectPath), cwd);
-      const branch = entry?.branch ?? "";
-      const ticket = entry?.link.ticket == null ? null : refOf(entry.link.ticket);
-      const effort = entry?.link.kind === "scratch" ? branch.slice(0, branch.indexOf("/")) : null;
-      const session: SessionInfo = {
-        id: event.session_id,
-        terminalId: pane,
-        agent: { id: adapter.id, name: adapter.name },
-        agentSessionId: event.agent_session_id ?? null,
-        project: projectPath,
-        ticket,
-        map: ticket?.map ?? (effort === null || effort === NEW_MAP_EFFORT || effort === SCRATCH_EFFORT ? null : effort),
-        worktree: { branch, path: entry?.path ?? cwd },
-        command: null,
-        startedAt: new Date().toISOString(),
-        manual: true,
-      };
-      // The shell outlives its CLI, so a CLI run again in it replaces the session it ended.
-      for (let i = started.length - 1; i >= 0; i--) if (started[i]?.terminalId === pane) started.splice(i, 1);
-      started.push(session);
-      return session;
-    },
 
     userTyped(terminalId, data) {
       if (isKeystroke(data)) pretypers.get(terminalId)?.cancel();
@@ -489,7 +436,6 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         text,
         write: (key) => terminals.write(terminalId, key),
         blocks: (output) => adapter !== undefined && blocksInput(adapter, output),
-        submit: false,
         timing: pretype,
       });
       pretypers.set(terminalId, typer);

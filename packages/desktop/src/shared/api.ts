@@ -2,7 +2,6 @@ import type { PanelFolded, PanelWidths } from "./panel-widths.ts";
 import type {
   AgentHooks,
   MergeStrategy,
-  LiveEvent,
   MapDetail,
   SessionState,
   SkillSetupReport,
@@ -64,12 +63,6 @@ export interface ProjectView {
   tracker: TrackerWidgetInfo | null;
 }
 
-/** How much of the live-events panel shows: all of it, its newest line, or nothing. */
-export const LIVE_EVENTS_PANEL_MODES = ["expanded", "line", "hidden"] as const;
-export type LiveEventsPanelMode = (typeof LIVE_EVENTS_PANEL_MODES)[number];
-export const isLiveEventsPanelMode = (value: unknown): value is LiveEventsPanelMode =>
-  LIVE_EVENTS_PANEL_MODES.includes(value as LiveEventsPanelMode);
-
 /** The settings the renderer acts on. */
 export interface AppSettings {
   /** Whether tracker writes in the open project are committed: its override, else the global setting. */
@@ -78,12 +71,6 @@ export interface AppSettings {
   globalAutoCommit: boolean;
   /** The open project's auto-commit override; `null` when it has none or no project is open. */
   projectAutoCommit: boolean | null;
-  /** Whether a session's pre-typed command is submitted in the open project: its override, else the global setting. */
-  autoSubmit: boolean;
-  /** The global auto-submit setting, which the open project's override, if any, wins over. */
-  globalAutoSubmit: boolean;
-  /** The open project's auto-submit override; `null` when it has none or no project is open. */
-  projectAutoSubmit: boolean | null;
   dontAsk: DontAsk;
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
@@ -97,7 +84,6 @@ export interface AppState {
   /** The projects open in the app, in the order they were opened; `project` is the one shown. */
   openProjects: OpenProject[];
   legendDismissed: boolean;
-  liveEventsPanel: LiveEventsPanelMode;
   /** The widths of the left and right side panels. */
   panelWidths: PanelWidths;
   /** Which side panels are folded away. */
@@ -123,8 +109,6 @@ export type ItemContent =
 export interface AgentAvailability {
   id: string;
   name: string;
-  /** First-class CLIs have verified launch and status; best-effort ones get launch and pre-typing only. */
-  tier: "first-class" | "best-effort";
   available: boolean;
   /** Why it is unavailable; `null` when it is available. */
   reason: string | null;
@@ -150,13 +134,6 @@ export interface SessionInfo {
   command: string | null;
   /** ISO timestamp of the spawn. */
   startedAt: string;
-  /**
-   * Set for a session the user started by hand in a plain terminal tab (linked by its working directory): the tab
-   * is a shell, which closing the tab ends, whether or not the CLI still runs in it.
-   */
-  manual?: true;
-  /** Set for a CLI without status hooks: its state is guessed from its terminal output, and shown as approximate. */
-  statusApproximate?: true;
 }
 
 /** The session work started, or why it could not start and what to do about it. */
@@ -192,8 +169,6 @@ export interface DrylandApi {
   dismissLegend(): Promise<void>;
   /** Carries out the tracker widget's action; resolves with what went wrong, or `null`. */
   trackerWidgetAction(kind: TrackerWidgetAction["kind"]): Promise<string | null>;
-  /** Remembers how much of the live-events panel shows. */
-  setLiveEventsPanel(mode: LiveEventsPanelMode): Promise<void>;
   /** Remembers the widths of the side panels. */
   setPanelWidths(widths: PanelWidths): Promise<void>;
   /** Remembers which side panels are folded. */
@@ -314,8 +289,6 @@ export interface DrylandApi {
   onTerminalExit(callback: (id: string, exitCode: number) => void): () => void;
   /** Called whenever tracker files change on disk. Returns an unsubscribe function. */
   onProjectChanged(callback: (project: ProjectView) => void): () => void;
-  /** Called with every live event the app receives. Returns an unsubscribe function. */
-  onLiveEvent(callback: (event: LiveEvent) => void): () => void;
   /** Called with the settings whenever they change, such as from the menu. Returns an unsubscribe function. */
   onSettingsChanged(callback: (settings: AppSettings) => void): () => void;
   /** Called when a menu item asks the window to open one of its dialogs. Returns an unsubscribe function. */

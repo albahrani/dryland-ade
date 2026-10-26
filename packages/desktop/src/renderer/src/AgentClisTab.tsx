@@ -1,13 +1,7 @@
 import type { AgentHooks } from "@dryland/core";
 import { useEffect, useState } from "react";
-import type { AgentAvailability, AppSettings } from "../../shared/api.ts";
+import type { AgentAvailability } from "../../shared/api.ts";
 import { describeAgentHooks, type AgentHooksAction } from "../../shared/agent-hooks.ts";
-import type { SettingsChange } from "../../shared/settings-change.ts";
-
-const TIER_LABELS: Record<AgentAvailability["tier"], string> = {
-  "first-class": "First-class",
-  "best-effort": "Best-effort",
-};
 
 /** What Dryland keeps in the user's own config for a CLI, spelled out for Inspect. */
 function HooksInspection({ hooks }: { hooks: AgentHooks }) {
@@ -40,21 +34,15 @@ function HooksInspection({ hooks }: { hooks: AgentHooks }) {
 }
 
 /**
- * The Agent CLIs tab: every adapter with its tier and whether it is installed, auto-submit at both levels, and for a
- * CLI that keeps its hooks in the user's own config what Dryland put there, with Install, Inspect and Remove.
+ * The Agent CLIs tab: every adapter and whether it is installed, and for a CLI that keeps its hooks in the user's
+ * own config what Dryland put there, with Install, Inspect and Remove.
  */
 export function AgentClisTab({
-  settings,
-  projectName,
   hooksRevision,
-  onChange,
   onHooks,
 }: {
-  settings: AppSettings;
-  projectName: string | null;
   /** Changes whenever the hooks were installed or removed, so the tab reads them again. */
   hooksRevision: number;
-  onChange: (change: SettingsChange) => void;
   onHooks: (agentId: string, action: AgentHooksAction) => void;
 }) {
   const [agents, setAgents] = useState<AgentAvailability[] | null>(null);
@@ -85,7 +73,7 @@ export function AgentClisTab({
           const own = hooks[agent.id];
           return (
             <li key={agent.id} aria-label={agent.name}>
-              <strong>{agent.name}</strong> <span>{TIER_LABELS[agent.tier]}</span>{" "}
+              <strong>{agent.name}</strong>{" "}
               <span className={agent.available ? undefined : "dim"}>
                 {agent.available ? "Installed" : `Not installed: ${agent.reason}`}
               </span>
@@ -116,32 +104,6 @@ export function AgentClisTab({
           );
         })}
       </ul>
-      <label>
-        <input
-          type="checkbox"
-          checked={settings.globalAutoSubmit}
-          onChange={(event) => onChange({ kind: "auto-submit", value: event.target.checked })}
-        />
-        Submit the pre-typed command (auto-submit)
-      </label>
-      {projectName !== null && (
-        <label>
-          Auto-submit in {projectName}{" "}
-          <select
-            value={settings.projectAutoSubmit === null ? "global" : settings.projectAutoSubmit ? "on" : "off"}
-            onChange={(event) =>
-              onChange({
-                kind: "project-auto-submit",
-                value: event.target.value === "global" ? null : event.target.value === "on",
-              })
-            }
-          >
-            <option value="global">Follow the global setting</option>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-          </select>
-        </label>
-      )}
     </>
   );
 }

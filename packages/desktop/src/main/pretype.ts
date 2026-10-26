@@ -16,31 +16,28 @@ export interface PretypeOptions {
   write(key: string): void;
   /** Whether output seen since the last pause shows a screen keys must not reach, such as a trust dialog. */
   blocks(output: string): boolean;
-  /** Whether to press Enter once the text is typed (the auto-submit setting). */
-  submit: boolean;
   timing: PretypeTiming;
 }
 
 /** The listener to feed a CLI's output, and the way to stand it down. */
 export type Pretyper = ((output: string) => void) & {
-  /** The user typed: nothing more is typed and nothing is submitted, so their keys never mix with ours. */
+  /** The user typed: nothing more is typed, so their keys never mix with ours. */
   cancel(): void;
 };
 
 /**
  * Types `text` into an interactive CLI: once its output has paused and that output shows no blocking screen, one
- * key at a time, and Enter after it only when `submit` is set. Returns the listener to feed the CLI's output; it
+ * key at a time, never Enter. Returns the listener to feed the CLI's output; it
  * types once, and stops for good when cancelled.
  */
-export function createPretyper({ text, write, blocks, submit, timing }: PretypeOptions): Pretyper {
+export function createPretyper({ text, write, blocks, timing }: PretypeOptions): Pretyper {
   let seen = "";
   let timer: ReturnType<typeof setTimeout> | undefined;
   let typing = false;
   let cancelled = false;
 
   async function typeAll(): Promise<void> {
-    const keys = submit ? [...text, "\r"] : [...text];
-    for (const key of keys) {
+    for (const key of text) {
       if (cancelled) return;
       write(key);
       if (timing.charDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, timing.charDelayMs));

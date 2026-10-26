@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { delimiter, extname, join, resolve } from "node:path";
+import { extname, join } from "node:path";
 import { hookSettings, type AgentAdapter } from "./agent-adapter.ts";
 import { envKey } from "./env-fs.ts";
 
@@ -38,17 +38,4 @@ export function launchArgs(adapter: AgentAdapter, hooksDir: string, sessionArgs:
   writeFileSync(temporary, JSON.stringify(hookSettings(adapter.statusEvents), null, 2));
   renameSync(temporary, file);
   return [...args, adapter.hookInjection.flag, file];
-}
-
-/** `env` with directory `dir` taken off its `PATH`, so a lookup there finds the real program behind a shim in it. */
-export function withoutPathDir(
-  env: Record<string, string | undefined>,
-  dir: string,
-): Record<string, string | undefined> {
-  const key = envKey(env, "PATH");
-  const skipped = resolve(dir).toLowerCase();
-  const kept = (env[key] ?? "")
-    .split(delimiter)
-    .filter((entry) => entry !== "" && resolve(entry).toLowerCase() !== skipped);
-  return { ...env, [key]: kept.join(delimiter) };
 }
