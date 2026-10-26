@@ -6,6 +6,8 @@ Blocked by: 39
 
 ## Question
 
+**Read first:** ADRs 0011, 0012 and 0015, `GLOSSARY.md`, ticket 14's Answer and the store code it built (`packages/core/src/state-store.ts`).
+
 **What to build:** the first of four tickets (41 to 44) that make the state store the only tracker with the behaviour the old tracker had and no new rules. Here the store gets the structured-document contract of ADR 0015, efforts, maps and every field a ticket has at creation, and reads return documents too. Until ticket 45 a repo is either on the store (it ran `dryland init`) or on markdown.
 
 The write contract (ADR 0015): every write is one document on stdin, run as parse (schema), check (content rules) and apply (compare-and-set); `--check` stops before apply; a diagnostic is one line with field path, rule id, what was wrong and the fix; the exit code tells which step failed. Reads take a reference argument and return a document by default, with a `$schema` id and field descriptions in the command help, so an agent never guesses a format; `--text` renders it for people.
