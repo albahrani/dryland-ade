@@ -26,6 +26,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Sandboxing the agent CLIs on a need-to-know basis](issues/07-sandboxing-the-agent-clis-on-a-need-to-know-basis.md): Three isolation levels (Off, Guarded, Contained); no agent write path to state; access requests with fail-fast AFK.
 - [Storage format and where the truth lives](issues/08-storage-format-and-where-the-truth-lives.md): Truth is an append-only event log on a never-checked-out git ref; syncs to an optional state remote; forges are reporting channels only.
 - [Migration from a skills-only repo](issues/09-migration-from-a-skills-only-repo.md): Explicit hands-off dryland migrate: idempotent import on a branch and staging ref, verified finish, installs prompts, zero loss via verbatim originals.
+- [The prompt set Dryland ships and tracking upstream releases](issues/10-the-prompt-set-dryland-ships-and-tracking-upstream.md): Workflow skills ship as prompts built from a pinned upstream snapshot plus overlays, synced per launch; user overrides allowed; maintainer adopts releases.
 
 ## Not yet specified
 
