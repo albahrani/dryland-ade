@@ -113,6 +113,8 @@ describe("live reporting", () => {
     expect((await post("{not json")).status).toBe(400);
     expect((await post({ ...EVENT, state: "exploded" })).status).toBe(400);
     expect((await post({ ...EVENT, session_id: 7 })).status).toBe(400);
+    expect((await post({ ...EVENT, timestamp: "" })).status).toBe(400);
+    expect((await post({ ...EVENT, timestamp: "yesterday" })).status).toBe(400);
     expect((await post({ state: "running" })).status).toBe(400);
     expect((await post({ ...EVENT, agent_session_id: 7 })).status).toBe(400);
     expect(received).toEqual([]);

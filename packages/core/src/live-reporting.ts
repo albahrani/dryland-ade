@@ -48,6 +48,7 @@ export function parseLiveEvent(value: unknown): LiveEvent | null {
   if (value === null || typeof value !== "object") return null;
   const { session_id, state, timestamp, agent_session_id } = value as Record<string, unknown>;
   if (typeof session_id !== "string" || typeof timestamp !== "string") return null;
+  if (!/^\d{4}-\d\d-\d\dT/.test(timestamp) || Number.isNaN(Date.parse(timestamp))) return null;
   if (!isReportedState(state)) return null;
   if (agent_session_id !== undefined && typeof agent_session_id !== "string") return null;
   const event: LiveEvent = { session_id, state, timestamp };

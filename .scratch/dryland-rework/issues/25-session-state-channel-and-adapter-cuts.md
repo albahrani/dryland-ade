@@ -19,4 +19,4 @@ The live channel is now a session state report: `{ session_id, state, timestamp 
 
 Commit: 0e0b035.
 
-Known limit: the timestamp is only checked to be a string.
+The timestamp must be an ISO date-time; the listener rejects any other.
