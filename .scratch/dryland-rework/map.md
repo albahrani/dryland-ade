@@ -28,11 +28,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 
 ## Not yet specified
 
-- Storage format and where the truth lives (is the repo still the source of truth?)
-- Effect on the local, GitHub and GitLab backends
 - UX rework: title and fog-item shape, description structure, what each screen shows, the unslop command's diff-and-accept view
-- The prompt set Dryland ships, and tracking upstream skill releases
-- Migration tooling from a skills-only repo
 - Which ADRs are superseded; spec and glossary consequences
 - Agent CLI adapter cleanup after dropping the best-effort tier (may need no ticket)
 

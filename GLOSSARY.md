@@ -174,3 +174,15 @@ _Avoid_: Override, escalation
 **Violation**:
 A recorded event where an agent changed tracker state outside the engine; the engine reverts the change and tells the agent.
 _Avoid_: Breach, incident
+
+**State store**:
+The engine's record of tickets, maps, fog and attachments, kept as an append-only log of events on a dedicated git ref that is never checked out; the only source of truth for tracker state.
+_Avoid_: Database, tracker files
+
+**Event**:
+One immutable entry in the state store (a claim, a revision, an analysis entry, a resolve); current state is derived by replaying events.
+_Avoid_: Change, record
+
+**State remote**:
+The git remote the state store syncs to: none (local-only), `origin`, or a separate repo such as a private one shared by a team.
+_Avoid_: Backend, tracker remote
