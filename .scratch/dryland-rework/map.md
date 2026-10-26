@@ -24,6 +24,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Ticket and map lifecycle](issues/02-ticket-and-map-lifecycle.md): Ticket is named parts (report, analysis log, description, summary); edits via revisions, reopen for resolved; map charting or done.
 - [Live state reporting: improve, shrink or cut](issues/06-live-state-reporting-improve-shrink-or-cut.md): Cut panel, ticket.changed, lock file, adoption and guesser; keep a session-only state channel.
 - [Sandboxing the agent CLIs on a need-to-know basis](issues/07-sandboxing-the-agent-clis-on-a-need-to-know-basis.md): Three isolation levels (Off, Guarded, Contained); no agent write path to state; access requests with fail-fast AFK.
+- [Storage format and where the truth lives](issues/08-storage-format-and-where-the-truth-lives.md): Truth is an append-only event log on a never-checked-out git ref; syncs to an optional state remote; forges are reporting channels only.
 
 ## Not yet specified
 
