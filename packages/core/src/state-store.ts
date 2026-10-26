@@ -1,82 +1,87 @@
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { DrylandError, requireOneLine } from "./errors.ts";
+import { type Diagnostic, parseDocument, WriteFailure } from "./documents.ts";
+import { DrylandError } from "./errors.ts";
+import { gitOk as gitOkIn, runGit as runGitIn } from "./git-exec.ts";
 import { assertMapName } from "./map.ts";
-import { TICKET_TYPES, TRIAGE_ROLES, type Ticket, type TicketType, type TriageRole } from "./ticket.ts";
+import { bindStore, storeDir } from "./store-dir.ts";
+import { MAP_INPUT, TICKET_INPUT } from "./store-schemas.ts";
+import type { Ticket, TicketState, TicketType, TriageRole } from "./ticket.ts";
 
-/** The ref holding the event log. It is never checked out, so no worktree or container mount contains it. */
+/** The ref holding the event log. It is never checked out, and it lives in a bare git dir outside the repo. */
 export const STATE_REF = "refs/dryland/state";
+
+/** The version of the event format. An event of any other version fails loudly on replay. */
+export const EVENT_SCHEMA = 1;
 
 /** Who wrote an event: a person, an agent in a session, or the engine itself. */
 export type AuthorKind = "human" | "agent" | "engine";
 
-interface TicketCreated {
-  kind: "ticket.created";
-  map: string;
+export interface StoreCriterion {
+  text: string;
+  done: boolean;
+}
+
+/** A ticket as the store holds it: every field it has at creation, plus the claim the lifecycle events set. */
+export interface StoreTicket {
+  effort: string;
+  /** The ticket number within its effort, zero padded (`01`). */
   id: string;
   title: string;
-  type: TicketType;
+  type: Exclude<TicketType, "none">;
+  status: TicketState;
   report: string;
+  criteria: StoreCriterion[];
+  /** Repo-relative path of the effort's spec file, when the ticket names one. */
+  spec: string | null;
+  /** Ids of the tickets of the same effort that block this one. */
   blockedBy: string[];
   triageRole: TriageRole | null;
+  hitl: boolean;
+  claim: { holder: string; at: string } | null;
+  createdAt: string;
 }
+
+/** An effort's map. An effort without one is a standalone ticket or a set of them. */
+export interface StoreMap {
+  effort: string;
+  title: string;
+  destination: string;
+  notes: string;
+  fog: string[];
+  outOfScope: string[];
+}
+
+export interface StoreState {
+  tickets: StoreTicket[];
+  maps: StoreMap[];
+}
+
+interface TicketCreated {
+  kind: "ticket.created";
+  effort: string;
+  id: string;
+  title: string;
+  type: StoreTicket["type"];
+  report: string;
+  criteria: StoreCriterion[];
+  spec: string | null;
+  blockedBy: string[];
+  triageRole: TriageRole | null;
+  hitl: boolean;
+}
+
+interface MapCreated extends StoreMap {
+  kind: "map.created";
+}
+
+type EventBody = TicketCreated | MapCreated;
 
 /** An immutable record of one change, stored as one file of the state ref. */
-export type StateEvent = TicketCreated & { at: string; author: AuthorKind };
-
-interface GitResult {
-  stdout: string;
-  exitCode: number;
-}
-
-/** Runs `git` with optional stdin and env; never rejects on a non-zero exit. Output is bytes so blobs survive. */
-function runGit(cwd: string, args: string[], opts: { input?: string; env?: Record<string, string> } = {}) {
-  return new Promise<GitResult & { raw: Buffer; stderr: string }>((resolve, reject) => {
-    const child = spawn("git", args, { cwd, env: { ...process.env, ...opts.env }, windowsHide: true });
-    const out: Buffer[] = [];
-    let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
-    child.on("error", reject);
-    child.on("close", (code) => {
-      const raw = Buffer.concat(out);
-      resolve({ stdout: raw.toString("utf8"), raw, stderr, exitCode: code ?? 1 });
-    });
-    // git may exit without reading its stdin; that is not an error.
-    child.stdin.on("error", () => undefined);
-    child.stdin.end(opts.input ?? "");
-  });
-}
-
-async function gitOk(cwd: string, args: string[], opts?: { input?: string; env?: Record<string, string> }) {
-  const result = await runGit(cwd, args, opts);
-  if (result.exitCode !== 0) {
-    throw new DrylandError(
-      `git ${args[0] ?? ""} failed: ${result.stderr.trim() || "no output"}`,
-      "Run dryland from inside a git repository.",
-    );
-  }
-  return result.stdout.trim();
-}
-
-async function commonDir(cwd: string): Promise<string> {
-  return gitOk(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-}
-
-/** The commit the state ref points at, or `null` when the repo has no state store. */
-async function stateHead(cwd: string): Promise<string | null> {
-  const result = await runGit(cwd, ["rev-parse", "--verify", "--quiet", STATE_REF]);
-  return result.exitCode === 0 ? result.stdout.trim() : null;
-}
-
-/** Whether the repo containing `cwd` keeps its tickets in the state store. */
-export async function isStoreInitialised(cwd: string): Promise<boolean> {
-  return (await stateHead(cwd).catch(() => null)) !== null;
-}
+export type StateEvent = EventBody & { schema: number; at: string; author: AuthorKind };
 
 const AUTHOR_ENV = {
   GIT_AUTHOR_NAME: "Dryland",
@@ -85,25 +90,68 @@ const AUTHOR_ENV = {
   GIT_COMMITTER_EMAIL: "dryland@localhost",
 };
 
-/** Creates the state ref with an empty tree. Does nothing, and says so, when it already exists. */
-export async function initStore(cwd: string): Promise<{ created: boolean }> {
-  if ((await stateHead(cwd)) !== null) return { created: false };
-  const tree = await gitOk(cwd, ["mktree"]);
-  const commit = await gitOk(cwd, ["commit-tree", tree, "-m", "Initialise the Dryland state store"], {
-    env: AUTHOR_ENV,
-  });
+const notInitialised = () =>
+  new DrylandError("This repo has no Dryland state store.", "Run `dryland init` to create one.");
+
+/** A git runner pinned to the store dir with `GIT_DIR`, so it can never touch the repo's own refs. */
+function inStore(dir: string) {
+  const env = (extra?: Record<string, string>) => ({ GIT_DIR: dir, ...extra });
+  return {
+    run: (args: string[], opts: { input?: string; env?: Record<string, string> } = {}) =>
+      runGitIn(dir, args, { ...opts, env: env(opts.env) }),
+    ok: (args: string[], opts: { input?: string; env?: Record<string, string> } = {}) =>
+      gitOkIn(dir, args, { ...opts, env: env(opts.env) }),
+  };
+}
+type StoreGit = ReturnType<typeof inStore>;
+
+/** The commit the state ref points at, or `null` when the store has none. */
+async function stateHead(git: StoreGit): Promise<string | null> {
+  const result = await git.run(["rev-parse", "--verify", "--quiet", STATE_REF]);
+  return result.exitCode === 0 ? result.stdout.trim() : null;
+}
+
+/** The store of the repo containing `cwd`, with its head; fails with the next action when there is none. */
+async function openStore(cwd: string): Promise<{ dir: string; git: StoreGit; head: string }> {
+  const dir = await storeDir(cwd).catch(() => null);
+  if (dir === null) throw notInitialised();
+  const git = inStore(dir);
+  const head = await stateHead(git);
+  if (head === null) throw notInitialised();
+  return { dir, git, head };
+}
+
+/** Whether the repo containing `cwd` keeps its tickets in the state store. */
+export async function isStoreInitialised(cwd: string): Promise<boolean> {
+  const dir = await storeDir(cwd).catch(() => null);
+  return dir !== null && (await stateHead(inStore(dir))) !== null;
+}
+
+/**
+ * Binds the repo to a store and creates the state ref with an empty tree. `bind` re-binds the repo to the existing
+ * store of that id. Does nothing, and says so, when the store already has its ref.
+ */
+export async function initStore(cwd: string, bind?: string): Promise<{ created: boolean }> {
+  const { dir } = await bindStore(cwd, bind);
+  const git = inStore(dir);
+  if ((await stateHead(git)) !== null) return { created: false };
+  const tree = await git.ok(["mktree"]);
+  const commit = await git.ok(["commit-tree", tree, "-m", "Initialise the Dryland state store"], { env: AUTHOR_ENV });
   const zero = "0".repeat(commit.length);
-  const result = await runGit(cwd, ["update-ref", STATE_REF, commit, zero]);
+  const result = await git.run(["update-ref", STATE_REF, commit, zero]);
   // A concurrent init that won the race leaves the same result.
-  if (result.exitCode !== 0 && (await stateHead(cwd)) === null) {
-    throw new DrylandError(`Could not create ${STATE_REF}: ${result.stderr.trim()}`, "Check the repo is writable.");
+  if (result.exitCode !== 0 && (await stateHead(git)) === null) {
+    throw new DrylandError(
+      `Could not create ${STATE_REF}: ${result.stderr.trim()}`,
+      "Check the store dir is writable.",
+    );
   }
   return { created: true };
 }
 
-/** Every event of the commit `head`, oldest first. */
-async function replayEvents(cwd: string, head: string): Promise<StateEvent[]> {
-  const listing = await gitOk(cwd, ["ls-tree", "-r", head]);
+/** Every event of the commit `head`, oldest first. An event of an unknown schema stops the replay. */
+async function replayEvents(git: StoreGit, head: string): Promise<StateEvent[]> {
+  const listing = await git.ok(["ls-tree", "-r", head]);
   const files = listing
     .split("\n")
     .filter((line) => line !== "")
@@ -114,14 +162,27 @@ async function replayEvents(cwd: string, head: string): Promise<StateEvent[]> {
     .filter((f) => f.path.startsWith("events/"))
     .sort((a, b) => a.path.localeCompare(b.path));
   if (files.length === 0) return [];
-  const batch = await runGit(cwd, ["cat-file", "--batch"], { input: files.map((f) => `${f.sha}\n`).join("") });
+  const batch = await git.run(["cat-file", "--batch"], { input: files.map((f) => `${f.sha}\n`).join("") });
   const events: StateEvent[] = [];
   let offset = 0;
-  for (let i = 0; i < files.length; i++) {
+  for (const file of files) {
     const newline = batch.raw.indexOf(0x0a, offset);
     const size = Number(batch.raw.subarray(offset, newline).toString("utf8").split(" ")[2]);
     const start = newline + 1;
-    events.push(JSON.parse(batch.raw.subarray(start, start + size).toString("utf8")) as StateEvent);
+    const event = JSON.parse(batch.raw.subarray(start, start + size).toString("utf8")) as StateEvent;
+    if (event.schema !== EVENT_SCHEMA) {
+      throw new DrylandError(
+        `Event ${file.path} has schema ${String(event.schema)}, but this Dryland reads schema ${EVENT_SCHEMA}.`,
+        "Update Dryland, or re-create the store with `dryland init` if it was written by an older build.",
+      );
+    }
+    if (event.kind !== "ticket.created" && event.kind !== "map.created") {
+      throw new DrylandError(
+        `Event ${file.path} has the unknown kind "${String((event as { kind?: unknown }).kind)}".`,
+        "Update Dryland, or re-create the store with `dryland init` if it was written by an older build.",
+      );
+    }
+    events.push(event);
     offset = start + size + 1;
   }
   return events;
@@ -129,43 +190,53 @@ async function replayEvents(cwd: string, head: string): Promise<StateEvent[]> {
 
 const padId = (n: number) => String(n).padStart(2, "0");
 
-/** The tickets the events add up to. */
-function reduce(events: StateEvent[]): Ticket[] {
-  const tickets: Ticket[] = [];
+/** The state the events add up to. */
+function reduce(events: StateEvent[]): StoreState {
+  const state: StoreState = { tickets: [], maps: [] };
   for (const event of events) {
     if (event.kind === "ticket.created") {
-      tickets.push({
+      state.tickets.push({
+        effort: event.effort,
         id: event.id,
-        map: event.map,
         title: event.title,
         type: event.type,
-        state: "open",
-        claimant: null,
-        blockers: event.blockedBy,
+        status: "open",
+        report: event.report,
+        criteria: event.criteria,
+        spec: event.spec,
+        blockedBy: event.blockedBy,
         triageRole: event.triageRole,
-        body: event.report,
-        answer: null,
-        comments: [],
-        raw: {},
+        hitl: event.hitl,
+        claim: null,
+        createdAt: event.at,
+      });
+    } else {
+      state.maps.push({
+        effort: event.effort,
+        title: event.title,
+        destination: event.destination,
+        notes: event.notes,
+        fog: event.fog,
+        outOfScope: event.outOfScope,
       });
     }
   }
-  return tickets;
+  state.tickets.sort((a, b) => a.effort.localeCompare(b.effort) || Number(a.id) - Number(b.id));
+  return state;
 }
 
-async function cachePath(cwd: string): Promise<string> {
-  return join(await commonDir(cwd), "dryland", "cache.sqlite");
-}
+/** Bumped when the cached shape changes, so an old cache is rebuilt rather than misread. */
+const CACHE_VERSION = "2";
 
 /** Reads the cache for `head`, or `null` when it is missing, stale or unreadable. */
-function readCache(path: string, head: string): Ticket[] | null {
+function readCache(path: string, head: string): StoreState | null {
   let db: DatabaseSync | undefined;
   try {
     db = new DatabaseSync(path, { readOnly: true });
-    const meta = db.prepare("SELECT value FROM meta WHERE key = 'head'").get() as { value: string } | undefined;
-    if (meta?.value !== head) return null;
-    const rows = db.prepare("SELECT json FROM tickets ORDER BY map, id").all() as { json: string }[];
-    return rows.map((row) => JSON.parse(row.json) as Ticket);
+    const rows = db.prepare("SELECT key, value FROM meta").all() as { key: string; value: string }[];
+    const meta = new Map(rows.map((r) => [r.key, r.value]));
+    if (meta.get("head") !== head || meta.get("version") !== CACHE_VERSION) return null;
+    return JSON.parse(meta.get("state") ?? "null") as StoreState | null;
   } catch {
     return null;
   } finally {
@@ -173,16 +244,16 @@ function readCache(path: string, head: string): Ticket[] | null {
   }
 }
 
-function writeCache(path: string, head: string, tickets: Ticket[]): void {
+function writeCache(path: string, head: string, state: StoreState): void {
   const db = new DatabaseSync(path);
   try {
     db.exec("BEGIN");
-    db.exec("DROP TABLE IF EXISTS meta; DROP TABLE IF EXISTS tickets");
+    db.exec("DROP TABLE IF EXISTS meta");
     db.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-    db.exec("CREATE TABLE tickets (map TEXT NOT NULL, id TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY (map, id))");
-    const insert = db.prepare("INSERT INTO tickets (map, id, json) VALUES (?, ?, ?)");
-    for (const t of tickets) insert.run(t.map, t.id, JSON.stringify(t));
-    db.prepare("INSERT INTO meta (key, value) VALUES ('head', ?)").run(head);
+    const insert = db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)");
+    insert.run("head", head);
+    insert.run("version", CACHE_VERSION);
+    insert.run("state", JSON.stringify(state));
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -192,107 +263,269 @@ function writeCache(path: string, head: string, tickets: Ticket[]): void {
   }
 }
 
-/** Every ticket in the store, from the cache when it matches the ref and by replay (rebuilding it) when not. */
-export async function readStoreTickets(cwd: string): Promise<Ticket[]> {
-  const head = await stateHead(cwd);
-  if (head === null) throw notInitialised();
-  const path = await cachePath(cwd);
+/** Everything in the store, from the cache when it matches the ref and by replay (rebuilding it) when not. */
+export async function readStoreState(cwd: string): Promise<StoreState> {
+  const { dir, git, head } = await openStore(cwd);
+  const path = join(dir, "dryland", "cache.sqlite");
   const cached = readCache(path, head);
   if (cached !== null) return cached;
-  const tickets = reduce(await replayEvents(cwd, head));
+  const state = reduce(await replayEvents(git, head));
   // The cache is disposable: failing to write it only costs the next read a replay.
   try {
     await mkdir(join(path, ".."), { recursive: true });
     await rm(path, { force: true });
-    writeCache(path, head, tickets);
+    writeCache(path, head, state);
   } catch {
     // ignored
   }
-  return tickets;
+  return state;
 }
 
-const notInitialised = () =>
-  new DrylandError("This repo has no Dryland state store.", "Run `dryland init` to create one.");
+/** A store ticket as the rest of the app sees tickets. */
+export function toTicket(t: StoreTicket): Ticket {
+  return {
+    id: t.id,
+    map: t.effort,
+    title: t.title,
+    type: t.type,
+    state: t.status,
+    claimant: t.claim?.holder ?? null,
+    blockers: t.blockedBy,
+    triageRole: t.triageRole,
+    body: t.report,
+    answer: null,
+    comments: [],
+    raw: {},
+  };
+}
 
-export interface CreateStoreTicketInput {
-  map: string;
-  title: string;
-  type: string;
-  question?: string;
-  blockedBy?: string[];
-  /** A triage role to start in. */
-  status?: string;
+/** Every ticket in the store. */
+export async function readStoreTickets(cwd: string): Promise<Ticket[]> {
+  return (await readStoreState(cwd)).tickets.map(toTicket);
+}
+
+interface Plan {
+  diagnostics: Diagnostic[];
+  event: EventBody | null;
+  /** The ref of what the event creates, for the commit message and the result. */
+  subject: string;
+}
+
+export interface WriteOptions {
+  author: AuthorKind;
+  /** Stop after the check step: nothing is written. */
+  checkOnly?: boolean;
 }
 
 const MAX_ATTEMPTS = 8;
 
 /**
- * Appends a `ticket.created` event as one compare-and-set on the state ref: the ticket number is chosen from the
- * state at the parent commit, and a lost race retries against the newer state.
+ * Runs a write: `plan` checks the document against the state at the head, and an event it returns is appended as one
+ * compare-and-set on the state ref. A lost race plans again against the newer state, so a rule is never decided on
+ * stale data. Returns the state after the event; for a check-only run that state is what the write would give.
  */
-export async function createStoreTicket(
+async function writeToStore(
   cwd: string,
-  input: CreateStoreTicketInput,
-  author: AuthorKind,
-): Promise<Ticket> {
-  assertMapName(input.map);
-  const title = requireOneLine("ticket title", input.title, "title", "<short title>");
-  const type = TICKET_TYPES.find((known) => known === input.type.toLowerCase());
-  if (type === undefined) {
-    throw new DrylandError(
-      `"${input.type}" is not a ticket type.`,
-      `Use --type with one of: ${TICKET_TYPES.join(", ")}.`,
-    );
-  }
-  const role = input.status === undefined ? null : TRIAGE_ROLES.find((known) => known === input.status);
-  if (role === undefined) {
-    throw new DrylandError(`"${input.status}" is not a triage role.`, `Use one of: ${TRIAGE_ROLES.join(", ")}.`);
-  }
+  plan: (state: StoreState) => Plan,
+  opts: WriteOptions,
+): Promise<{ state: StoreState; subject: string; written: boolean }> {
   const scratch = await mkdtemp(join(tmpdir(), "dryland-state-"));
   try {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const head = await stateHead(cwd);
-      if (head === null) throw notInitialised();
-      const events = await replayEvents(cwd, head);
-      const own = reduce(events).filter((t) => t.map === input.map);
-      const blockedBy = (input.blockedBy ?? []).map((n) => padId(Number(n)));
-      for (const blocker of blockedBy) {
-        if (!own.some((t) => t.id === blocker)) {
-          throw new DrylandError(
-            `Blocker ${input.map}/${blocker} does not exist.`,
-            "Name tickets of the same map, or create the blocker first.",
-          );
-        }
-      }
-      const id = padId(own.reduce((max, t) => Math.max(max, Number(t.id)), 0) + 1);
+      const { git, head } = await openStore(cwd);
+      const events = await replayEvents(git, head);
+      const planned = plan(reduce(events));
+      if (planned.diagnostics.length > 0 || planned.event === null)
+        throw new WriteFailure("check", planned.diagnostics);
       const event: StateEvent = {
-        kind: "ticket.created",
+        schema: EVENT_SCHEMA,
         at: new Date().toISOString(),
-        author,
-        map: input.map,
-        id,
-        title,
-        type,
-        report: input.question?.trim() ?? "",
-        blockedBy,
-        triageRole: role,
+        author: opts.author,
+        ...planned.event,
       };
+      const after = reduce([...events, event]);
+      if (opts.checkOnly) return { state: after, subject: planned.subject, written: false };
       const name = `events/${String(events.length + 1).padStart(8, "0")}-${randomUUID()}.json`;
-      const blob = await gitOk(cwd, ["hash-object", "-w", "--stdin"], { input: `${JSON.stringify(event)}\n` });
+      const blob = await git.ok(["hash-object", "-w", "--stdin"], { input: `${JSON.stringify(event)}\n` });
       const env = { ...AUTHOR_ENV, GIT_INDEX_FILE: join(scratch, "index") };
       await rm(env.GIT_INDEX_FILE, { force: true });
-      await gitOk(cwd, ["read-tree", head], { env });
-      await gitOk(cwd, ["update-index", "--add", "--cacheinfo", `100644,${blob},${name}`], { env });
-      const tree = await gitOk(cwd, ["write-tree"], { env });
-      const commit = await gitOk(cwd, ["commit-tree", tree, "-p", head, "-m", `ticket.created ${input.map}/${id}`], {
-        env,
-      });
-      if ((await runGit(cwd, ["update-ref", STATE_REF, commit, head])).exitCode === 0) {
-        return reduce([event])[0] as Ticket;
+      await git.ok(["read-tree", head], { env });
+      await git.ok(["update-index", "--add", "--cacheinfo", `100644,${blob},${name}`], { env });
+      const tree = await git.ok(["write-tree"], { env });
+      const commit = await git.ok(["commit-tree", tree, "-p", head, "-m", `${event.kind} ${planned.subject}`], { env });
+      if ((await git.run(["update-ref", STATE_REF, commit, head])).exitCode === 0) {
+        return { state: after, subject: planned.subject, written: true };
       }
     }
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
-  throw new DrylandError("The state store kept changing underneath this command.", "Run it again.");
+  throw new WriteFailure("apply", [
+    {
+      path: "$",
+      rule: "store-busy",
+      problem: "The state store kept changing underneath this command.",
+      fix: "Run the command again.",
+    },
+  ]);
+}
+
+interface TicketDocument {
+  effort: string;
+  title: string;
+  type: StoreTicket["type"];
+  report?: string;
+  criteria?: StoreCriterion[];
+  spec?: string;
+  blockedBy?: string[];
+  triageRole?: string;
+  hitl?: boolean;
+}
+
+interface MapDocument {
+  effort: string;
+  title: string;
+  destination?: string;
+  notes?: string;
+  fog?: string[];
+  outOfScope?: string[];
+}
+
+const diagnostic = (path: string, rule: string, problem: string, fix: string): Diagnostic => ({
+  path,
+  rule,
+  problem,
+  fix,
+});
+
+function checkEffort(effort: string): Diagnostic[] {
+  try {
+    assertMapName(effort);
+    return [];
+  } catch {
+    return [
+      diagnostic(
+        "effort",
+        "bad-effort",
+        `"${effort}" is not an effort slug.`,
+        "Use one word without slashes, spaces or a leading dot, e.g. shop.",
+      ),
+    ];
+  }
+}
+
+function checkOneLine(path: string, value: string): Diagnostic[] {
+  return value.trim() === "" || /[\r\n]/.test(value)
+    ? [diagnostic(path, "one-line", "It must be one non-empty line.", `Write ${path} as a single line of text.`)]
+    : [];
+}
+
+function checkTicket(doc: TicketDocument, state: StoreState): Diagnostic[] {
+  const out = [...checkEffort(doc.effort), ...checkOneLine("title", doc.title)];
+  if (doc.spec !== undefined && (/^([a-z]:|[\\/])/i.test(doc.spec) || doc.spec.split(/[\\/]/).includes(".."))) {
+    out.push(
+      diagnostic(
+        "spec",
+        "bad-path",
+        "The spec must be a path inside the repo.",
+        "Use a relative path like .scratch/shop/spec.md.",
+      ),
+    );
+  }
+  (doc.criteria ?? []).forEach((c, i) => out.push(...checkOneLine(`criteria[${i}].text`, c.text)));
+  (doc.blockedBy ?? []).forEach((ref, i) => {
+    const match = /^([^/\s]+)\/(\d+)$/.exec(ref);
+    const path = `blockedBy[${i}]`;
+    if (match === null) {
+      out.push(
+        diagnostic(
+          path,
+          "bad-reference",
+          `"${ref}" is not a ticket reference.`,
+          "Write it as effort/NN, e.g. shop/01.",
+        ),
+      );
+    } else if (match[1] !== doc.effort) {
+      out.push(
+        diagnostic(path, "cross-effort", `${ref} is in another effort.`, `Block on tickets of ${doc.effort} only.`),
+      );
+    } else if (!state.tickets.some((t) => t.effort === doc.effort && Number(t.id) === Number(match[2]))) {
+      out.push(
+        diagnostic(
+          path,
+          "no-such-ticket",
+          `Blocker ${ref} does not exist.`,
+          "Create the blocker first, or name an existing ticket.",
+        ),
+      );
+    }
+  });
+  return out;
+}
+
+/** Creates a ticket from a document: parse, check, then append one `ticket.created` event. */
+export async function createStoreTicket(cwd: string, text: string, opts: WriteOptions) {
+  const doc = parseDocument<TicketDocument>(TICKET_INPUT, text);
+  const role = doc.triageRole === undefined || doc.triageRole === "" ? null : (doc.triageRole as TriageRole);
+  const done = await writeToStore(
+    cwd,
+    (state) => {
+      const number =
+        state.tickets.filter((t) => t.effort === doc.effort).reduce((max, t) => Math.max(max, Number(t.id)), 0) + 1;
+      const id = padId(number);
+      return {
+        diagnostics: checkTicket(doc, state),
+        subject: `${doc.effort}/${id}`,
+        event: {
+          kind: "ticket.created",
+          effort: doc.effort,
+          id,
+          title: doc.title.trim(),
+          type: doc.type,
+          report: doc.report?.trim() ?? "",
+          criteria: (doc.criteria ?? []).map((c) => ({ text: c.text.trim(), done: c.done })),
+          spec: doc.spec ?? null,
+          blockedBy: (doc.blockedBy ?? []).map((ref) => padId(Number(ref.split("/")[1]))),
+          triageRole: role,
+          hitl: doc.hitl ?? false,
+        },
+      };
+    },
+    opts,
+  );
+  const [effort = "", id = ""] = done.subject.split("/");
+  const ticket = done.state.tickets.find((t) => t.effort === effort && t.id === id) as StoreTicket;
+  return { ticket, written: done.written };
+}
+
+/** Creates an effort's map from a document: parse, check, then append one `map.created` event. */
+export async function createStoreMap(cwd: string, text: string, opts: WriteOptions) {
+  const doc = parseDocument<MapDocument>(MAP_INPUT, text);
+  const done = await writeToStore(
+    cwd,
+    (state) => {
+      const diagnostics = [...checkEffort(doc.effort), ...checkOneLine("title", doc.title)];
+      if (state.maps.some((m) => m.effort === doc.effort)) {
+        diagnostics.push(
+          diagnostic("effort", "map-exists", `${doc.effort} already has a map.`, "Edit the existing map (ticket 44)."),
+        );
+      }
+      return {
+        diagnostics,
+        subject: doc.effort,
+        event: {
+          kind: "map.created",
+          effort: doc.effort,
+          title: doc.title.trim(),
+          destination: doc.destination?.trim() ?? "",
+          notes: doc.notes?.trim() ?? "",
+          fog: doc.fog ?? [],
+          outOfScope: doc.outOfScope ?? [],
+        },
+      };
+    },
+    opts,
+  );
+  const map = done.state.maps.find((m) => m.effort === done.subject) as StoreMap;
+  return { map, written: done.written };
 }

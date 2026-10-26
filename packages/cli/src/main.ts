@@ -5,22 +5,27 @@ import {
   claimTicket,
   commentOnTicket,
   compatPrompt,
+  createStoreMap,
   createStoreTicket,
   createTicket,
   copilotPaths,
   createWorktree,
   currentAgentSession,
+  documentHelp,
   DrylandError,
+  formatDiagnostic,
   findMainCheckout,
   hookStateOf,
   indexMap,
   initStore,
   installAgentHooks,
   isStoreInitialised,
+  listStoreTickets,
   linkLauncher,
   isReportedState,
   listTickets,
   listWorktrees,
+  MAP_INPUT,
   mapFrontier,
   nodeProcessRunner,
   pruneWorktree,
@@ -36,7 +41,11 @@ import {
   sendLiveEvent,
   sessionsOf,
   showMap,
+  showStoreMap,
+  showStoreTicket,
   showTicket,
+  storeFrontier,
+  TICKET_INPUT,
   tickTicket,
   ticketKind,
   triageTicket,
@@ -45,10 +54,13 @@ import {
   type DoctorReport,
   type IndexedSession,
   type LiveEvent,
+  type MapDocument,
   type MapView,
   type ReportedState,
   type Ticket,
+  type TicketDocument,
   type WorktreeEntry,
+  WriteFailure,
 } from "@dryland/core";
 
 function formatWorktrees(entries: WorktreeEntry[]): string {
@@ -133,12 +145,55 @@ function formatMap(map: MapView): string {
   return `${lines.join("\n")}\n`;
 }
 
+/** A ticket document as the ticket formatters take tickets. */
+const asTicket = (d: TicketDocument): Ticket => ({
+  id: d.id,
+  map: d.effort,
+  title: d.title,
+  type: d.type,
+  state: d.status,
+  claimant: d.claim?.holder ?? null,
+  blockers: d.blockedBy.map((ref) => ref.split("/")[1] ?? ref),
+  triageRole: d.triageRole,
+  body: d.report,
+  answer: null,
+  comments: [],
+  raw: {},
+});
+
+function formatStoreTicket(d: TicketDocument, sessions: IndexedSession[]): string {
+  const text = formatTicket(asTicket(d), sessions).trimEnd().split("\n");
+  const extra = [
+    ...(d.spec === null ? [] : [`Spec: ${d.spec}`]),
+    ...(d.hitl ? ["Human in the loop: yes"] : []),
+    ...(d.criteria.length === 0
+      ? []
+      : ["Criteria:", ...d.criteria.map((c) => `  - [${c.done ? "x" : " "}] ${c.text}`)]),
+  ];
+  text.splice(text.findIndex((line) => line.startsWith("Triage: ")) + 1, 0, ...extra);
+  return `${text.join("\n")}\n`;
+}
+
+function formatStoreMap(d: MapDocument): string {
+  const view = {
+    name: d.effort,
+    title: d.map?.title ?? d.effort,
+    destination: d.map?.destination ?? "",
+    fog: d.map?.fog ?? [],
+    decisions: [],
+    sections: [],
+    tickets: d.tickets.map(asTicket),
+  };
+  return formatMap(view);
+}
+
 const USAGE = [
-  "Usage: dryland init [--json]",
-  "       dryland ticket list [--json]",
-  "       dryland ticket show <map>/<number> [--json]",
+  "Usage: dryland init [--bind <repo id>] [--json]",
+  "       dryland ticket list [--text] [--json]",
+  "       dryland ticket show <map>/<number> [--text] [--json]",
   "       dryland ticket claim <map>/<number> [--commit | --no-commit] [--json]",
   "       dryland ticket release <map>/<number> [--commit | --no-commit] [--json]",
+  "       dryland ticket create [--check] [--help]   (state store: a JSON document on stdin)",
   "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
   "                             [--blocked-by <number>[,<number>...]] [--status <role>] [--commit | --no-commit] [--json]",
   "       dryland ticket resolve <map>/<number> --answer <text> [--amend] [--commit | --no-commit] [--json]",
@@ -147,8 +202,9 @@ const USAGE = [
   "                            [--commit | --no-commit] [--json]",
   "       dryland ticket comment <map>/<number> --text <text> [--commit | --no-commit] [--json]",
   "       dryland ticket triage <map>/<number> --role <role> [--commit | --no-commit] [--json]",
-  "       dryland map show <map> [--json]",
-  "       dryland map frontier <map> [--json]",
+  "       dryland map create [--check] [--help]   (state store: a JSON document on stdin)",
+  "       dryland map show <map> [--text] [--json]",
+  "       dryland map frontier <map> [--text] [--json]",
   "       dryland map index <map> --title <title> --link <path> --gist <text> [--commit | --no-commit] [--json]",
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
@@ -160,6 +216,8 @@ const USAGE = [
 
 interface Output {
   value: unknown;
+  /** A read of the state store: printed as its document unless `--text` asks for the rendering. */
+  structured?: true;
   text: string;
   /** Written to stderr; the command still succeeded. */
   warnings?: string[];
@@ -229,6 +287,13 @@ async function recordAgentSession(ticket: string): Promise<string[]> {
 /** Whether to commit: `--commit` or `--no-commit` when given, so the app's setting wins; otherwise git's `dryland.autoCommit` decides. */
 const autoCommit = (flags: Flags) => flags.commit;
 
+/** Whether this command runs inside an Agent CLI session, which makes an agent its author. */
+const callerAuthor = (): "human" | "agent" =>
+  currentAgentSession(AGENT_ADAPTERS, process.env) !== null || !!process.env["DRYLAND_SESSION_ID"] ? "agent" : "human";
+
+/** The document on stdin for a write command. */
+const readDocument = (): Promise<string> => readStdin(5000);
+
 /** Every command: whether it takes a target (a ticket or map), and what it prints. */
 const COMMANDS: Record<
   string,
@@ -239,6 +304,8 @@ const COMMANDS: Record<
     switches?: string[];
     /** The value options (without `--`) the command accepts; any other is refused rather than ignored. */
     options?: string[];
+    /** Printed by `--help`: the usage and the schema of the document the command reads. */
+    help?: string;
     /** Set on commands that act on one ticket: run inside an Agent CLI session, that session is recorded on it. */
     recordsSession?: true;
     run: (target: string, flags: Flags) => Promise<Output>;
@@ -246,8 +313,9 @@ const COMMANDS: Record<
 > = {
   init: {
     target: false,
-    run: async () => {
-      const { created } = await initStore(process.cwd());
+    options: ["bind"],
+    run: async (_target, flags) => {
+      const { created } = await initStore(process.cwd(), flags.values["bind"]);
       return {
         value: { created },
         text: created ? "Created the Dryland state store.\n" : "The Dryland state store already exists.\n",
@@ -257,6 +325,10 @@ const COMMANDS: Record<
   "ticket list": {
     target: false,
     run: async () => {
+      if (await isStoreInitialised(process.cwd())) {
+        const list = await listStoreTickets(process.cwd());
+        return { value: list, structured: true, text: formatTickets(list.tickets.map(asTicket)) };
+      }
       const tickets = await listTickets(nodeProcessRunner, process.cwd());
       return { value: tickets, text: formatTickets(tickets) };
     },
@@ -264,6 +336,17 @@ const COMMANDS: Record<
   "ticket show": {
     target: true,
     run: async (target) => {
+      if (await isStoreInitialised(process.cwd())) {
+        const document = await showStoreTicket(process.cwd(), target);
+        const { index, warnings } = await readSessionIndex(nodeProcessRunner, process.cwd());
+        const sessions = sessionsOf(index, document.ref);
+        return {
+          value: { ...document, sessions },
+          structured: true,
+          text: formatStoreTicket(document, sessions),
+          warnings,
+        };
+      }
       const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
       const { index, warnings } = await readSessionIndex(nodeProcessRunner, process.cwd());
       const sessions = sessionsOf(index, `${ticket.map}/${ticket.id}`);
@@ -300,22 +383,26 @@ const COMMANDS: Record<
   "ticket create": {
     target: false,
     options: ["map", "title", "type", "question", "blocked-by", "status"],
+    switches: ["check"],
+    help: documentHelp("dryland ticket create [--check] [--json] < ticket.json", TICKET_INPUT),
     run: async (_target, flags) => {
       if (await isStoreInitialised(process.cwd())) {
-        const agent = currentAgentSession(AGENT_ADAPTERS, process.env) !== null || !!process.env["DRYLAND_SESSION_ID"];
-        const ticket = await createStoreTicket(
-          process.cwd(),
-          {
-            map: required(flags, "map"),
-            title: required(flags, "title"),
-            type: required(flags, "type"),
-            question: flags.values["question"],
-            status: flags.values["status"],
-            blockedBy: numberList(flags, "blocked-by"),
-          },
-          agent ? "agent" : "human",
-        );
-        return { value: ticket, text: `Created ${ticket.map}/${ticket.id}: ${ticket.title}\n` };
+        const flagged = Object.keys(flags.values).filter((name) => name !== "text");
+        if (flagged.length > 0) {
+          throw new DrylandError(
+            `--${flagged[0]} is not an option of \`dryland ticket create\` in a repo with a state store.`,
+            "Pipe one JSON document to the command instead; run it with --help for the fields and an example.",
+          );
+        }
+        const { ticket, written } = await createStoreTicket(process.cwd(), await readDocument(), {
+          author: callerAuthor(),
+          checkOnly: flags.switches.has("check"),
+        });
+        const ref = `${ticket.effort}/${ticket.id}`;
+        return {
+          value: { ref, written, ticket },
+          text: written ? `Created ${ref}: ${ticket.title}\n` : `Checked: this would create ${ref}.\n`,
+        };
       }
       const { ticket, warnings } = await createTicket(
         nodeProcessRunner,
@@ -413,9 +500,30 @@ const COMMANDS: Record<
       return { value: ticket, text: `Triaged ${ticket.map}/${ticket.id} as ${ticket.triageRole}.\n`, warnings };
     },
   },
+  "map create": {
+    target: false,
+    switches: ["check"],
+    help: documentHelp("dryland map create [--check] [--json] < map.json", MAP_INPUT),
+    run: async (_target, flags) => {
+      const { map, written } = await createStoreMap(process.cwd(), await readDocument(), {
+        author: callerAuthor(),
+        checkOnly: flags.switches.has("check"),
+      });
+      return {
+        value: { effort: map.effort, written, map },
+        text: written
+          ? `Created the map of ${map.effort}: ${map.title}\n`
+          : `Checked: this would create the map of ${map.effort}.\n`,
+      };
+    },
+  },
   "map show": {
     target: true,
     run: async (target) => {
+      if (await isStoreInitialised(process.cwd())) {
+        const document = await showStoreMap(process.cwd(), target);
+        return { value: document, structured: true, text: formatStoreMap(document) };
+      }
       const map = await showMap(nodeProcessRunner, process.cwd(), target);
       return { value: map, text: formatMap(map) };
     },
@@ -423,6 +531,11 @@ const COMMANDS: Record<
   "map frontier": {
     target: true,
     run: async (target) => {
+      if (await isStoreInitialised(process.cwd())) {
+        const document = await storeFrontier(process.cwd(), target);
+        const tickets = document.tickets.map(asTicket);
+        return { value: document, structured: true, text: formatTickets(tickets, "No frontier tickets.") };
+      }
       const tickets = await mapFrontier(nodeProcessRunner, process.cwd(), target);
       return { value: tickets, text: formatTickets(tickets, "No frontier tickets.") };
     },
@@ -569,6 +682,7 @@ async function run(args: string[]): Promise<number> {
     return 0;
   }
   const json = args.includes("--json");
+  const asText = args.includes("--text");
   if (args.includes("--commit") && args.includes("--no-commit")) {
     throw new DrylandError("--commit and --no-commit contradict each other.", "Pass one of them, or neither.");
   }
@@ -578,13 +692,15 @@ async function run(args: string[]): Promise<number> {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
     const name = arg.startsWith("--") ? arg.slice(2) : "";
-    if (VALUE_OPTIONS.has(name)) {
+    // `--text` renders a read for people; only `ticket comment` (replaced by a typed log entry in ticket 17) takes it as a value.
+    const isRendering = name === "text" && !(args[0] === "ticket" && args[1] === "comment");
+    if (VALUE_OPTIONS.has(name) && !isRendering) {
       const value = args[++i];
       if (value === undefined) throw new DrylandError(`--${name} needs a value.`, `Write it as --${name} <value>.`);
       flags.values[name] = value;
     } else if (SWITCHES.has(name)) {
       flags.switches.add(name);
-    } else if (!["--json", "--commit", "--no-commit"].includes(arg)) {
+    } else if (!["--json", "--text", "--help", "--commit", "--no-commit"].includes(arg)) {
       positional.push(arg);
     }
   }
@@ -593,6 +709,11 @@ async function run(args: string[]): Promise<number> {
   const commandName = positional.slice(0, words).join(" ");
   const target = positional[words];
   const entry = COMMANDS[commandName];
+
+  if (args.includes("--help") && entry?.help !== undefined) {
+    process.stdout.write(entry.help);
+    return 0;
+  }
 
   if (entry !== undefined && (entry.target === "optional" || entry.target === (target !== undefined))) {
     const given = [
@@ -607,13 +728,13 @@ async function run(args: string[]): Promise<number> {
         );
       }
     }
-    const { value, text, warnings = [], exitCode = 0 } = await entry.run(target ?? "", flags);
+    const { value, text, warnings = [], exitCode = 0, structured } = await entry.run(target ?? "", flags);
     if (entry.recordsSession) {
       const ticket = value as Ticket;
       warnings.push(...(await recordAgentSession(`${ticket.map}/${ticket.id}`)));
     }
     for (const warning of warnings) process.stderr.write(`dryland: warning: ${warning}\n`);
-    process.stdout.write(json ? `${JSON.stringify(value, null, 2)}\n` : text);
+    process.stdout.write(json || (structured === true && !asText) ? `${JSON.stringify(value, null, 2)}\n` : text);
     return exitCode;
   }
 
@@ -625,6 +746,11 @@ try {
   process.exitCode = await run(process.argv.slice(2));
 } catch (error) {
   if (!(error instanceof DrylandError)) throw error;
+  if (error instanceof WriteFailure) {
+    for (const d of error.diagnostics) process.stderr.write(`${formatDiagnostic(d)}\n`);
+    process.exitCode = error.exitCode;
+  } else {
+    process.exitCode = 1;
+  }
   process.stderr.write(`dryland: ${error.message}\nNext: ${error.nextAction}\n`);
-  process.exitCode = 1;
 }

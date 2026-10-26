@@ -152,7 +152,7 @@ A session state report (running, waiting, idle or ended) that an Agent CLI's hoo
 _Avoid_: Log entry, notification
 
 **Main checkout**:
-The repo's primary working tree, whose git common dir holds the machine-local session index and cache that every session and the ADE share.
+The repo's primary working tree. The machine-local session index and cache that every session and the ADE share sit beside the state store, not in the repo.
 _Avoid_: Root, master copy
 
 **Linked worktree**:

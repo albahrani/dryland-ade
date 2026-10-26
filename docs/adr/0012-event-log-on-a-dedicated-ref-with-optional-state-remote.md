@@ -18,6 +18,12 @@ Rejected: a SQLite file as the store (does not merge, sits in a mount); state on
 
 - **Reachability: the store is its own bare git dir outside the repo.** "Never checked out" keeps state out of the files an agent edits, not out of reach of git: a linked worktree shares the git common dir, and update-ref, push, fetch, symbolic-ref, fast-import, aliases and plain file writes all change a ref there, so no deny set is enough. The dedicated ref therefore lives in a separate bare git dir (under the user data dir, keyed by repo), addressed by the engine with `GIT_DIR`; the cache and session index sit beside it. Findings: `.scratch/dryland-rework/research/git-and-the-state-ref.md`.
 
+- **Placement (settled by dryland-rework ticket 41).**
+  - *Bare:* the store is `git init --bare`, so it has no working tree and no index of its own; the engine writes with `GIT_DIR` set and a scratch `GIT_INDEX_FILE`.
+  - *Repo id:* a random UUID, written at `dryland init` to the repo's own git config as `dryland.repoId`. Worktrees share it; a plain move of the repo keeps it, because the config travels with the `.git` dir.
+  - *Path:* `<data dir>/stores/<repo id>.git`. The data dir is `DRYLAND_DATA_DIR` when set, else `%LOCALAPPDATA%\Dryland` on Windows, `~/Library/Application Support/Dryland` on macOS and `$XDG_DATA_HOME/dryland` (default `~/.local/share/dryland`) elsewhere. Nothing under it is inside a repo.
+  - *Beside the store:* `dryland/cache.sqlite` and `dryland/sessions.json` (the ADR 0010 session index) sit in the store dir. A repo without a store keeps the index in its git common dir.
+  - *Re-binding:* a copied or re-cloned repo either carries the same id (and so shares the store) or has none. `dryland init --bind <repo id>` binds a repo to an existing store on this machine; a plain `dryland init` in a repo with no id makes a new, empty store.
 - Supersedes ADR 0008's backend mapping: there is one ticket model and no per-forge claim or blocking mapping.
 - The session index of ADR 0010 stays machine-local, now beside the cache.
 - The event schema, snapshot cadence, prune protocol across clones and attachment caps are set during build.

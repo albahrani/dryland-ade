@@ -4,6 +4,7 @@ import { type AgentAdapter, CLAUDE_CODE } from "./agent-adapter.ts";
 import { DrylandError } from "./errors.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { acquireLock, removeLeftoverTemps, writeAtomically } from "./tracker-write.ts";
+import { storeDir } from "./store-dir.ts";
 
 /** How long a session stays in the index after it was last seen, unless the caller says otherwise. */
 export const DEFAULT_SESSION_RETENTION_DAYS = 30;
@@ -60,7 +61,8 @@ export async function sessionIndexPath(runner: ProcessRunner, cwd: string): Prom
       "Run dryland from inside the repo, or from one of its worktrees.",
     );
   }
-  return join(common.stdout.trim(), "dryland", "sessions.json");
+  // Beside the store once the repo has one (ADR 0012); in the git common dir until then.
+  return join((await storeDir(cwd)) ?? common.stdout.trim(), "dryland", "sessions.json");
 }
 
 function isSession(value: unknown): value is IndexedSession {

@@ -9,7 +9,7 @@ import { findSpecsWithoutTickets, frontierOf, type MapModel, readMapFile } from 
 import { nodeProcessRunner, type ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
 import { readTrackerKind, type TrackerKind } from "./tracker.ts";
-import { isStoreInitialised, readStoreTickets } from "./state-store.ts";
+import { isStoreInitialised, readStoreState, toTicket } from "./state-store.ts";
 import { readTriageVocabulary } from "./triage-labels.ts";
 
 interface LoadedTracker {
@@ -22,9 +22,20 @@ interface LoadedTracker {
 /** Every ticket (and, for a remote tracker, every map) of the main checkout, from the tracker its docs name. */
 async function loadTracker(runner: ProcessRunner, mainCheckout: string): Promise<LoadedTracker> {
   if (await isStoreInitialised(mainCheckout)) {
-    const tickets = await readStoreTickets(mainCheckout);
-    const names = [...new Set(tickets.map((t) => t.map))].sort();
-    const maps = names.map((name) => ({ name, title: name, destination: "", fog: [], decisions: [], sections: [] }));
+    const state = await readStoreState(mainCheckout);
+    const tickets = state.tickets.map(toTicket);
+    const names = [...new Set([...state.maps.map((m) => m.effort), ...tickets.map((t) => t.map)])].sort();
+    const maps = names.map((name): MapModel => {
+      const map = state.maps.find((m) => m.effort === name);
+      return {
+        name,
+        title: map?.title ?? name,
+        destination: map?.destination ?? "",
+        fog: map?.fog ?? [],
+        decisions: [],
+        sections: [],
+      };
+    });
     return { kind: "local-markdown", tickets, maps };
   }
   const kind = await readTrackerKind(mainCheckout);

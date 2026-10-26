@@ -12,7 +12,10 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_ADAPTERS, envKey } from "@dryland/core";
+import { AGENT_ADAPTERS, envKey, type FixtureEffort, seedStore } from "@dryland/core";
+
+// Every store lives under one data dir of this run (inside the scoped temp dir), never in the real user data dir.
+process.env["DRYLAND_DATA_DIR"] ??= mkdtempSync(join(tmpdir(), "dryland-data-"));
 
 const BUNDLE = fileURLToPath(new URL("../dist/dryland.mjs", import.meta.url));
 
@@ -138,6 +141,13 @@ export class TempRepo {
     return repo;
   }
 
+  /** A repo whose tickets live in the state store, filled with `efforts` through the same write path the CLI uses. */
+  static async createStore(efforts: FixtureEffort[] = [], files: Record<string, string> = {}): Promise<TempRepo> {
+    const repo = TempRepo.create(files);
+    await seedStore(repo.path, efforts);
+    return repo;
+  }
+
   write(file: string, content: string): void {
     const full = join(this.path, file);
     mkdirSync(dirname(full), { recursive: true });
@@ -168,6 +178,11 @@ export class TempRepo {
     rmSync(dir, { recursive: true });
     git(this.path, ["worktree", "add", "--quiet", "-b", branch, dir]);
     return dir;
+  }
+
+  /** Runs `dryland` with `input` on stdin, as an agent pipes a document. */
+  runWithInput(args: string[], input: string, cwd: string = this.path): Promise<RunResult> {
+    return runDryland(args, { cwd, input });
   }
 
   run(args: string[], cwd: string = this.path, env: Record<string, string> = {}): Promise<RunResult> {
