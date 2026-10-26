@@ -1,7 +1,8 @@
 # Rework ADRs and glossary
 
 Type: task
-Status: ready-for-agent
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-26T15:31:14.937Z","was":"ready-for-agent"}} -->
 
 ## Question
 
