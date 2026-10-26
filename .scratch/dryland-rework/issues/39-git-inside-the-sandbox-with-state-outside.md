@@ -8,6 +8,8 @@ Blocked by: 14
 
 This runs first: if no deny set is enough, the store location changes, and tickets 41 onward build on it.
 
+**Read first:** ADRs 0012 and 0013 (their "Open" consequences are what this ticket settles), ticket 14's Answer and the store code it built (`packages/core/src/state-store.ts`).
+
 **What to build:** a throwaway prototype that answers one question before tickets 28 and 30 build on it: how can an agent run git in its worktree, including commits, when the state ref must be unwritable by it?
 
 Facts checked while building ticket 14:
