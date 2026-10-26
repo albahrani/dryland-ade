@@ -32,7 +32,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 
 ## Not yet specified
 
-- Agent CLI adapter cleanup after dropping the best-effort tier (may fold into ADRs superseded and spec and glossary consequences; may need no ticket)
+None. The adapter cleanup folded into the ADRs superseded ticket.
 
 ## Out of scope
 
