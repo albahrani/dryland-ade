@@ -1,5 +1,7 @@
 # A claim is recorded as a Dryland annotation under the `Status:` line
 
+_Superseded by ADR 0011 and 0012: a claim is an event in the state store, not an annotation in a ticket file._
+
 ADR 0001 and the spec require a claim to record its holder (branch or session id) and a timestamp, while ADR 0008 keeps the local-markdown format unchanged from the default skills. The default skills know only `Status: claimed`, which says nothing about who holds it. ADR 0003 allows an ADE-owned annotation if it is delimited so skills ignore it, is written through `dryland`, and is optional for every feature, and asks that each type be its own decision. This is that decision.
 
 `dryland ticket claim` sets `Status: claimed` and adds one line directly under it in the ticket header:

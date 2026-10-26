@@ -12,7 +12,7 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 
 ## Writing tickets
 
-Change tickets and map indexes only through the `dryland` CLI (`dryland ticket claim`, `resolve`, `create`, `block`, `triage`; `dryland map index`), never by editing the files. This is the ADE tracker; Dryland shows a repo whose tracker doc never mentions `dryland` in lens mode.
+Change tickets and map indexes only through the `dryland` CLI (`dryland ticket claim`, `resolve`, `create`, `block`, `triage`; `dryland map index`), never by editing the files. Dryland shows a repo whose tracker doc never mentions `dryland` in lens mode.
 
 ## When a skill says "publish to the issue tracker"
 

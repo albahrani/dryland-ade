@@ -1,5 +1,7 @@
 # `dryland` CLI surface, one normalized ticket model, localhost live reporting
 
+_Superseded by ADR 0015 (CLI surface and session-state channel) and ADR 0011 and 0012 (ticket model and storage). The backend mapping, `ticket.changed` and the lock file are gone._
+
 ADR 0001 made the CLI the single write path for tickets. This records its shape. The CLI has five command groups, exposes one normalized ticket model over all three backends, and tells a running app what happened over a localhost channel. A plain CLI on `PATH` was chosen over an MCP server: every Agent CLI can run a command, and it works in outside terminals. Storing events, webhooks and stored tracker tokens were rejected: the repo and the tracker are the source of truth.
 
 ## Decisions

@@ -6,7 +6,7 @@ The ADE is an Electron app written in TypeScript (React renderer, pnpm workspace
 
 ## Decisions
 
-- **Pure core package**: the rule engine and the artifact/tracker parsing live in a TypeScript package with no Electron imports, shared by the app and the `ade` CLI.
+- **Pure core package**: the rule engine and the state engine live in a TypeScript package with no Electron imports, shared by the app and the `ade` CLI.
 - **PTY ownership**: PTYs are owned by the Electron main process behind an `IPtyProvider`-style interface. There is no background daemon, and no process outlives the UI. Orca keeps a daemon so sessions survive restarts; we deliberately don't, unless a daemon later solves a concrete roadblock. WSL is a separate PTY backend and is out of v1.
 - **Default shell**: a plain terminal runs the user's own shell: PowerShell 7, else Windows PowerShell, else `COMSPEC` on Windows; `SHELL` elsewhere. `DRYLAND_SHELL` (with `DRYLAND_SHELL_ARGS`, a JSON array) overrides it for scripted use and tests.
 - **`ade` CLI runtime**: one bundled JS file run by the Electron binary in node mode (`ELECTRON_RUN_AS_NODE`), with an `ade` launcher in the install directory (see ADR 0004). It needs no system Node and works with the app closed (see ADR 0001).

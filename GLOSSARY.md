@@ -16,31 +16,67 @@ A repo opened in the ADE, shown by the folder name. Several can be open at once;
 _Avoid_: Workspace, repo (for the open one)
 
 **Skill workflow**:
-The intended sequence of Matt Pocock skills and the artifacts they produce and consume (maps, tickets, specs, glossary, ADRs).
+The intended sequence of prompts derived from Matt Pocock's skills and the state and files they produce and consume (maps, tickets, specs, glossary, ADRs).
 _Avoid_: Pipeline, process
 
 **Map**:
-A wayfinder index of decisions for one effort, with child tickets.
+The engine's record of one effort: a Destination (human-only edits), Notes, fog items, out-of-scope items and child tickets, with a status of charting or done. Decisions so far is derived from its resolved tickets.
 _Avoid_: Roadmap, plan
 
 **Ticket**:
-A unit of work or decision tracked on an issue tracker, local-markdown, GitHub or GitLab.
+The engine's record of one unit of work or decision, with a Report, an Analysis log, a Description and a Solution summary, and a status of open, claimed or resolved.
 _Avoid_: Task, card
+
+**Report**:
+The question or request a ticket starts from. Fixed once the ticket is claimed; only a human edits it, and each edit is a revision.
+_Avoid_: Body, question
+
+**Analysis log**:
+A ticket's append-only list of typed entries (finding, failed-attempt, correction, retraction). A correction or retraction points at an earlier entry with a one-line reason; retracted entries are struck and collapsed, never deleted.
+_Avoid_: Comments, notes
+
+**Description**:
+A ticket's current state in three sections: Problem, Cause (required for bugs) and Plan. Resolve requires Problem and Plan.
+_Avoid_: Body, details
+
+**Solution summary**:
+The short text that closes a ticket, within its cap. It feeds Decisions so far and release notes.
+_Avoid_: Answer, resolution
+
+**Revision**:
+One entry in a field's history, with time, author kind and an optional reason. Every edit appends one.
+_Avoid_: Version, edit
+
+**Author kind**:
+Who wrote a revision or entry: human, agent or engine.
+_Avoid_: Author, actor
+
+**Reopen**:
+Returning a resolved ticket to open, with a reason, by an agent or a human. The old summary stays as a superseded revision, a correction entry is added, and a reopened badge stays until a human dismisses it.
+_Avoid_: Undo, unresolve
+
+**Unslop**:
+The command that proposes a denser rewrite of a field. A human sees a word-level diff and the character count against the cap, and accepts only after three ticks (clear, dense, nothing cut). A workflow-triggered unslop, such as in migration, applies unattended and is marked agent-authored.
+_Avoid_: Summarize, shorten
+
+**Suggest**:
+The button beside a hand-written one-liner that drafts a version within the cap, using a read-only agent prompt. An accepted draft is saved as human-authored.
+_Avoid_: Autocomplete, rewrite
 
 **Ticket kind**:
 Where a map's item sits in the skill workflow: Fog (not yet specified on the map), Planning (grilling, research or prototype tickets) or Implementation (task tickets). Derived, never stored.
 _Avoid_: Phase, stage, category
 
 **Ticket status**:
-What a ticket's icon shows: ready (open, unblocked, unclaimed), in progress (claimed), blocked (open with an unresolved or unknown blocker) or done (resolved). Derived from state and blockers, never stored. A blocker is unknown when its tracker cannot say, e.g. a GitLab issue without Premium whose body has no `Blocked by:` line; it stays blocked rather than ready, because a ticket is never offered on a guess. `dryland ticket create` writes `Blocked by: none` on GitLab, so only tickets made by hand are unknown.
+What a ticket's icon shows: ready (open, unblocked, unclaimed), in progress (claimed), blocked (open with an unresolved blocker) or done (resolved). Derived from state and blockers, never stored.
 _Avoid_: Ticket state (that is open, claimed, resolved)
 
 **Acceptance criterion**:
-One checkbox under a ticket's `Acceptance criteria` heading, numbered from 1 in file order whether ticked or not. Ticked by `ticket tick --criterion <n>`, never by editing the file. Local markdown only.
+One checkbox in a ticket's acceptance criteria, numbered from 1 in order whether ticked or not. Ticked by `ticket tick --criterion <n>`.
 _Avoid_: Checklist item, requirement
 
 **Amend**:
-Replacing the Answer of an already resolved ticket, by `ticket resolve --amend`. Without `--amend`, resolving a resolved ticket fails. Local markdown only.
+Replacing the Solution summary of an already resolved ticket, with a required reason, which appends a revision. A resolved ticket changes only by amend or reopen.
 _Avoid_: Edit, re-resolve
 
 **Workflow engine**:
@@ -48,7 +84,7 @@ The deterministic part of Dryland that owns maps, fog, tickets, comments and the
 _Avoid_: Backbone, tracker logic
 
 **Fog item**:
-One entry in a map's Not yet specified: an area or question too coarse to ticket yet. Shown as a short label, with the full text on hover.
+One record on a map: an area or question too coarse to ticket yet, in one sentence. It is open, graduated to a ticket (one atomic command that creates the ticket, wires its blockers and removes the item) or dropped with a reason.
 _Avoid_: Fog ticket, TODO
 
 **Prompt**:
@@ -60,7 +96,7 @@ The open, unblocked, unclaimed tickets of a map.
 _Avoid_: Backlog, queue
 
 **Claim**:
-A mark on a ticket that someone is working on it, naming its holder (the branch the work happens on; on a GitHub tracker the assignee's `gh` login) and, on local markdown, when it was made. Taken by `ticket claim`, undone by `ticket release`.
+An event on a ticket that someone is working on it, naming its holder (the branch the work happens on) and when it was made. Required before work; taken by `ticket claim`, undone by `ticket release`. The first claim to reach the state remote wins; an offline claim is provisional.
 _Avoid_: Lock, assignment
 
 **Stale claim**:
@@ -95,10 +131,6 @@ _Avoid_: Background session, minimized session, closed session
 A session started with no ticket, from File ▸ New Scratch Session, in a new scratch worktree under the `scratch` map. It is linked to that worktree, not to a ticket.
 _Avoid_: Free session, ad-hoc session
 
-**Hand-started session**:
-A session the user starts by typing the Agent CLI's command in a plain terminal tab. The ADE's launcher puts it on the status hooks, and links it to a ticket by the worktree it runs in, or shows it as unlinked when that is no Dryland worktree. It ends with its tab.
-_Avoid_: Manual session, external session
-
 **Session index**:
 The ADE's machine-local record of which sessions belong to which ticket, map or scratch worktree, kept beside the repository's git data and never committed; a cache rebuilt where possible from the Agent CLIs.
 _Avoid_: Session store, session database, session log
@@ -112,15 +144,11 @@ A quit the operating system starts (shutdown, restart, log-off). It asks nothing
 _Avoid_: System quit, forced quit
 
 **Live event**:
-A message the ADE's command-line tool sends to the running ADE when a session changes state or a ticket changes; shown live and never stored.
+A session state report (running, waiting, idle or ended) that an Agent CLI's hook sends through `dryland` to the running ADE; it carries no payload.
 _Avoid_: Log entry, notification
 
-**ADE tracker**:
-The ticket-management mode in which all ticket and map-index changes go through the ADE's own command-line tool, which delegates to local-markdown, GitHub or GitLab.
-_Avoid_: Custom tracker, wrapper
-
 **Main checkout**:
-The repo's primary working tree, where local-markdown tracker state lives so every session and the ADE see the same thing.
+The repo's primary working tree, whose git common dir holds the machine-local session index and cache that every session and the ADE share.
 _Avoid_: Root, master copy
 
 **Linked worktree**:
@@ -136,32 +164,8 @@ A branch or worktree the ADE cannot tie to any ticket, because it matches neithe
 _Avoid_: Orphan branch, stray branch
 
 **Agent adapter**:
-The per-Agent-CLI description the ADE uses to launch a session, pre-type a skill command and observe its status.
+The per-Agent-CLI description the ADE uses to launch a session, pre-type a prompt command and observe its status through hooks. Only Claude Code and GitHub Copilot CLI have one.
 _Avoid_: Driver, plugin
-
-**Best-effort tier**:
-The adapter tier for Agent CLIs beyond Claude Code and GitHub Copilot CLI, such as Codex CLI and Gemini CLI: launch and the pre-typed command only, with no hooks, no session id, no resume and no status guarantee. The other tier is first-class, with a full, verified adapter.
-_Avoid_: Unsupported, experimental, second-class
-
-**Approximate status**:
-A session's state guessed from its PTY output instead of reported by hooks: working while output flows, idle after a short quiet, never waiting, and ended from process exit. It is marked "approximate" wherever it is shown.
-_Avoid_: Estimated status, fake status
-
-**Auto-submit**:
-The opt-in setting that presses Enter after the ADE pre-types a skill command, so the session starts working at once. Off by default; global, with a per-project override that wins. A key the user types first cancels the pre-typed command and its submit.
-_Avoid_: Auto-run, auto-start
-
-**Skill setup state**:
-How the repo's installed skills and `docs/agents` files compare to the known default setup: default, default with extras, or modified.
-_Avoid_: Skill version, config drift
-
-**Compatibility verdict**:
-An agent-written judgement, per ADE feature, of whether a modified skill setup still works with the ADE.
-_Avoid_: Validation, lint result
-
-**ADE-owned annotation**:
-A clearly marked addition the ADE writes into a prose artifact for its own benefit, which the skills can ignore.
-_Avoid_: Metadata block, tag
 
 **Isolation level**:
 The user's choice of how strongly an agent session is kept from the host and from tracker state: Off, Guarded (the agent CLI's own permission rules plus the engine's checks) or Contained (the agent CLI runs in a container that mounts only the session's worktree).

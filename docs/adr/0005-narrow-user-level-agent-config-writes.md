@@ -1,5 +1,7 @@
 # Narrow, Dryland-owned writes to user-level agent config are allowed
 
+_Amended by ADR 0013 and 0015: only Claude Code and Copilot CLI are supported, and the isolation rule store may be translated into Agent CLI rules under the same narrow-write rules. The consent flags of ADR 0003 survive for these writes._
+
 The original rule was that the ADE never touches user-level Agent CLI config, and injects status hooks only per launch or per worktree. That works for Claude Code (a per-launch settings flag) but not for Copilot CLI: it has no hooks-only flag, worktree-local `.github/hooks` did not fire in an untrusted worktree, and every new worktree raises a trust prompt. Reliability beats purity, so Dryland may make narrow, Dryland-owned, reversible writes to user-level agent config where that is what makes status hooks and first-launch trust work. Per-launch or worktree-local injection stays preferred wherever a CLI offers it. Rewriting the user's main settings file, as most peer tools do with `~/.claude/settings.json`, stays rejected. Orca is the prior art for the accepted shape.
 
 ## Decisions

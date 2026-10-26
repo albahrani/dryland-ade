@@ -1,5 +1,7 @@
 # ADE writes metadata only, prose only as marked annotations, and degrades on modified skill setups
 
+_Superseded by ADR 0011 (write policy), ADR 0014 (prompts replace skill-setup detection) and ADR 0012 (no annotations, no auto-commit of tracker files). Annotations, fingerprinting and the compatibility verdict are gone. The per-type "do not ask again" consent flags survive for ADR 0005._
+
 _Naming: the product is now Dryland ADE and the CLI binary is `dryland`; read `ade` in this ADR as `dryland`, the annotation marker as `<!-- dryland: ... -->` and the verdict file as `.dryland/compat.md`._
 
 The ADE is a lens plus actuator, so its writes are narrow: tracker metadata through `ade` (claim, resolve, blocking, map index line, `Status:` and triage labels), each confirmed by a click unless the user started it from a ticket. Prose artifacts are not strictly off limits, because an ADE-owned addition may later improve UX or parsing. Any such **ADE-owned annotation** must be written through `ade`, delimited so skills ignore it (e.g. `<!-- ade: ... -->`), never alter skill-authored text, and be optional for every ADE feature. Each type is recorded as its own decision, and v1 ships none. A hard "never write prose" rule was rejected as too rigid; free-form content edits were rejected as coupling the ADE to skill details that change.

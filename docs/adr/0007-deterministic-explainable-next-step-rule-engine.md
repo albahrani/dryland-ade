@@ -1,5 +1,7 @@
 # Next steps come from a deterministic, explainable rule engine
 
+_Amended by ADR 0011 and 0014: the snapshot is the engine's state, not parsed files, and skill setup state, the compatibility verdict and the `/setup-matt-pocock-skills` routing are dropped in favour of `migrate` and `init`._
+
 The **next step** is computed by a pure function in the core: a repo snapshot goes in, a ranked list of next steps comes out, each with a target artifact, a recommended skill command, a rule id, a one-sentence reason and an evidence list (which artifact and field was read). The rules are ordered code. An LLM was rejected: recommendations must be the same for the same repo state, explainable, free, and available with no session running. User-editable rules were rejected for v1 as premature.
 
 ## Decisions

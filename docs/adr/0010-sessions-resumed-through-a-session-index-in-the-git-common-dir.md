@@ -1,5 +1,7 @@
 # Sessions are paused and resumed through a session index in the git common dir
 
+_Amended by ADR 0012 and 0015: claims are events in the state store, so a claim names a session and branch through the engine, the index stays machine-local and never synced, and `lastState` comes from the session-state channel. The tracker lock and hand-started sessions are gone._
+
 Quitting Dryland in the middle of a grilling or an implementation is normal, so a session must outlive its process: the Agent CLI keeps every session and can resume it, and Dryland only has to know which session belongs to which item. Releasing claims at quit (the earlier plan) and tying a claim to an in-memory Dryland session id made every such ticket lose its claim or read as stale after a restart.
 
 Dryland keeps a **session index** at `<git common dir>/dryland/sessions.json`: per item (a ticket, a map or a scratch worktree), its known Agent CLI sessions, newest first, each with its CLI, the CLI's own session id, when it was last seen and, for sessions the app ran, its last state (running, waiting, idle). The git common dir is the main checkout's `.git` from every worktree, so all worktrees and every `dryland` call share one file; git ignores it and never commits, clones or cleans it. The tracker lock already lives beside it.

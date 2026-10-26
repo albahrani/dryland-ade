@@ -1,5 +1,7 @@
 # Declarative Agent adapters, interactive PTY launch, status from hooks
 
+_Amended by ADR 0015 and the rework: the best-effort tier, auto-submit, PTY output guessing, approximate status, `session.started` and hand-started adoption are removed. Only Claude Code and Copilot CLI have adapters, and status is hook-sourced only, through the session-state channel._
+
 Dryland drives Agent CLIs only through their own binaries under the user's subscription login. Each supported CLI is described by an **Agent adapter**: a declarative entry in the pure core (binary, launch arguments, skill-command syntax, initial-prompt handling, hook-injection method, status-event mapping), with small code hooks only where a first-class CLI needs them. A session is the interactive CLI spawned in a PTY inside the ticket's worktree, with the recommended skill command typed but not submitted, which is the same as a human at a terminal. Session status comes from the CLI's own hooks, which call `dryland status`.
 
 Rejected: the Claude API and Agent SDK (hard product constraint); headless `-p` or initial-prompt-argument launch (submits immediately and loses interactivity); Orca's structured `stream-json` mode (out of v1); transcript parsing as the primary status source (Claude Code's transcript format is unofficial and unstable); tmux or screen scraping.
