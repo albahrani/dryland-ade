@@ -1,6 +1,8 @@
 # Migration from a skills-only repo
 
 Type: grilling
+Status: claimed
+<!-- dryland: {"claim":{"holder":"main","at":"2026-10-26T10:15:57.955Z","was":""}} -->
 Blocked by: 08
 
 ## Question
