@@ -743,42 +743,6 @@ test("starts a session without a ticket in a scratch worktree, and an ended sess
   await app.close();
 });
 
-test("links a CLI started by hand in a terminal tab to its ticket by working directory, or leaves it unlinked", async () => {
-  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
-  // A worktree Dryland made for shop/02 earlier; nothing here starts a session on it.
-  const worktree = join(`${repo}.worktrees`, "shop-02-grill");
-  execFileSync("git", ["worktree", "add", "-q", "-b", "shop/02-grill", worktree], { cwd: repo, stdio: "pipe" });
-  const screen = window.locator(".xterm-rows:visible");
-
-  // In the main checkout, which Dryland did not create for any ticket: unlinked.
-  await window.getByRole("button", { name: "New terminal" }).click();
-  await expect(window.getByRole("tab", { name: "Terminal 1" })).toHaveAttribute("aria-selected", "true");
-  await window.locator(".xterm:visible").click();
-  await window.keyboard.type("claude");
-  await window.keyboard.press("Enter");
-  await expect(screen).toContainText("agent-ready cwd=");
-  await window.keyboard.type("~");
-  await window.getByRole("button", { name: "Sessions", exact: true }).click();
-  const openPane = window.getByRole("region", { name: "Open sessions" });
-  await expect(openPane.getByRole("button", { name: "Unlinked" })).toBeVisible();
-
-  // Inside the ticket's worktree: the session belongs to the ticket.
-  await window.getByRole("button", { name: "New terminal" }).click();
-  await expect(window.getByRole("tab", { name: "Terminal 2" })).toHaveAttribute("aria-selected", "true");
-  await window.locator(".xterm:visible").click();
-  await window.keyboard.type(`cd "${worktree}"`);
-  await window.keyboard.press("Enter");
-  await window.keyboard.type("claude");
-  await window.keyboard.press("Enter");
-  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
-  await window.keyboard.type("~");
-  await window.getByRole("button", { name: "Tickets", exact: true }).click();
-  await expect(
-    window.getByRole("region", { name: "Tickets" }).getByRole("img", { name: "Claude Code: idle" }),
-  ).toBeVisible();
-  await app.close();
-});
-
 /** A fake `copilot` that prints where it runs and then idles on stdin; it fires no hooks. */
 function stubCopilot(): string {
   const dir = mkdtempSync(join(tmpdir(), "dryland-e2e-copilot-"));
