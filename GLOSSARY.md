@@ -19,12 +19,16 @@ _Avoid_: Workspace, repo (for the open one)
 The intended sequence of prompts derived from Matt Pocock's skills and the state and files they produce and consume (maps, tickets, specs, glossary, ADRs).
 _Avoid_: Pipeline, process
 
+**Effort**:
+A body of work named by a slug, grouping tickets as `effort/NN`, with an optional Map and an optional spec file.
+_Avoid_: Feature, project
+
 **Map**:
-The engine's record of one effort: a Destination (human-only edits), Notes, fog items, out-of-scope items and child tickets, with a status of charting or done. Decisions so far is derived from its resolved tickets.
+The optional wayfinding record of an effort: a Destination (human-only edits), Notes, fog items, out-of-scope items and child tickets, with a status of charting or done. Decisions so far is derived from its resolved tickets.
 _Avoid_: Roadmap, plan
 
 **Ticket**:
-The engine's record of one unit of work or decision, with a Report, an Analysis log, a Description and a Solution summary, and a status of open, claimed or resolved.
+The engine's record of one unit of work or decision in an effort, with a Report, an Analysis log, a Description and a Solution summary, and a status of open, claimed or resolved.
 _Avoid_: Task, card
 
 **Report**:

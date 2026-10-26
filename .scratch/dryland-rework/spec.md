@@ -20,8 +20,8 @@ Dryland becomes the source of truth for maps, fog, tickets and comments. The eng
 4. As a maintainer, I want blocking edges kept acyclic, so that the frontier is always computable.
 5. As a human, I want the frontier computed by the engine, so that I see what is takeable without reading files.
 6. As a human, I want a HITL ticket to resolve only after my confirmation in the UI, so that an agent cannot answer for me.
-7. As an agent, I want to pass prose on stdin to commands, so that I never touch file paths or state files.
-8. As an agent, I want write-time rejections that state the cap or rule, so that I can fix text and retry.
+7. As an agent, I want to submit every write as a structured document on stdin, with prose only inside its prose fields, so that I never touch file paths or state files.
+8. As an agent, I want write-time diagnostics with the field path, rule id and fix, and a `--check` mode that validates without writing, so that I can correct the document and retry.
 9. As a human, I want over-cap text rejected, never truncated, so that nothing is silently lost.
 10. As a human, I want short titles that name the decision (about 60 chars) and one-sentence fog items (about 140), so that the map reads at a glance.
 11. As a human, I want a ticket to have Report, Analysis log, Description and Solution summary, so that each kind of text has one place.
@@ -100,7 +100,7 @@ Dryland becomes the source of truth for maps, fog, tickets and comments. The eng
 
 ## Implementation Decisions
 
-**Engine (core).** One module owns the event log, replay, cache, caps, lint and gates. It never calls a model. Every command is an atomic compare-and-set within one repo. Command results carry write-time rejections and violation notices to the agent.
+**Engine (core).** One module owns the event log, replay, cache, caps, lint and gates. It never calls a model. Every command is an atomic compare-and-set within one repo. Every write command is parse (schema), check (content rules), apply (compare-and-set); `--check` stops before apply. Command results carry write-time diagnostics and violation notices to the agent.
 
 **Ticket model.** Types: research, prototype, grilling, task (plus plain feature tickets). Statuses: open, claimed, resolved only. Parts and rules as in stories 11 to 22. Reopen needs a reason, sets open, keeps the old summary as a superseded revision, adds a correction entry, and needs a new summary at next resolve. Resolved tickets change only via amend or reopen.
 
