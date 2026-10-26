@@ -38,6 +38,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Git inside the sandbox with the state ref outside](issues/39-git-inside-the-sandbox-with-state-outside.md): State moves to a separate bare git dir; Guarded denies its path, Contained mounts a clone.
 - [Cut the features that do not need the tracker](issues/40-cut-the-features-that-do-not-need-the-tracker.md): Codex and Gemini adapters, auto-submit, output-guessed status, hand-started adoption and the live-events panel are gone; hook-fed status, `ticket.changed` and the lock file stay.
 - [Session-state channel](issues/25-session-state-channel-and-adapter-cuts.md): a Live event is a running, waiting, idle or ended report with no payload, and `ticket.changed` is gone.
+- [Store model parity](issues/41-store-model-parity-maps-and-ticket-fields.md): The store is a bare git dir in the user data dir with document writes and document reads; ticket and map creation are schema-checked.
 
 ## Not yet specified
 
