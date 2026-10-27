@@ -10,6 +10,9 @@ scopeTmp();
 // Every app the tests launch writes its live-reporting lock file here, never where a real Dryland keeps it.
 process.env.DRYLAND_APP_DIR ??= mkdtempSync(join(tmpdir(), "dryland-e2e-app-"));
 
+// The state stores the tests create live in this run's temp folder, never in the real user data dir.
+process.env.DRYLAND_DATA_DIR ??= mkdtempSync(join(tmpdir(), "dryland-e2e-data-"));
+
 export default defineConfig({
   testDir: "e2e",
   globalTeardown: "./e2e/global-teardown.ts",

@@ -41,7 +41,11 @@ export interface StoreTicket {
   blockedBy: string[];
   triageRole: TriageRole | null;
   hitl: boolean;
-  claim: { holder: string; at: string } | null;
+  /** Who holds the claim: the branch, so it outlives the session; the session that made it, when there was one. */
+  claim: { holder: string; at: string; session: string | null } | null;
+  /** What the resolution recorded; `null` while unresolved. */
+  answer: string | null;
+  comments: string[];
   createdAt: string;
 }
 
@@ -78,7 +82,20 @@ interface MapCreated extends StoreMap {
   kind: "map.created";
 }
 
-type EventBody = TicketCreated | MapCreated;
+/** The changes a ticket goes through after it is created; each is one event naming the ticket it applies to. */
+export type LifecycleChange =
+  | { kind: "ticket.claimed"; holder: string; session: string | null }
+  | { kind: "ticket.released" }
+  | { kind: "ticket.resolved"; answer: string }
+  | { kind: "ticket.answer-amended"; answer: string }
+  | { kind: "ticket.ticked"; criterion: number }
+  | { kind: "ticket.triaged"; role: TriageRole }
+  | { kind: "ticket.blockers-changed"; blockedBy: string[] }
+  | { kind: "ticket.commented"; text: string };
+
+export type WithRef<T> = T extends unknown ? T & { effort: string; id: string } : never;
+
+export type EventBody = TicketCreated | MapCreated | WithRef<LifecycleChange>;
 
 /** An immutable record of one change, stored as one file of the state ref. */
 export type StateEvent = EventBody & { schema: number; at: string; author: AuthorKind };
@@ -155,6 +172,19 @@ export async function initStore(cwd: string, opts: BindOptions = {}): Promise<{ 
   return { created: true };
 }
 
+const EVENT_KINDS: ReadonlySet<string> = new Set([
+  "ticket.created",
+  "map.created",
+  "ticket.claimed",
+  "ticket.released",
+  "ticket.resolved",
+  "ticket.answer-amended",
+  "ticket.ticked",
+  "ticket.triaged",
+  "ticket.blockers-changed",
+  "ticket.commented",
+] satisfies StateEvent["kind"][]);
+
 /** Every event of the commit `head`, oldest first. An event of an unknown schema stops the replay. */
 async function replayEvents(git: StoreGit, head: string): Promise<StateEvent[]> {
   const listing = await git.ok(["ls-tree", "-r", head]);
@@ -182,7 +212,7 @@ async function replayEvents(git: StoreGit, head: string): Promise<StateEvent[]> 
         "Update Dryland, or re-create the store with `dryland init` if it was written by an older build.",
       );
     }
-    if (event.kind !== "ticket.created" && event.kind !== "map.created") {
+    if (!EVENT_KINDS.has(event.kind)) {
       throw new DrylandError(
         `Event ${file.path} has the unknown kind "${String((event as { kind?: unknown }).kind)}".`,
         "Update Dryland, or re-create the store with `dryland init` if it was written by an older build.",
@@ -196,6 +226,42 @@ async function replayEvents(git: StoreGit, head: string): Promise<StateEvent[]> 
 
 const padId = (n: number) => String(n).padStart(2, "0");
 
+/** Folds one lifecycle event into its ticket. */
+function applyChange(ticket: StoreTicket, event: WithRef<LifecycleChange> & { at: string }): void {
+  switch (event.kind) {
+    case "ticket.claimed":
+      ticket.status = "claimed";
+      ticket.claim = { holder: event.holder, at: event.at, session: event.session };
+      break;
+    case "ticket.released":
+      ticket.status = "open";
+      ticket.claim = null;
+      break;
+    case "ticket.resolved":
+      ticket.status = "resolved";
+      ticket.claim = null;
+      ticket.answer = event.answer;
+      break;
+    case "ticket.answer-amended":
+      ticket.answer = event.answer;
+      break;
+    case "ticket.ticked": {
+      const criterion = ticket.criteria[event.criterion - 1];
+      if (criterion !== undefined) criterion.done = true;
+      break;
+    }
+    case "ticket.triaged":
+      ticket.triageRole = event.role;
+      break;
+    case "ticket.blockers-changed":
+      ticket.blockedBy = event.blockedBy;
+      break;
+    case "ticket.commented":
+      ticket.comments.push(event.text);
+      break;
+  }
+}
+
 /** The state the events add up to. */
 function reduce(events: StateEvent[]): StoreState {
   const state: StoreState = { tickets: [], maps: [] };
@@ -208,14 +274,19 @@ function reduce(events: StateEvent[]): StoreState {
         type: event.type,
         status: "open",
         report: event.report,
-        criteria: event.criteria,
+        criteria: event.criteria.map((c) => ({ ...c })),
         spec: event.spec,
-        blockedBy: event.blockedBy,
+        blockedBy: [...event.blockedBy],
         triageRole: event.triageRole,
         hitl: event.hitl,
         claim: null,
+        answer: null,
+        comments: [],
         createdAt: event.at,
       });
+    } else if (event.kind !== "map.created") {
+      const ticket = state.tickets.find((t) => t.effort === event.effort && t.id === event.id);
+      if (ticket !== undefined) applyChange(ticket, event);
     } else {
       state.maps.push({
         effort: event.effort,
@@ -232,7 +303,7 @@ function reduce(events: StateEvent[]): StoreState {
 }
 
 /** Bumped when the cached shape changes, so an old cache is rebuilt rather than misread. */
-const CACHE_VERSION = "2";
+const CACHE_VERSION = "3";
 
 /** Reads the cache for `head`, or `null` when it is missing, stale or unreadable. */
 function readCache(path: string, head: string): StoreState | null {
@@ -299,8 +370,8 @@ export function toTicket(t: StoreTicket): Ticket {
     blockers: t.blockedBy,
     triageRole: t.triageRole,
     body: t.report,
-    answer: null,
-    comments: [],
+    answer: t.answer,
+    comments: t.comments,
     spec: t.spec,
     criteria: t.criteria,
     raw: {},
@@ -323,7 +394,7 @@ export async function readStoreTickets(cwd: string): Promise<Ticket[]> {
   return (await readStoreState(cwd)).tickets.map(toTicket);
 }
 
-interface Plan {
+export interface Plan {
   diagnostics: Diagnostic[];
   event: EventBody | null;
   /** The ref of what the event creates, for the commit message and the result. */
@@ -343,7 +414,7 @@ const MAX_ATTEMPTS = 8;
  * compare-and-set on the state ref. A lost race plans again against the newer state, so a rule is never decided on
  * stale data. Returns the state after the event; for a check-only run that state is what the write would give.
  */
-async function writeToStore(
+export async function writeToStore(
   cwd: string,
   plan: (state: StoreState) => Plan,
   opts: WriteOptions,
@@ -353,9 +424,11 @@ async function writeToStore(
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const { git, head } = await openStore(cwd);
       const events = await replayEvents(git, head);
-      const planned = plan(reduce(events));
-      if (planned.diagnostics.length > 0 || planned.event === null)
-        throw new WriteFailure("check", planned.diagnostics);
+      const current = reduce(events);
+      const planned = plan(current);
+      if (planned.diagnostics.length > 0) throw new WriteFailure("check", planned.diagnostics);
+      // A plan with nothing to add, such as a claim its holder already has, writes nothing.
+      if (planned.event === null) return { state: current, subject: planned.subject, written: false };
       const event: StateEvent = {
         schema: EVENT_SCHEMA,
         at: new Date().toISOString(),

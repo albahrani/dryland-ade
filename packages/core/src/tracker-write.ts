@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import type { AuthorKind } from "./state-store.ts";
 import { readTrackerKind } from "./tracker.ts";
 
 /** How long a writer waits for the lock before giving up. */
@@ -32,6 +33,8 @@ export interface TrackerWrite<T> {
 export interface TrackerWriteOptions {
   /** `false` leaves the change on disk without a commit. `undefined` reads git's `dryland.autoCommit`, on by default. */
   autoCommit?: boolean;
+  /** Who writes, for the event a state-store write appends; markdown writes ignore it. Defaults to a person. */
+  author?: AuthorKind;
 }
 
 export interface TrackerWriteResult<T> {

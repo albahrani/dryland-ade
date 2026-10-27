@@ -1,6 +1,8 @@
 import { DrylandError } from "./errors.ts";
 import { appendComment, rewriteBlockedBy, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import { isStoreInitialised } from "./state-store.ts";
+import { blockStoreTicket, commentOnStoreTicket, triageStoreTicket } from "./store-lifecycle.ts";
 import { currentTicket, parseTicketReference, readTickets, type TicketWriteResult } from "./tickets.ts";
 import { remoteBackend } from "./tracker-backend.ts";
 import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
@@ -32,6 +34,10 @@ export async function blockTicket(
       "Nothing to change: no blocker was given.",
       "Pass --add <number>[,<number>...] and/or --remove <number>[,<number>...].",
     );
+  }
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings } = await blockStoreTicket(cwd, reference, change, { author: options.author ?? "human" });
+    return { ticket, warnings };
   }
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) {
@@ -82,6 +88,12 @@ export async function commentOnTicket(
   if (text === "") {
     throw new DrylandError("A comment needs text.", 'Pass it as --text "<comment>".');
   }
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings } = await commentOnStoreTicket(cwd, reference, text, {
+      author: options.author ?? "human",
+    });
+    return { ticket, warnings };
+  }
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) return remote.backend.comment(runner, remote.checkout, reference, text);
   if (/^## /m.test(text)) {
@@ -111,6 +123,10 @@ export async function triageTicket(
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings } = await triageStoreTicket(cwd, reference, role, { author: options.author ?? "human" });
+    return { ticket, warnings };
+  }
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) return remote.backend.triage(runner, remote.checkout, reference, role);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {

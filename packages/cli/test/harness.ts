@@ -148,6 +148,11 @@ export class TempRepo {
     return repo;
   }
 
+  /** The bare git dir this repo's state store lives in, beside which the cache and the session index sit. */
+  storeDir(): string {
+    return join(process.env["DRYLAND_DATA_DIR"] ?? "", "stores", `${this.git("config", "dryland.repoId")}.git`);
+  }
+
   write(file: string, content: string): void {
     const full = join(this.path, file);
     mkdirSync(dirname(full), { recursive: true });

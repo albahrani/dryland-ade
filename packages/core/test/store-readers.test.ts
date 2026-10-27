@@ -4,7 +4,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  claimStoreTicket,
+  commentOnStoreTicket,
   createStoreTicket,
+  resolveStoreTicket,
+  storeDir,
   createWorktree,
   type FixtureEffort,
   nextSteps,
@@ -19,6 +23,8 @@ import {
   showMap,
   specsWithoutTickets,
 } from "../src/index.ts";
+
+const readTicketsTree = async (root: string) => (await readProjectState(nodeProcessRunner, root)).tree;
 
 async function storeRepo(efforts: FixtureEffort[], files: Record<string, string> = {}): Promise<string> {
   process.env["DRYLAND_DATA_DIR"] ??= mkdtempSync(join(tmpdir(), "dryland-data-"));
@@ -115,8 +121,6 @@ describe("the tickets tree and snapshot on a store", () => {
 });
 
 describe("the project state of a store with only open tickets", () => {
-  // Claimed and resolved tickets, and so the paused, stale and folded-done cases of the markdown tests, need the
-  // lifecycle events of ticket 43; they are ported there.
   it("shows an effort without a map as a standalone group, and leaves sessions unknown when given none", async () => {
     const root = await storeRepo([
       { effort: "blog", tickets: [{ title: "Write post" }, { title: "Edit post", blockedBy: [1] }] },
@@ -139,6 +143,85 @@ describe("the project state of a store with only open tickets", () => {
     const { snapshot } = await readProjectState(nodeProcessRunner, root, []);
 
     expect(nextSteps(snapshot).map((s) => s.ruleId)).toEqual(["map-frontier"]);
+  });
+});
+
+describe("claimed and resolved tickets on a store", () => {
+  const as = { author: "engine" } as const;
+  const claimedShop = async () => {
+    const root = await storeRepo([
+      { effort: "shop", map: { title: "Shop" }, tickets: ["A", "B", "C", "D", "E"].map((title) => ({ title })) },
+    ]);
+    for (const id of ["01", "02", "03", "04", "05"].slice(1)) {
+      await claimStoreTicket(root, `shop/${id}`, { ...as, holder: `shop/${id}-branch` });
+    }
+    return root;
+  };
+
+  it("derives status and claimant, folds a resolved ticket into done and unblocks its dependants", async () => {
+    const root = await storeRepo([
+      { effort: "shop", tickets: [{ title: "A" }, { title: "B", blockedBy: [1] }, { title: "C", blockedBy: [2, 1] }] },
+    ]);
+    await resolveStoreTicket(root, "shop/01", "Done.", as);
+    await claimStoreTicket(root, "shop/02", { ...as, holder: "shop/02-b" });
+
+    const [shop] = (await readTicketsTree(root)).maps;
+
+    expect(shop?.done.map((t) => t.id)).toEqual(["01"]);
+    const byId = Object.fromEntries((shop?.implementation ?? []).map((t) => [t.id, t]));
+    expect(byId["02"]).toMatchObject({ status: "in-progress", claimant: "shop/02-b", blockers: [] });
+    expect(byId["03"]).toMatchObject({ status: "blocked", blockers: ["02"] });
+    expect(await readTicketDetail(root, "shop", "01")).toMatchObject({ status: "done" });
+  });
+
+  it("calls a claim stale when neither a live session nor the session index knows it", async () => {
+    const root = await storeRepo([{ effort: "shop", tickets: [{ title: "A" }] }]);
+    await claimStoreTicket(root, "shop/01", { ...as, holder: "gone-session" });
+
+    const { snapshot } = await readProjectState(nodeProcessRunner, root, []);
+
+    expect(nextSteps(snapshot).map((s) => s.ruleId)).toEqual(["stale-claim"]);
+    const live = [{ id: "s1", ticket: { map: "shop", id: "01" }, state: "running" as const }];
+    expect(nextSteps((await readProjectState(nodeProcessRunner, root, live)).snapshot)).toEqual([]);
+  });
+
+  it("feeds live sessions into the snapshot and reads an indexed claim with no live session as paused", async () => {
+    const root = await claimedShop();
+    const dir = await storeDir(root);
+    const seen = (sessionId: string, lastState?: string) => [
+      { adapter: "claude-code", sessionId, lastSeen: "2026-10-15T09:00:00.000Z", ...(lastState ? { lastState } : {}) },
+    ];
+    mkdirSync(join(dir ?? "", "dryland"), { recursive: true });
+    writeFileSync(
+      join(dir ?? "", "dryland", "sessions.json"),
+      JSON.stringify({ items: { "shop/02": seen("c2", "waiting"), "shop/03": seen("c3", "running") } }),
+    );
+    const sessions = [{ id: "s4", ticket: { map: "shop", id: "04" }, state: "waiting" as const }];
+
+    const { snapshot } = await readProjectState(nodeProcessRunner, root, sessions);
+
+    expect(snapshot.sessions).toEqual([
+      ...sessions,
+      { id: "c2", ticket: { map: "shop", id: "02" }, state: "paused", was: "waiting" },
+      { id: "c3", ticket: { map: "shop", id: "03" }, state: "paused", was: "interrupted" },
+    ]);
+    expect(nextSteps(snapshot).map((s) => s.ruleId)).toEqual([
+      "waiting-session",
+      "paused-was-waiting",
+      "stale-claim",
+      "map-frontier",
+    ]);
+    expect((await readProjectState(nodeProcessRunner, root)).snapshot.sessions).toBeNull();
+  });
+
+  it("shows the claim holder, answer and comments on the ticket tab", async () => {
+    const root = await storeRepo([{ effort: "shop", tickets: [{ title: "A" }, { title: "B" }] }]);
+    await claimStoreTicket(root, "shop/01", { ...as, holder: "shop/01-a" });
+    await commentOnStoreTicket(root, "shop/01", "A note.", as);
+    await resolveStoreTicket(root, "shop/02", "Because.", as);
+
+    expect(await readTicketDetail(root, "shop", "01")).toMatchObject({ claimant: "shop/01-a", comments: ["A note."] });
+    expect(await readTicketDetail(root, "shop", "02")).toMatchObject({ status: "done", answer: "Because." });
   });
 });
 

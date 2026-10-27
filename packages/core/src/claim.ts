@@ -1,6 +1,8 @@
 import { DrylandError } from "./errors.ts";
 import { readClaim, rewriteStatus } from "./local-markdown.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import { isStoreInitialised } from "./state-store.ts";
+import { claimStoreTicket, releaseStoreTicket } from "./store-lifecycle.ts";
 import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
 import { remoteBackend } from "./tracker-backend.ts";
 import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
@@ -8,6 +10,8 @@ import { writeTracker, type TrackerWriteOptions } from "./tracker-write.ts";
 export interface ClaimOptions extends TrackerWriteOptions {
   /** Who is claiming: a branch name, so the claim outlives the session that made it (ADR 0010). */
   holder: string;
+  /** The Dryland or Agent CLI session making the claim, recorded on a state-store claim beside its branch. */
+  session?: string | null;
 }
 
 /** The holder name for `cwd`: its branch, or the commit when detached. */
@@ -35,6 +39,14 @@ export async function claimTicket(
   options: ClaimOptions,
 ): Promise<ClaimResult> {
   const wanted = parseTicketReference(reference);
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings, alreadyHeld } = await claimStoreTicket(cwd, reference, {
+      author: options.author ?? "human",
+      holder: options.holder,
+      session: options.session ?? null,
+    });
+    return { ticket, warnings, alreadyHeld };
+  }
   // On a remote tracker the claim is the assignee, which is the user's own login rather than the branch holder.
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) return remote.backend.claim(runner, remote.checkout, reference);
@@ -76,6 +88,10 @@ export async function releaseTicket(
   options: TrackerWriteOptions = {},
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings } = await releaseStoreTicket(cwd, reference, { author: options.author ?? "human" });
+    return { ticket, warnings };
+  }
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) return remote.backend.release(runner, remote.checkout, reference);
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {

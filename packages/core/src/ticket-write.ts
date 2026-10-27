@@ -10,6 +10,8 @@ import {
 } from "./local-markdown.ts";
 import { assertMapName, readMapFile } from "./map.ts";
 import type { ProcessRunner } from "./process-runner.ts";
+import { isStoreInitialised } from "./state-store.ts";
+import { resolveStoreTicket, tickStoreTicket } from "./store-lifecycle.ts";
 import { TICKET_TYPES, type TicketType } from "./ticket.ts";
 import { currentTicket, parseTicketReference, type TicketWriteResult } from "./tickets.ts";
 import { remoteBackend } from "./tracker-backend.ts";
@@ -120,6 +122,13 @@ export async function resolveTicket(
   if (text === "") {
     throw new DrylandError("A resolution needs an answer.", 'Pass it as --answer "<what was decided or done>".');
   }
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings } = await resolveStoreTicket(cwd, reference, text, {
+      author: options.author ?? "human",
+      amend: options.amend === true,
+    });
+    return { ticket, warnings };
+  }
   const remote = await remoteBackend(runner, cwd);
   if (remote !== null) {
     if (options.amend === true) throw remoteUnsupported("--amend");
@@ -188,6 +197,12 @@ export async function tickTicket(
       `"${criterion}" is not a criterion number.`,
       "Pass --criterion with the 1-based position of the box, e.g. --criterion 2.",
     );
+  }
+  if (await isStoreInitialised(cwd)) {
+    const { ticket, warnings } = await tickStoreTicket(cwd, reference, criterion, {
+      author: options.author ?? "human",
+    });
+    return { ticket, warnings };
   }
   if ((await remoteBackend(runner, cwd)) !== null) throw remoteUnsupported("ticket tick");
   const { value, warnings } = await writeTracker(runner, cwd, options, async (mainCheckout) => {

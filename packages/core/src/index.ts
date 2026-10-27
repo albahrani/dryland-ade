@@ -31,6 +31,7 @@ export * from "./skills.ts";
 export * from "./state-store.ts";
 export * from "./store-dir.ts";
 export * from "./store-fixture.ts";
+export * from "./store-lifecycle.ts";
 export * from "./store-read.ts";
 export * from "./store-schemas.ts";
 export * from "./ticket-edit.ts";

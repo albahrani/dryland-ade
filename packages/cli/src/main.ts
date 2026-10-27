@@ -156,8 +156,8 @@ const asTicket = (d: TicketDocument): Ticket => ({
   blockers: d.blockedBy.map((ref) => ref.split("/")[1] ?? ref),
   triageRole: d.triageRole,
   body: d.report,
-  answer: null,
-  comments: [],
+  answer: d.answer,
+  comments: d.comments,
   raw: {},
 });
 
@@ -365,7 +365,10 @@ const COMMANDS: Record<
       const holder = await branchHolder(nodeProcessRunner, process.cwd());
       const { ticket, warnings, alreadyHeld } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
         holder,
+        session:
+          process.env["DRYLAND_SESSION_ID"] ?? currentAgentSession(AGENT_ADAPTERS, process.env)?.sessionId ?? null,
         autoCommit: autoCommit(flags),
+        author: callerAuthor(),
       });
       const name = `${ticket.map}/${ticket.id}`;
       // On GitHub the claimant is the `gh` login, not the branch.
@@ -380,6 +383,7 @@ const COMMANDS: Record<
     run: async (target, flags) => {
       const { ticket, warnings } = await releaseTicket(nodeProcessRunner, process.cwd(), target, {
         autoCommit: autoCommit(flags),
+        author: callerAuthor(),
       });
       return { value: ticket, text: `Released ${ticket.map}/${ticket.id}.\n`, warnings };
     },
@@ -439,7 +443,7 @@ const COMMANDS: Record<
         process.cwd(),
         target,
         required(flags, "answer"),
-        { autoCommit: autoCommit(flags), amend },
+        { autoCommit: autoCommit(flags), amend, author: callerAuthor() },
       );
       const verb = amend ? "Amended the answer of" : "Resolved";
       return { value: ticket, text: `${verb} ${ticket.map}/${ticket.id}.\n`, warnings };
@@ -453,6 +457,7 @@ const COMMANDS: Record<
       const criterion = Number(required(flags, "criterion"));
       const { ticket, warnings } = await tickTicket(nodeProcessRunner, process.cwd(), target, criterion, {
         autoCommit: autoCommit(flags),
+        author: callerAuthor(),
       });
       return { value: ticket, text: `Ticked criterion ${criterion} of ${ticket.map}/${ticket.id}.\n`, warnings };
     },
@@ -467,7 +472,7 @@ const COMMANDS: Record<
         process.cwd(),
         target,
         { add: numberList(flags, "add"), remove: numberList(flags, "remove") },
-        { autoCommit: autoCommit(flags) },
+        { autoCommit: autoCommit(flags), author: callerAuthor() },
       );
       const ids = ticket.blockers === "unknown" ? [] : ticket.blockers;
       const blockers = ids.length === 0 ? "none" : ids.join(", ");
@@ -484,7 +489,7 @@ const COMMANDS: Record<
         process.cwd(),
         target,
         required(flags, "text"),
-        { autoCommit: autoCommit(flags) },
+        { autoCommit: autoCommit(flags), author: callerAuthor() },
       );
       return { value: ticket, text: `Commented on ${ticket.map}/${ticket.id}.\n`, warnings };
     },
@@ -499,7 +504,7 @@ const COMMANDS: Record<
         process.cwd(),
         target,
         required(flags, "role"),
-        { autoCommit: autoCommit(flags) },
+        { autoCommit: autoCommit(flags), author: callerAuthor() },
       );
       return { value: ticket, text: `Triaged ${ticket.map}/${ticket.id} as ${ticket.triageRole}.\n`, warnings };
     },
