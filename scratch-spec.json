@@ -1,7 +1,0 @@
-{"edits":[
-{"file":"test/source-control-pull-request.test.ts","find":"const setTracker = (title: string) => {\n  writeFileSync(join(repo, \"docs/agents/issue-tracker.md\"), `# Issue tracker: ${title}\n`);\n  git(repo, \"commit\", \"-qam\", \"Tracker\");\n};","replace":"/** Points `origin` at the forge's host, from which the project's forge is found. */\nconst setForge = (host: \"github.com\" | \"gitlab.com\") => {\n  try {\n    git(repo, \"remote\", \"remove\", \"origin\");\n  } catch {\n    // No origin yet.\n  }\n  git(repo, \"remote\", \"add\", \"origin\", `https://${host}/acme/shop.git`);\n};"},
-{"file":"test/source-control-pull-request.test.ts","find":"setTracker(\"GitHub\")","replace":"setForge(\"github.com\")"},
-{"file":"test/source-control-pull-request.test.ts","find":"setTracker(\"GitLab\")","replace":"setForge(\"gitlab.com\")"},
-{"file":"test/source-control-pull-request.test.ts","find":"on a local-markdown project","replace":"on a project without a forge"},
-{"file":"test/source-control-pull-request.test.ts","find":"    // Listing the worktrees reads the tracker's issues; this project has none.\n","replace":""}
-]}
