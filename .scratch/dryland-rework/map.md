@@ -40,6 +40,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Session-state channel](issues/25-session-state-channel-and-adapter-cuts.md): a Live event is a running, waiting, idle or ended report with no payload, and `ticket.changed` is gone.
 - [Store model parity](issues/41-store-model-parity-maps-and-ticket-fields.md): The store is a bare git dir in the user data dir with document writes and document reads; ticket and map creation are schema-checked.
 - [Desktop and rule engine read the store](issues/42-desktop-and-rule-engine-read-the-store.md): Tree, tabs, rules, snapshot and worktree naming read the store, and the desktop polls the state ref head to refresh.
+- [Lifecycle writes on the store](issues/43-lifecycle-writes-on-the-store.md): Claim, release, resolve, tick, triage, block and comment append events to the store with the old rules and messages, and the desktop actions run them unchanged.
 
 ## Not yet specified
 
