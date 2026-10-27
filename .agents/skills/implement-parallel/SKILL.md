@@ -17,17 +17,18 @@ Permission mode is accept-edits, with the shell allowlist in `.claude/settings.l
 3. **Brief** each agent (fill N and the ticket path):
 
    > Implement ticket N: `<ticket path>`. Work ONLY in `<abs worktree path>` (branch ticket-N); absolute paths, `git -C`. Follow the ticket's "Read first" list, AGENTS.md, and the tdd skill.
-   > - Write/Edit only for files; no heredocs or inline scripts. `rtk vitest run <file>`, `rtk tsc`. Never run `dryland ticket|map`.
+   > - Change files with Write and Edit; batches and regex replacements with `node scripts/edit.mjs <spec.json>` (spec in the scratchpad directory, never in the repo); deletions with `git rm`. `sed`, `awk`, heredocs and inline scripts are forbidden. `rtk vitest run <file>`, `rtk tsc`. Never run `dryland ticket|map`.
    > - `.claude/skills/` is absent in your worktree; the skills are in `.agents/skills/<name>/SKILL.md`. Run `pnpm install --offline` first if `node_modules` is missing.
    > - Tests: run whatever verifies the point you are at, as often as needed (single files, then packages), so you know when you are done. Every run is a verification with a purpose; pick the smallest that serves it. The final full-suite run is the last line of defense for the unforeseen: run `pnpm test` at least once at the end, then the heavy suites as the final quality gate.
    > - Heavy suites run only through the lock: `node scripts/with-lock.mjs pnpm test:linux`, `node scripts/with-lock.mjs pnpm --filter @dryland/desktop test:e2e`, `node scripts/with-lock.mjs pnpm test:e2e:linux`. All other tests run lock-free in parallel.
-   > - The e2e suites open the desktop app on the user's screen: run each exactly once, at the very end, and only if `packages/desktop` changed. To debug an e2e failure, run the single spec, not the suite.
-   > - Stuck: after 3 failed attempts at the same failure, or when the ticket and the code disagree, stop and report the blocker with what you tried; do not keep trying. Commit a WIP checkpoint after each coherent chunk.
+   > - E2E is the most expensive check; unit and integration tests verify first. Native e2e opens the app on the user's screen, so use it only for the final gate. During development, an e2e run (only when `packages/desktop` changed and no lower test can verify the behaviour) is `node scripts/with-lock.mjs pnpm test:e2e:linux e2e/<spec>.spec.ts`: invisible (Xvfb), faster, only the specs your change touches. Batch first: finish a coherent chunk and fix every known failure, then run once, never once per small edit.
+   > - Final gate, once everything else is done and reviewed (review fixes included): one full native e2e and one full `test:e2e:linux`, both green on the final commit. Any code change after a green run means both full runs again. Do not report done without them.
+   > - Stuck: after 3 failed attempts at the same failure, or when the ticket and the code disagree, stop and report the blocker with what you tried; do not keep trying. Commit a checkpoint with a real message after each coherent chunk.
    > - Code-review (Standards + Spec) against `main..HEAD` is mandatory; fix real findings, re-test.
    > - Commit the code on ticket-N. Close the ticket per AGENTS.md "Closing a ticket" as a separate commit. Do not merge or push.
    > - Report: commits, tests run with pass/fail, review findings and fixes, known limits.
 
-4. **Watch.** A background agent cannot ask mid-run; it reports only when it ends. While one runs, check its worktree now and then (`git -C <worktree> log --oneline main..HEAD`, `git diff main --shortstat`) against the ticket's scope. No new commits for a long stretch, or a diff far beyond the ticket, means stuck or drifting.
+4. **Watch.** A background agent cannot ask mid-run; it reports only when it ends. While one runs, check `node scripts/wave-status.mjs` now and then (commits, last commit age, diff size, lock owner, containers) against the ticket's scope. No new commits for a long stretch, or a diff far beyond the ticket, means stuck or drifting.
 5. **Intervene** when an agent reports blocked, loops, or drifts from its ticket: diagnose, then `SendMessage` the fix. If it names a missing file or stale base, check the worktree base first.
 
 ## Merge and verify

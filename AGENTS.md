@@ -37,4 +37,4 @@ Both Linux scripts only `docker run` a stock `node` image, so they leave no Dock
 
 ## Editing files
 
-Create files with the Write tool and change them with the Edit tool. For a batch of replacements across files, or a regex replacement, Write a JSON spec and run `node scripts/edit.mjs <spec.json> [--dry-run]`; the spec format is in the script's header. For any other one-off script, Write it to the scratchpad and run `node <file>`. Verify a scripted change with Grep.
+Create files with the Write tool and change them with the Edit tool. For a batch of replacements across files, or a regex replacement, Write a JSON spec to the scratchpad directory (never into the repo) and run `node scripts/edit.mjs <spec.json> [--dry-run]`; the spec format is in the script's header. For any other one-off script, Write it to the scratchpad and run `node <file>`. Verify a scripted change with Grep.
