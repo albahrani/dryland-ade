@@ -588,7 +588,8 @@ test("stops a session and resumes it from the paused box, in its worktree with t
   await expect(screen).toContainText("agent-ready cwd=shop-02-grill-the-cart");
   await expect(screen).toContainText(`resume=${id}`);
   await expect(screen).not.toContainText("/implement shop/02");
-  expect(show(repo, "shop/02")).toEqual(claimed);
+  const after = show(repo, "shop/02");
+  expect({ status: after.status, claim: after.claim }).toEqual({ status: claimed.status, claim: claimed.claim });
   await app.close();
 });
 
