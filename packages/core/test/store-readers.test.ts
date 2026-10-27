@@ -18,7 +18,6 @@ import {
   readProjectState,
   readStoreHead,
   readTicketDetail,
-  readTrackerWidget,
   seedStore,
   showMap,
   specsWithoutTickets,
@@ -70,7 +69,7 @@ describe("the tickets tree and snapshot on a store", () => {
     expect(shop?.implementation.map((t) => [t.title, t.status, t.blockers])).toEqual([
       ["Build the cart", "blocked", ["01"]],
     ]);
-    expect(snapshot.setupConfigPresent).toBe(true);
+    expect(snapshot.hasStore).toBe(true);
     expect(snapshot.efforts.map((e) => [e.name, e.map?.title ?? null])).toEqual([["shop", "Shop"]]);
   });
 
@@ -255,23 +254,13 @@ describe("the item tabs on a store", () => {
   });
 });
 
-describe("worktrees and the tracker widget on a store", () => {
+describe("worktrees on a store", () => {
   it("names a ticket's worktree after its title", async () => {
     const root = await storeRepo([SHOP]);
 
     const result = await createWorktree(nodeProcessRunner, root, { ticket: "shop/01" });
 
     expect(result.branch).toBe("shop/01-grill-the-cart");
-  });
-
-  it("names the state store as the tracker, with no lens mode and no default-branch note", async () => {
-    const root = await storeRepo([SHOP]);
-
-    expect(await readTrackerWidget(nodeProcessRunner, root)).toEqual({
-      kind: "state-store",
-      lens: false,
-      offDefaultBranch: null,
-    });
   });
 });
 

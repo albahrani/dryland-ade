@@ -1,9 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { mapGroups, parseMap } from "./map.ts";
+import { mapGroups } from "./map.ts";
 import {
   decisionsOf,
-  isStoreInitialised,
   readStoreState,
   type StoreMap,
   type StoreState,
@@ -11,14 +8,13 @@ import {
   toTicket,
 } from "./state-store.ts";
 import type { Ticket, TriageRole } from "./ticket.ts";
-import { readTickets } from "./tickets.ts";
 import { type TreeTicket, toTreeTicket } from "./tickets-tree.ts";
 
-/** A ticket as an editor tab shows it: its row fields plus the text of the file. */
+/** A ticket as an editor tab shows it: its row fields plus its Report and criteria. */
 export interface TicketDetail extends TreeTicket {
-  /** The title of the parent map, or its name when the map has no `map.md`. */
+  /** The title of the parent map, or its name when the effort has no map record. */
   mapTitle: string;
-  /** The ticket text; for a store ticket its Report and a checklist of its acceptance criteria. */
+  /** The ticket text: its Report and a checklist of its acceptance criteria. */
   body: string;
   answer: string | null;
   comments: string[];
@@ -29,7 +25,7 @@ export interface TicketDetail extends TreeTicket {
 export interface MapDetail {
   name: string;
   title: string;
-  /** The `map.md` text as written; for a store map the record rendered as markdown. */
+  /** The map record rendered as markdown. */
   markdown: string;
 }
 
@@ -70,31 +66,25 @@ function renderTicketBody(ticket: StoreTicket): string {
   return `${ticket.report}\n\n## Acceptance criteria\n\n${boxes}`;
 }
 
-/** The map of an effort, or `null` when it has none: a `map.md` for markdown, a map record for the store. */
+/** The map record of an effort rendered for its tab, or `null` when the effort has none. */
 export async function readMapDetail(mainCheckout: string, name: string): Promise<MapDetail | null> {
-  if (await isStoreInitialised(mainCheckout)) {
-    const state = await readStoreState(mainCheckout);
-    const map = state.maps.find((m) => m.effort === name);
-    return map === undefined ? null : { name, title: map.title || name, markdown: renderMap(map, state) };
-  }
-  const markdown = await readFile(join(mainCheckout, ".scratch", name, "map.md"), "utf8").catch(() => null);
-  if (markdown === null) return null;
-  return { name, title: parseMap(name, markdown).title || name, markdown };
+  const state = await readStoreState(mainCheckout);
+  const map = state.maps.find((m) => m.effort === name);
+  return map === undefined ? null : { name, title: map.title || name, markdown: renderMap(map, state) };
 }
 
 /** One ticket by map and number, or `null` when it does not exist. */
 export async function readTicketDetail(mainCheckout: string, map: string, id: string): Promise<TicketDetail | null> {
-  const own = (await readTickets(mainCheckout)).filter((t) => t.map === map);
+  const state = await readStoreState(mainCheckout);
+  const own = state.tickets.filter((t) => t.effort === map).map(toTicket);
   const ticket = own.find((t) => t.id === id);
-  if (ticket === undefined) return null;
-  const mapTitle = (await readMapDetail(mainCheckout, map))?.title ?? map;
-  const stored = (await isStoreInitialised(mainCheckout))
-    ? (await readStoreState(mainCheckout)).tickets.find((t) => t.effort === map && t.id === id)
-    : undefined;
+  const stored = state.tickets.find((t) => t.effort === map && t.id === id);
+  if (ticket === undefined || stored === undefined) return null;
+  const mapTitle = state.maps.find((m) => m.effort === map)?.title || map;
   return {
     ...toTreeTicket(ticket, own),
     mapTitle,
-    body: stored === undefined ? ticket.body : renderTicketBody(stored),
+    body: renderTicketBody(stored),
     answer: ticket.answer,
     comments: ticket.comments,
     triageRole: ticket.triageRole,

@@ -1,13 +1,11 @@
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { exists } from "./env-fs.ts";
 import { DrylandError, requireOneLine } from "./errors.ts";
-import { ticketFile } from "./local-markdown.ts";
-import { findMainCheckout } from "./main-checkout.ts";
+import { defaultBranch, findMainCheckout } from "./main-checkout.ts";
 import type { WorktreeGitState } from "./next-step.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
 import { findTicket, parseTicketReference, readTickets } from "./tickets.ts";
-import { defaultBranch } from "./tracker-write.ts";
 
 /** The commit trailer that ties a branch to a ticket when its name does not: `Dryland-Ticket: <map>/<NN>`. */
 export const TICKET_TRAILER = "Dryland-Ticket";
@@ -96,10 +94,7 @@ export async function createWorktree(
       );
     }
     const found = findTicket(await readTickets(mainCheckout), parseTicketReference(options.ticket));
-    // A markdown ticket is named after its file; a store ticket has none, so its title names it.
-    const file = await ticketFile(mainCheckout, found.map, found.id);
-    const stem = file === null ? "" : basename(file, ".md").replace(/^\d+-/, "");
-    base = `${found.map}/${found.id}-${slugify(stem) || slugify(found.title) || "ticket"}`;
+    base = `${found.map}/${found.id}-${slugify(found.title) || "ticket"}`;
     ticket = `${found.map}/${found.id}`;
   } else {
     if (options.map === undefined) {
@@ -255,7 +250,7 @@ async function snapshotWorktrees(
 ): Promise<WorktreeSnapshot> {
   const [raw, tickets, defaultName] = await Promise.all([
     gitWorktrees(runner, mainCheckout),
-    known ?? readTickets(mainCheckout, runner),
+    known ?? readTickets(mainCheckout),
     defaultBranch(runner, mainCheckout),
   ]);
   const base = defaultName ?? "HEAD";

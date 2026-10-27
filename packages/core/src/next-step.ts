@@ -1,4 +1,3 @@
-import { issuesDir } from "./local-markdown.ts";
 import { frontierOf, isUnblocked, type MapModel, unresolvedBlockers } from "./map.ts";
 import { byTicketNumber, type Ticket, ticketKind } from "./ticket.ts";
 
@@ -11,11 +10,11 @@ export interface EffortSnapshot {
 
 /**
  * Everything the rules read, already normalized: no file or process is touched to evaluate it. `git` is read
- * from the Linked worktrees; `sessions` and `skillSetup` stay `null` (unknown) until their sources are fed in.
+ * from the Linked worktrees; `sessions` stays `null` (unknown) until its source is fed in.
  */
 export interface RepoSnapshot {
-  /** Whether the repo has somewhere to keep tickets: a Dryland state store, or the issue-tracker doc the skills wrote. */
-  setupConfigPresent: boolean;
+  /** Whether the repo has a Dryland state store, the only place tickets and maps live. */
+  hasStore: boolean;
   efforts: EffortSnapshot[];
   tickets: Ticket[];
   hasGlossary: boolean;
@@ -24,7 +23,6 @@ export interface RepoSnapshot {
   git: GitState | null;
   /** Live Dryland sessions; `null` when unknown, in which case no claim is called stale. */
   sessions: SessionSnapshot[] | null;
-  skillSetup: SkillSetupSnapshot | null;
 }
 
 /** A reference to a ticket: its map and number. */
@@ -77,21 +75,6 @@ export interface GitState {
   worktrees: WorktreeGitState[];
 }
 
-export type FeatureVerdict = "ok" | "degraded" | "broken";
-
-export interface SkillSetupSnapshot {
-  setup: "default" | "default-with-extras" | "modified";
-  /** The Compatibility verdict per rule id; `null` when no valid verdict exists. */
-  verdict: Record<string, FeatureVerdict> | null;
-  /** Rule ids the user re-enabled although the verdict calls them broken. */
-  overrides: string[];
-  /**
-   * The skills installed, by name; `null` when unknown. A modified setup without a valid verdict is only ever
-   * recommended these.
-   */
-  installed?: string[] | null;
-}
-
 /** The artifact a step points at. */
 export type StepTarget =
   | { kind: "repo" }
@@ -116,14 +99,14 @@ export interface NextStep {
   evidence: Evidence[];
 }
 
-const mapFile = (map: string) => `.scratch/${map}/map.md`;
+const mapRecord = (map: string) => `map ${map}`;
+const ticketsOf = (map: string) => `${map} tickets`;
 const specFile = (map: string) => `.scratch/${map}/spec.md`;
 const ticketRef = (t: Ticket) => `${t.map}/${t.id}`;
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-/** Whether the ticket links to its spec: a store ticket's `spec` field, or a markdown ticket's `Spec:` header. */
-const linksToSpec = (ticket: Ticket): boolean =>
-  (ticket.spec ?? null) !== null || Object.keys(ticket.raw).some((key) => key.toLowerCase() === "spec");
+/** Whether the ticket links to its spec through its `spec` field. */
+const linksToSpec = (ticket: Ticket): boolean => (ticket.spec ?? null) !== null;
 
 /**
  * Whether a ticket is slice-of-the-spec work rather than a wayfinding decision. A spec link or a triage
@@ -139,19 +122,15 @@ function isSliceOfSpec(ticket: Ticket, effort: EffortSnapshot): boolean {
 type Rule = (snapshot: RepoSnapshot) => NextStep[];
 
 const noSetupConfig: Rule = (snapshot) =>
-  snapshot.setupConfigPresent
+  snapshot.hasStore
     ? []
     : [
         {
           ruleId: "no-setup-config",
           command: "dryland init",
           target: { kind: "repo" },
-          reason:
-            "The repo has no Dryland state store and no tracker doc, so there is nowhere to keep tickets and maps.",
-          evidence: [
-            { artifact: "state store", field: "presence", value: "missing" },
-            { artifact: "docs/agents/issue-tracker.md", field: "presence", value: "missing" },
-          ],
+          reason: "The repo has no Dryland state store, so there is nowhere to keep tickets and maps.",
+          evidence: [{ artifact: "state store", field: "presence", value: "missing" }],
         },
       ];
 
@@ -204,8 +183,8 @@ const fogOnly: Rule = perEffort((effort, tickets) => {
       target: { kind: "map", map: effort.name },
       reason: `Map ${effort.name} has no open ticket left and ${count(map.fog.length, "item")} of fog, so the map itself is next.`,
       evidence: [
-        { artifact: mapFile(effort.name), field: "Not yet specified", value: count(map.fog.length, "item") },
-        { artifact: issuesDir(effort.name), field: "open tickets", value: "0" },
+        { artifact: mapRecord(effort.name), field: "Not yet specified", value: count(map.fog.length, "item") },
+        { artifact: ticketsOf(effort.name), field: "open tickets", value: "0" },
       ],
     },
   ];
@@ -224,8 +203,8 @@ const clearedMap: Rule = perEffort((effort, tickets) => {
       target: { kind: "map", map: effort.name },
       reason: `Map ${effort.name} is cleared: no open ticket and no fog remain, so its decisions can become a spec.`,
       evidence: [
-        { artifact: mapFile(effort.name), field: "Not yet specified", value: "empty" },
-        { artifact: issuesDir(effort.name), field: "open tickets", value: "0" },
+        { artifact: mapRecord(effort.name), field: "Not yet specified", value: "empty" },
+        { artifact: ticketsOf(effort.name), field: "open tickets", value: "0" },
       ],
     },
   ];
@@ -241,7 +220,7 @@ const specWithoutTickets: Rule = perEffort((effort, tickets) => {
       reason: `The spec of ${effort.name} has not been sliced into tickets yet.`,
       evidence: [
         { artifact: specFile(effort.name), field: "presence", value: "present" },
-        { artifact: issuesDir(effort.name), field: "implementation tickets", value: "0" },
+        { artifact: ticketsOf(effort.name), field: "implementation tickets", value: "0" },
       ],
     },
   ];
@@ -330,7 +309,7 @@ const implementSpec: Rule = perEffort((effort, tickets) => {
       evidence: [
         { artifact: specFile(effort.name), field: "presence", value: "present" },
         {
-          artifact: issuesDir(effort.name),
+          artifact: ticketsOf(effort.name),
           field: "ready-for-agent tickets",
           value: ready.map((t) => t.id).join(", "),
         },
@@ -472,51 +451,10 @@ export const RECOMMENDED_SKILLS = [
   "/retro",
 ] as const;
 
-/** A rule is off when the Compatibility verdict calls it broken and the user has not overridden that. */
-function isDisabled(snapshot: RepoSnapshot, ruleId: string): boolean {
-  const { skillSetup } = snapshot;
-  if (skillSetup === null || skillSetup.verdict === null) return false;
-  return skillSetup.verdict[ruleId] === "broken" && !skillSetup.overrides.includes(ruleId);
-}
-
-/**
- * Whether a step's skill is missing from a modified setup nobody has a verdict for: Dryland then pre-types only
- * skills it can see are installed.
- */
-function recommendsMissingSkill(snapshot: RepoSnapshot, step: NextStep): boolean {
-  const { skillSetup } = snapshot;
-  if (step.command === null || !step.command.startsWith("/") || skillSetup === null || skillSetup.verdict !== null)
-    return false;
-  if (skillSetup.setup !== "modified" || skillSetup.installed == null) return false;
-  const skill = step.command.slice(1).split(" ")[0] ?? "";
-  return !skillSetup.installed.includes(skill);
-}
-
 /** The ranked next steps of a repo snapshot, best first. Pure: the same snapshot gives the same list. */
 export function nextSteps(snapshot: RepoSnapshot): NextStep[] {
-  return RULES.flatMap((rule) => rule(snapshot)).filter(
-    (step) => !isDisabled(snapshot, step.ruleId) && !recommendsMissingSkill(snapshot, step),
-  );
+  return RULES.flatMap((rule) => rule(snapshot));
 }
-
-/** Every rule id, in priority order: the features a Compatibility verdict speaks about. */
-export const RULE_IDS = [
-  "no-setup-config",
-  "waiting-session",
-  "paused-was-waiting",
-  "stale-claim",
-  "map-frontier",
-  "implement-spec",
-  "implement-ticket",
-  "map-fog-only",
-  "map-cleared",
-  "needs-triage",
-  "spec-without-tickets",
-  "blocking-unknown",
-  "review-before-pr",
-  "open-pr",
-  "retro",
-] as const;
 
 /**
  * The skill command to pre-type when work starts on `ref`: that of the best next step pointing at the ticket.

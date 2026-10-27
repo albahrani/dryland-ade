@@ -5,19 +5,17 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CLAUDE_CODE,
-  COMPAT_RUN_COMMAND,
   DrylandError,
   hookSettings,
   nodeProcessRunner,
   readSessionIndex,
-  readTrackerInfo,
 } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
 import { createDrylandCli } from "../src/main/dryland-cli.ts";
 import { createTerminalManager } from "../src/main/terminals.ts";
 import { createWorkStarter } from "../src/main/work.ts";
 import { FakePtyProvider } from "./fake-pty.ts";
-import { fixtureRepo } from "./fixture-repo.ts";
+import { dryland as drylandIn, fixtureRepo } from "./fixture-repo.ts";
 
 const windows = process.platform === "win32";
 
@@ -36,7 +34,7 @@ function stubBin(others: string[] = []): { dir: string; claude: string } {
 /** The real `dryland` bundle, built by the test suite's global setup; Node stands in for the app's Electron. */
 const CLI = fileURLToPath(new URL("../../cli/dist/dryland.mjs", import.meta.url));
 
-function setup(path = stubBin().dir, inherited: Record<string, string> = {}, autoCommit = true) {
+function setup(path = stubBin().dir, inherited: Record<string, string> = {}) {
   // The app hands terminals and the work starter the same environment, its own.
   const env = { PATH: path, HOME: "/home/test", ...inherited };
   // `dryland` runs with the test's own environment, which finds git; no app listens for it.
@@ -47,7 +45,6 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}, aut
       ...process.env,
       DRYLAND_PORT: undefined,
       DRYLAND_TOKEN: undefined,
-      DRYLAND_APP_DIR: mkdtempSync(join(tmpdir(), "dryland-no-app-")),
     },
   });
   const provider = new FakePtyProvider();
@@ -66,14 +63,18 @@ function setup(path = stubBin().dir, inherited: Record<string, string> = {}, aut
     launcherDirs: ["/opt/dryland/bin"],
     hooksDir,
     dryland,
-    autoCommit: () => autoCommit,
     pretype: { quietMs: 20, charDelayMs: 0 },
   });
   return { provider, starter, hooksDir, dryland };
 }
 
 const git = (repo: string, ...args: string[]) => execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim();
-const grill = (repo: string) => readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8");
+/** Ticket shop/02 as the state store holds it. */
+const grill = (repo: string) =>
+  JSON.parse(drylandIn(repo, undefined, "ticket", "show", "shop/02", "--json")) as {
+    status: string;
+    claim: { holder: string } | null;
+  };
 
 const onTicket = (id: string) => ({ kind: "ticket" as const, ticket: { map: "shop", id } });
 
@@ -98,8 +99,8 @@ describe("starting work on a ticket", () => {
 
     const { session } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
-    expect(session.worktree.branch).toBe("shop/02-grill");
-    expect(existsSync(join(session.worktree.path, ".scratch/shop/issues/02-grill.md"))).toBe(true);
+    expect(session.worktree.branch).toBe("shop/02-grill-the-cart");
+    expect(existsSync(session.worktree.path)).toBe(true);
     const options = provider.spawned[0]?.options;
     expect(options).toMatchObject({ file: bin.claude, cwd: session.worktree.path });
     expect(options?.env).toMatchObject({
@@ -155,9 +156,9 @@ describe("starting work on a ticket", () => {
     const pty = provider.spawned[0];
 
     pty?.emit("Claude Code v2\r\n❯ ");
-    await vi.waitFor(() => expect(typed(pty)).toBe("/implement shop/02"));
+    await vi.waitFor(() => expect(typed(pty)).toBe("/wayfinder shop"));
     expect(pty?.written.every((key) => key.length === 1)).toBe(true);
-    expect(session.command).toBe("/implement shop/02");
+    expect(session.command).toBe("/wayfinder shop");
     await pause(50);
     expect(typed(pty)).not.toContain("\r");
   });
@@ -172,7 +173,7 @@ describe("starting work on a ticket", () => {
     expect(typed(pty)).toBe("");
 
     pty?.emit("\x1b[2J❯ Try something");
-    await vi.waitFor(() => expect(typed(pty)).toBe("/implement shop/02"));
+    await vi.waitFor(() => expect(typed(pty)).toBe("/wayfinder shop"));
   });
 
   it("types nothing when no next step points at the ticket", async () => {
@@ -261,27 +262,10 @@ describe("starting work on a ticket", () => {
     const { session, warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(warnings).toEqual([]);
-    expect(grill(repo)).not.toContain(session.id);
-    expect(git(repo, "log", "-1", "--format=%s")).toBe("Claim shop/02 for shop/02-grill");
-    const shown = execFileSync(process.execPath, [CLI, "ticket", "show", "shop/02", "--json"], {
-      cwd: repo,
-      encoding: "utf8",
-    });
-    expect(JSON.parse(shown)).toMatchObject({ state: "claimed", claimant: "shop/02-grill" });
+    expect(grill(repo).claim?.holder).toBe(session.worktree.branch);
+    expect(session.worktree.branch).toBe("shop/02-grill-the-cart");
     provider.spawned[0]?.emit("❯ ");
-    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/implement shop/02"));
-  });
-
-  it("starts and claims the same way in a lens-mode repo, whose tracker doc never mentions dryland", async () => {
-    const repo = fixtureRepo();
-    expect(await readTrackerInfo(repo)).toEqual({ kind: "local-markdown", lens: true });
-    const { provider, starter } = setup();
-
-    const { session, warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
-
-    expect(warnings).toEqual([]);
-    expect(provider.spawned).toHaveLength(1);
-    expect(grill(repo)).toContain(`"holder":"${session.worktree.branch}"`);
+    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/wayfinder shop"));
   });
 
   it("keeps the claim when work starts on the ticket again, its branch already holding it", async () => {
@@ -296,17 +280,6 @@ describe("starting work on a ticket", () => {
     expect(git(repo, "rev-parse", "HEAD")).toBe(head);
   });
 
-  it("claims without committing when auto-commit is off", async () => {
-    const repo = fixtureRepo();
-    const head = git(repo, "rev-parse", "HEAD");
-    const { starter } = setup(undefined, {}, false);
-
-    await starter.startWork(repo, onTicket("02"), "claude-code");
-
-    expect(grill(repo)).toContain('"holder":"shop/02-grill"');
-    expect(git(repo, "rev-parse", "HEAD")).toBe(head);
-  });
-
   it("starts anyway on a ticket someone else holds, leaving their claim alone and saying so", async () => {
     const repo = fixtureRepo();
     const { provider, starter, dryland } = setup();
@@ -315,7 +288,7 @@ describe("starting work on a ticket", () => {
     const { warnings } = await starter.startWork(repo, onTicket("02"), "claude-code");
 
     expect(warnings).toEqual([expect.stringContaining("already claimed by main")]);
-    expect(grill(repo)).toContain('"holder":"main"');
+    expect(grill(repo).claim?.holder).toBe("main");
     expect(provider.spawned).toHaveLength(1);
   });
 
@@ -334,7 +307,7 @@ describe("starting work on a ticket", () => {
   });
 });
 
-describe("continuing a map and starting a new one", () => {
+describe("continuing a map", () => {
   it("continues a map in its own scratch worktree with /wayfinder <map> typed, claiming nothing", async () => {
     const repo = fixtureRepo();
     const head = git(repo, "rev-parse", "HEAD");
@@ -352,7 +325,7 @@ describe("continuing a map and starting a new one", () => {
     provider.spawned[0]?.emit("❯ ");
     await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/wayfinder shop"));
     expect(git(repo, "rev-parse", "HEAD")).toBe(head);
-    expect(grill(repo)).not.toContain("holder");
+    expect(grill(repo).claim).toBeNull();
   });
 
   it("reuses the map's scratch worktree when the map is continued again", async () => {
@@ -364,34 +337,14 @@ describe("continuing a map and starting a new one", () => {
     expect(worktreeCount(repo)).toBe(2);
   });
 
-  it("starts a new map in a new temporary worktree with /wayfinder typed and writes no map file", async () => {
-    const repo = fixtureRepo();
-    const { provider, starter } = setup();
-
-    const { session: first } = await starter.startWork(repo, { kind: "new-map" }, "claude-code");
-    const { session: second } = await starter.startWork(repo, { kind: "new-map" }, "claude-code");
-
-    expect(first).toMatchObject({ ticket: null, map: null, worktree: { branch: "new-map/scratch-wayfinder" } });
-    expect(second.worktree.branch).toBe("new-map/scratch-wayfinder-2");
-    provider.spawned[0]?.emit("❯ ");
-    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/wayfinder "));
-    await pause(50);
-    expect(typed(provider.spawned[0])).not.toContain("\r");
-    expect(readdirSync(join(repo, ".scratch"))).toEqual(["shop"]);
-    expect(readdirSync(join(first.worktree.path, ".scratch"))).toEqual(["shop"]);
-    expect(git(repo, "status", "--porcelain")).toBe("");
-  });
-
-  it("records a map's session under the map, and a new map's under its scratch worktree branch", async () => {
+  it("records a map's session under the map", async () => {
     const repo = fixtureRepo();
     const { starter } = setup();
 
     const { session: map } = await starter.startWork(repo, { kind: "map", map: "shop" }, "claude-code");
-    const { session: newMap } = await starter.startWork(repo, { kind: "new-map" }, "claude-code");
 
     const { index } = await readSessionIndex(nodeProcessRunner, repo);
     expect(index.items["shop"]?.map((s) => s.sessionId)).toEqual([map.agentSessionId]);
-    expect(index.items["new-map/scratch-wayfinder"]?.map((s) => s.sessionId)).toEqual([newMap.agentSessionId]);
   });
 });
 
@@ -431,19 +384,6 @@ describe("starting a session without a ticket", () => {
     await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe("/grilling "));
     const { index } = await readSessionIndex(nodeProcessRunner, repo);
     expect(index.items["scratch/scratch-session"]?.map((s) => s.sessionId)).toEqual([session.agentSessionId]);
-  });
-});
-
-describe("the Compatibility check session", () => {
-  it("opens a scratch session with the compatibility prompt command typed, not a skill", async () => {
-    const repo = fixtureRepo();
-    const { provider, starter } = setup();
-
-    const { session } = await starter.startWork(repo, { kind: "compat-check" }, "claude-code");
-
-    expect(session).toMatchObject({ ticket: null, map: null, worktree: { branch: "scratch/scratch-session" } });
-    provider.spawned[0]?.emit("❯ ");
-    await vi.waitFor(() => expect(typed(provider.spawned[0])).toBe(COMPAT_RUN_COMMAND));
   });
 });
 
@@ -538,6 +478,7 @@ describe("resuming a paused session", () => {
   it("makes the indexed session live again and leaves the claim as it was", async () => {
     const { repo, session: old, starter } = await paused(true);
     const claimed = grill(repo);
+    expect(claimed.claim).not.toBeNull();
     const before = await readSessionIndex(nodeProcessRunner, repo);
 
     await starter.resumeSession(repo, ticket, "resume");
@@ -547,7 +488,7 @@ describe("resuming a paused session", () => {
     expect(Date.parse(index.items["shop/02"]?.[0]?.lastSeen ?? "")).toBeGreaterThanOrEqual(
       Date.parse(before.index.items["shop/02"]?.[0]?.lastSeen ?? ""),
     );
-    expect(grill(repo)).toBe(claimed);
+    expect(grill(repo)).toMatchObject({ status: claimed.status, claim: claimed.claim });
   });
 
   it("opens the CLI's own picker, and says why, when the CLI no longer has the session", async () => {
@@ -646,7 +587,7 @@ describe("starting work with Copilot CLI", () => {
     expect(spawned?.options.file).toBe(copilot);
     expect(spawned?.options.args).toEqual(["--session-id", session.agentSessionId]);
     spawned?.emit("GitHub Copilot\r\n> ");
-    await vi.waitFor(() => expect(typed(spawned)).toBe("/implement shop/02"));
+    await vi.waitFor(() => expect(typed(spawned)).toBe("/wayfinder shop"));
     expect(typed(spawned)).not.toContain("\r");
   });
 
@@ -668,7 +609,7 @@ describe("pre-typing the command", () => {
     const pty = provider.spawned[0];
 
     pty?.emit("❯ ");
-    await vi.waitFor(() => expect(typed(pty)).toBe("/implement shop/02"));
+    await vi.waitFor(() => expect(typed(pty)).toBe("/wayfinder shop"));
     await pause(50);
     expect(typed(pty)).not.toContain("\r");
   });
@@ -693,6 +634,6 @@ describe("pre-typing the command", () => {
     pty?.emit("❯ ");
     starter.userTyped(session.terminalId, "\x1b[1;1R");
 
-    await vi.waitFor(() => expect(typed(pty)).toBe("/implement shop/02"));
+    await vi.waitFor(() => expect(typed(pty)).toBe("/wayfinder shop"));
   });
 });

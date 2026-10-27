@@ -1,32 +1,24 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
-
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\n## Question\n\nWhat?\n`;
+import { createMap, createTicket, git, resolveTicket, storeRepo } from "./store-fixture.ts";
 
 const write = (root: string, file: string, content: string) => {
   mkdirSync(dirname(join(root, file)), { recursive: true });
   writeFileSync(join(root, file), content);
 };
-const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 
-/** A committed repo with ticket shop/02, whose worktree holds one uncommitted edit. */
+/** A committed repo with ticket shop/01, whose worktree holds one uncommitted edit. */
 function fixture(): { repo: string; worktree: string } {
-  const repo = realpathSync.native(mkdtempSync(join(tmpdir(), "dryland-e2e-merge-")));
-  write(repo, "docs/agents/issue-tracker.md", "# Issue tracker: Local markdown\n");
-  write(repo, ".scratch/shop/map.md", "# Map: Shop\n\n## Not yet specified\n\nNothing.\n");
-  write(repo, ".scratch/shop/issues/02-grill.md", ticket("Grill the cart", "Type: task", "Status: ready-for-agent"));
+  const repo = storeRepo("dryland-e2e-merge-");
+  createMap(repo, "shop", "Shop");
+  createTicket(repo, "shop", { title: "Grill the cart" });
   write(repo, "src/greeting.ts", "export const greeting = 'hello';\n");
-  git(repo, "init", "-q", "-b", "main");
-  git(repo, "config", "user.name", "Test");
-  git(repo, "config", "user.email", "test@example.com");
-  git(repo, "config", "commit.gpgsign", "false");
   git(repo, "add", ".");
-  git(repo, "commit", "-q", "-m", "Fixture");
+  git(repo, "commit", "-q", "-m", "Add greeting");
   const worktree = join(repo, "..", `${repo.split(/[\\/]/).at(-1)}-wt`);
-  git(repo, "worktree", "add", "-q", "-b", "shop/02-grill", worktree);
+  git(repo, "worktree", "add", "-q", "-b", "shop/01-grill", worktree);
   write(worktree, "src/greeting.ts", "export const greeting = 'hello world';\n");
   return { repo, worktree: realpathSync.native(worktree) };
 }
@@ -51,7 +43,7 @@ test("merges from the Merge section: blocked while dirty, kept while the ticket 
 
   // Committed, the only thing left is a hint: the ticket is not resolved.
   git(worktree, "commit", "-q", "-a", "-m", "Say hello world");
-  await expect(merge.getByRole("list", { name: "Dry run" })).toContainText("shop/02 is not resolved");
+  await expect(merge.getByRole("list", { name: "Dry run" })).toContainText("shop/01 is not resolved");
   await expect(mergeButton).toBeEnabled();
 
   // Merge with cleanup: the merge lands, the worktree stays because the ticket is open.
@@ -71,13 +63,11 @@ test("merges from the Merge section: blocked while dirty, kept while the ticket 
   expect(existsSync(worktree)).toBe(true);
 
   // Once the ticket is resolved, the confirmed prune removes worktree and branch.
-  const file = join(repo, ".scratch/shop/issues/02-grill.md");
-  writeFileSync(file, readFileSync(file, "utf8").replace("Status: ready-for-agent", "Status: resolved"));
-  git(repo, "commit", "-q", "-a", "-m", "Resolve 02");
+  resolveTicket(repo, "shop/01");
   await merge.getByRole("button", { name: "Prune worktree…" }).click();
   await merge.getByRole("button", { name: "Confirm prune" }).click();
   await expect.poll(() => existsSync(worktree)).toBe(false);
-  expect(git(repo, "branch", "--list", "shop/02-grill").trim()).toBe("");
+  expect(git(repo, "branch", "--list", "shop/01-grill").trim()).toBe("");
 
   await app.close();
 });

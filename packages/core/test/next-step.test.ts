@@ -1,61 +1,94 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  claimStoreTicket,
+  createStoreTicket,
   type EffortSnapshot,
   nextSteps,
   nodeProcessRunner,
-  parseMap,
   RECOMMENDED_SKILLS,
-  parseTicketFile,
-  readLocalMarkdownTickets,
-  readRepoSnapshot,
+  readProjectState,
+  resolveStoreTicket,
   type RepoSnapshot,
+  seedStore,
+  TICKET_TYPES,
+  TRIAGE_ROLES,
   type Ticket,
+  type TicketType,
   whyNot,
 } from "../src/index.ts";
 
+/**
+ * A ticket from header lines as the skills wrote them (`Type: task`, `Status: claimed`, `Blocked by: 01, 02`,
+ * `Spec: path`); the first other line starts the Report.
+ */
 function ticket(map: string, id: string, fields: string[] = [], title = `Ticket ${id}`): Ticket {
-  return parseTicketFile(map, id, [`# ${title}`, "", ...fields, ""].join("\n"));
+  const header = new Map<string, string>();
+  let bodyAt = fields.length;
+  for (const [i, line] of fields.entries()) {
+    const match = /^(Type|Status|Blocked by|Spec|Claimed by):\s*(.*)$/.exec(line);
+    if (match?.[1] === undefined) {
+      if (line.trim() === "") continue;
+      bodyAt = i;
+      break;
+    }
+    header.set(match[1].toLowerCase(), match[2] ?? "");
+  }
+  const status = header.get("status");
+  const state = status === "claimed" || status === "resolved" ? status : "open";
+  const role = TRIAGE_ROLES.find((known) => known === status);
+  const type = TICKET_TYPES.find((known) => known === header.get("type"));
+  const blockers = header.get("blocked by")?.match(/\d+/g) ?? [];
+  const spec = header.get("spec");
+  return {
+    id,
+    map,
+    title,
+    type: (type ?? "none") satisfies TicketType,
+    state,
+    claimant: state === "claimed" ? (header.get("claimed by") ?? null) : null,
+    blockers,
+    triageRole: state === "open" && role !== undefined ? role : null,
+    body: fields.slice(bodyAt).join("\n").trim(),
+    answer: state === "resolved" ? "Done." : null,
+    comments: [],
+    ...(spec === undefined ? {} : { spec: "spec.md" }),
+  };
 }
 
 function effort(name: string, options: { fog?: string[]; spec?: boolean; map?: boolean } = {}): EffortSnapshot {
-  const fog = (options.fog ?? []).map((item) => `- ${item}`).join("\n") || "Nothing.";
   return {
     name,
-    map: options.map === false ? null : parseMap(name, `# Map: ${name}\n\n## Not yet specified\n\n${fog}\n`),
+    map: options.map === false ? null : { name, title: name, destination: "", fog: options.fog ?? [], decisions: [] },
     hasSpec: options.spec ?? false,
   };
 }
 
 function snapshot(efforts: EffortSnapshot[], tickets: Ticket[], overrides: Partial<RepoSnapshot> = {}): RepoSnapshot {
   return {
-    setupConfigPresent: true,
+    hasStore: true,
     efforts,
     tickets,
     hasGlossary: true,
     adrCount: 0,
     git: null,
     sessions: null,
-    skillSetup: null,
     ...overrides,
   };
 }
 
 describe("nextSteps rules", () => {
   it("no setup config: recommends `dryland init` for the repo", () => {
-    expect(nextSteps(snapshot([], [], { setupConfigPresent: false }))).toEqual([
+    expect(nextSteps(snapshot([], [], { hasStore: false }))).toEqual([
       {
         ruleId: "no-setup-config",
         command: "dryland init",
         target: { kind: "repo" },
-        reason: "The repo has no Dryland state store and no tracker doc, so there is nowhere to keep tickets and maps.",
-        evidence: [
-          { artifact: "state store", field: "presence", value: "missing" },
-          { artifact: "docs/agents/issue-tracker.md", field: "presence", value: "missing" },
-        ],
+        reason: "The repo has no Dryland state store, so there is nowhere to keep tickets and maps.",
+        evidence: [{ artifact: "state store", field: "presence", value: "missing" }],
       },
     ]);
   });
@@ -95,8 +128,8 @@ describe("nextSteps rules", () => {
         target: { kind: "map", map: "shop" },
         reason: "Map shop is cleared: no open ticket and no fog remain, so its decisions can become a spec.",
         evidence: [
-          { artifact: ".scratch/shop/map.md", field: "Not yet specified", value: "empty" },
-          { artifact: ".scratch/shop/issues", field: "open tickets", value: "0" },
+          { artifact: "map shop", field: "Not yet specified", value: "empty" },
+          { artifact: "shop tickets", field: "open tickets", value: "0" },
         ],
       },
     ]);
@@ -117,8 +150,8 @@ describe("nextSteps rules", () => {
         target: { kind: "map", map: "shop" },
         reason: "Map shop has no open ticket left and 2 items of fog, so the map itself is next.",
         evidence: [
-          { artifact: ".scratch/shop/map.md", field: "Not yet specified", value: "2 items" },
-          { artifact: ".scratch/shop/issues", field: "open tickets", value: "0" },
+          { artifact: "map shop", field: "Not yet specified", value: "2 items" },
+          { artifact: "shop tickets", field: "open tickets", value: "0" },
         ],
       },
     ]);
@@ -137,7 +170,7 @@ describe("nextSteps rules", () => {
         reason: "The spec of shop has not been sliced into tickets yet.",
         evidence: [
           { artifact: ".scratch/shop/spec.md", field: "presence", value: "present" },
-          { artifact: ".scratch/shop/issues", field: "implementation tickets", value: "0" },
+          { artifact: "shop tickets", field: "implementation tickets", value: "0" },
         ],
       },
     ]);
@@ -249,15 +282,18 @@ describe("nextSteps session and claim rules", () => {
 
   /** Ticket shop/02 claimed by `holder`, with no live session, and the given ticket worktree branches on disk. */
   function heldBy(holder: string, branches: string[]): RepoSnapshot {
-    const claim = `<!-- dryland: {"claim":{"holder":"${holder}","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->`;
-    return snapshot([effort("shop")], [ticket("shop", "02", ["Type: task", "Status: claimed", claim])], {
-      sessions: [],
-      git: {
-        worktrees: [
-          { map: "shop", id: "02", exists: true, branches, aheadOfDefault: false, merged: false, prExists: null },
-        ],
+    return snapshot(
+      [effort("shop")],
+      [ticket("shop", "02", ["Type: task", "Status: claimed", `Claimed by: ${holder}`])],
+      {
+        sessions: [],
+        git: {
+          worktrees: [
+            { map: "shop", id: "02", exists: true, branches, aheadOfDefault: false, merged: false, prExists: null },
+          ],
+        },
       },
-    });
+    );
   }
   const ruleIds = (input: RepoSnapshot) => nextSteps(input).map((s) => s.ruleId);
 
@@ -320,7 +356,7 @@ describe("nextSteps triage, implementation and unknown rules", () => {
         reason: "The spec of shop has 1 ready-for-agent ticket.",
         evidence: [
           { artifact: ".scratch/shop/spec.md", field: "presence", value: "present" },
-          { artifact: ".scratch/shop/issues", field: "ready-for-agent tickets", value: "20" },
+          { artifact: "shop tickets", field: "ready-for-agent tickets", value: "20" },
         ],
       },
       {
@@ -524,19 +560,6 @@ describe("nextSteps priority, compatibility and why-not", () => {
     expect(RECOMMENDED_SKILLS).not.toContain("/grill-with-docs");
   });
 
-  it("a rule the compatibility verdict calls broken produces no steps, and an override re-enables it", () => {
-    const base = snapshot([effort("shop", { fog: ["x"] })], [ticket("shop", "01", ["Type: research"])]);
-    const broken = { setup: "modified" as const, verdict: { "map-frontier": "broken" as const }, overrides: [] };
-
-    expect(nextSteps({ ...base, skillSetup: broken })).toEqual([]);
-    expect(nextSteps({ ...base, skillSetup: { ...broken, overrides: ["map-frontier"] } }).map((s) => s.ruleId)).toEqual(
-      ["map-frontier"],
-    );
-    expect(
-      nextSteps({ ...base, skillSetup: { ...broken, verdict: { "map-frontier": "degraded" } } }).map((s) => s.ruleId),
-    ).toEqual(["map-frontier"]);
-  });
-
   it("why not X: a blocked ticket lists exactly its unresolved blockers", () => {
     const input = snapshot(
       [effort("shop")],
@@ -595,7 +618,7 @@ describe("nextSteps ordering and edges", () => {
       snapshot(
         [effort("a", { fog: ["x"] }), effort("b", { fog: ["x"] }), effort("c", { spec: true })],
         [ticket("a", "01", ["Type: research", "Status: resolved"]), ticket("b", "01", ["Type: research"])],
-        { setupConfigPresent: false },
+        { hasStore: false },
       ),
     );
 
@@ -682,53 +705,24 @@ describe("nextSteps ordering and edges", () => {
   });
 });
 
-describe("nextSteps on this repo's real .scratch state", () => {
-  it("yields /to-tickets for the spec once the wayfinding tickets are resolved", async () => {
-    // The state the repo was in when its spec was written: the 19 wayfinding tickets, a spec, no slices yet.
-    const fixtures = join(import.meta.dirname, "../../cli/test/fixtures/real-scratch/mattpocock-ade");
-    const root = mkdtempSync(join(tmpdir(), "dryland-next-step-"));
-    const write = (file: string, content: string) => {
-      mkdirSync(dirname(join(root, file)), { recursive: true });
-      writeFileSync(join(root, file), content);
-    };
-    write("docs/agents/issue-tracker.md", "# Issue tracker: Local Markdown\n");
-    write(".scratch/mattpocock-ade/map.md", readFileSync(join(fixtures, "map.md"), "utf8"));
-    write(".scratch/mattpocock-ade/spec.md", "# Spec\n");
-    for (const name of readdirSync(join(fixtures, "issues"))) {
-      if (Number(name.slice(0, 2)) <= 19) {
-        write(`.scratch/mattpocock-ade/issues/${name}`, readFileSync(join(fixtures, "issues", name), "utf8"));
-      }
-    }
-
-    const steps = nextSteps(await readRepoSnapshot(nodeProcessRunner, root, await readLocalMarkdownTickets(root)));
-
-    expect(steps.map((s) => [s.ruleId, s.command, s.target])).toEqual([
-      ["spec-without-tickets", "/to-tickets", { kind: "spec", map: "mattpocock-ade" }],
-    ]);
-  });
-});
-
 describe("readRepoSnapshot git state", () => {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, encoding: "utf8" });
 
-  function repoWithResolvedTicket(): string {
+  async function repoWithResolvedTicket(): Promise<string> {
+    process.env["DRYLAND_DATA_DIR"] ??= mkdtempSync(join(tmpdir(), "dryland-data-"));
     const root = mkdtempSync(join(tmpdir(), "dryland-snapshot-git-"));
     git(root, "init", "-q", "-b", "main");
-    mkdirSync(join(root, "docs/agents"), { recursive: true });
-    mkdirSync(join(root, ".scratch/m/issues"), { recursive: true });
-    writeFileSync(join(root, "docs/agents/issue-tracker.md"), "# Issue tracker: Local Markdown\n");
-    writeFileSync(join(root, ".scratch/m/map.md"), "# Map: m\n");
-    writeFileSync(join(root, ".scratch/m/issues/01-a.md"), "# A\n\nType: task\nStatus: resolved\n");
-    git(root, "add", "-A");
-    git(root, "commit", "-q", "-m", "init");
+    git(root, "commit", "-q", "--allow-empty", "-m", "init");
+    await seedStore(root, [{ effort: "m", map: { title: "m" }, tickets: [{ title: "A" }] }]);
+    await resolveStoreTicket(root, "m/01", "Done.", { author: "engine" });
     return root;
   }
 
-  const read = async (root: string) => readRepoSnapshot(nodeProcessRunner, root, await readLocalMarkdownTickets(root));
+  const read = async (root: string) => (await readProjectState(nodeProcessRunner, root)).snapshot;
 
   it("yields review-before-pr and open-pr for a Linked worktree ahead of main", async () => {
-    const root = repoWithResolvedTicket();
+    const root = await repoWithResolvedTicket();
     const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
     git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
     writeFileSync(join(tree, "work.txt"), "x");
@@ -744,14 +738,11 @@ describe("readRepoSnapshot git state", () => {
   });
 
   it("keeps a claim held by a ticket worktree's branch from reading stale while no session runs", async () => {
-    const root = repoWithResolvedTicket();
-    const claim =
-      '<!-- dryland: {"claim":{"holder":"m/02-b","at":"2026-10-15T09:00:00.000Z","was":"ready-for-agent"}} -->';
-    writeFileSync(join(root, ".scratch/m/issues/02-b.md"), `# B\n\nType: task\nStatus: claimed\n${claim}\n`);
-    git(root, "add", "-A");
-    git(root, "commit", "-q", "-m", "claim");
+    const root = await repoWithResolvedTicket();
+    await createStoreTicket(root, JSON.stringify({ effort: "m", title: "B", type: "task" }), { author: "engine" });
+    await claimStoreTicket(root, "m/02", { author: "engine", holder: "m/02-b" });
     const staleWith = async () =>
-      nextSteps(await readRepoSnapshot(nodeProcessRunner, root, await readLocalMarkdownTickets(root), undefined, []))
+      nextSteps((await readProjectState(nodeProcessRunner, root, [])).snapshot)
         .filter((s) => s.ruleId === "stale-claim")
         .map((s) => s.target);
 
@@ -761,7 +752,7 @@ describe("readRepoSnapshot git state", () => {
   });
 
   it("calls a branch merged once its work is in the default branch", async () => {
-    const root = repoWithResolvedTicket();
+    const root = await repoWithResolvedTicket();
     const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
     git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
     writeFileSync(join(tree, "work.txt"), "x");
@@ -779,7 +770,7 @@ describe("readRepoSnapshot git state", () => {
   });
 
   it("calls a fast-forward-merged branch merged even before the default branch moves on", async () => {
-    const root = repoWithResolvedTicket();
+    const root = await repoWithResolvedTicket();
     const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
     git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
     writeFileSync(join(tree, "work.txt"), "x");
@@ -793,7 +784,7 @@ describe("readRepoSnapshot git state", () => {
   });
 
   it("does not call a fresh empty branch merged", async () => {
-    const root = repoWithResolvedTicket();
+    const root = await repoWithResolvedTicket();
     const tree = join(mkdtempSync(join(tmpdir(), "dryland-wt-")), "wt");
     git(root, "worktree", "add", "-q", "-b", "m/01-a", tree);
     writeFileSync(join(root, "later.txt"), "y");
@@ -806,7 +797,7 @@ describe("readRepoSnapshot git state", () => {
   });
 
   it("folds the worktrees of one ticket, ignoring one that is gone from disk", async () => {
-    const root = repoWithResolvedTicket();
+    const root = await repoWithResolvedTicket();
     const holder = mkdtempSync(join(tmpdir(), "dryland-wt-"));
     const gone = join(holder, "gone");
     git(root, "worktree", "add", "-q", "-b", "m/01-a", gone);
@@ -835,20 +826,18 @@ describe("readRepoSnapshot git state", () => {
   it("leaves git unknown when the repo has no default branch to compare against", async () => {
     const root = mkdtempSync(join(tmpdir(), "dryland-snapshot-nobase-"));
     git(root, "init", "-q", "-b", "trunk");
-    mkdirSync(join(root, ".scratch/m/issues"), { recursive: true });
 
     const snapshot = await read(root);
 
     expect(snapshot.git).toBeNull();
   });
 
-  it("leaves git unknown outside a git repo, and sessions and skill setup unknown", async () => {
+  it("leaves git unknown outside a git repo, and sessions unknown", async () => {
     const root = mkdtempSync(join(tmpdir(), "dryland-snapshot-nogit-"));
 
     const snapshot = await read(root);
 
     expect(snapshot.git).toBeNull();
     expect(snapshot.sessions).toBeNull();
-    expect(snapshot.skillSetup).toBeNull();
   });
 });

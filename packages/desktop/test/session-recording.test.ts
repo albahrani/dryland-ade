@@ -8,7 +8,6 @@ import {
   envKey,
   hookSettings,
   type LiveEvent,
-  liveLockFile,
   type LiveListener,
   nodeProcessRunner,
   readSessionIndex,
@@ -170,9 +169,8 @@ describe("hook events from a Claude Code session reaching the index", () => {
     const session = sessionIn(repo);
     const { recorder, indexed } = recorderFor(repo, [session]);
     const appDir = mkdtempSync(join(tmpdir(), "dryland-app-"));
-    listeners.push(
-      await startLiveListener({ lockFile: liveLockFile({ DRYLAND_APP_DIR: appDir }), onEvent: recorder.apply }),
-    );
+    const listener = await startLiveListener({ onEvent: recorder.apply });
+    listeners.push(listener);
     const launcher = mkdtempSync(join(tmpdir(), "dryland-launcher-"));
     writeLauncher(launcher, { runtime: process.execPath, cli: CLI });
     const settings = join(appDir, "claude-code.json");
@@ -181,7 +179,8 @@ describe("hook events from a Claude Code session reaching the index", () => {
     const env = {
       ...process.env,
       [pathKey]: [launcher, process.env[pathKey]].join(delimiter),
-      DRYLAND_APP_DIR: appDir,
+      DRYLAND_PORT: String(listener.port),
+      DRYLAND_TOKEN: listener.token,
       DRYLAND_SESSION_ID: session.id,
     };
     const fire = (hookEvent: string, cliSession: string) =>

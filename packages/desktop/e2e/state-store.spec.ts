@@ -1,23 +1,11 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { _electron as electron, expect, test } from "@playwright/test";
-
-const CLI = fileURLToPath(new URL("../../cli/dist/dryland.mjs", import.meta.url));
-
-const dryland = (repo: string, input: unknown, ...args: string[]) =>
-  execFileSync(process.execPath, [CLI, ...args], {
-    cwd: repo,
-    env: { ...process.env, DRYLAND_APP_DIR: repo },
-    input: input === undefined ? undefined : JSON.stringify(input),
-  });
+import { dryland, storeRepo } from "./store-fixture.ts";
 
 test("shows a store repo's tickets and maps with no tracker files, and refreshes when the state ref moves", async () => {
-  const repo = mkdtempSync(join(tmpdir(), "dryland-e2e-store-"));
-  execFileSync("git", ["init", "-q", repo]);
-  dryland(repo, undefined, "init");
+  const repo = storeRepo();
   dryland(repo, { effort: "shop", title: "Shop", destination: "Sell things.", fog: ["Payments"] }, "map", "create");
   dryland(
     repo,
@@ -70,9 +58,7 @@ test("shows a store repo's tickets and maps with no tracker files, and refreshes
 
 // The store twin of smoke.spec.ts. Resolved tickets (the "done" fold) need the lifecycle events of ticket 43.
 function storeFixture(): string {
-  const repo = mkdtempSync(join(tmpdir(), "dryland-e2e-store-"));
-  execFileSync("git", ["init", "-q", repo]);
-  dryland(repo, undefined, "init");
+  const repo = storeRepo();
   dryland(repo, { effort: "shop", title: "Shop", destination: "Sell things.", fog: ["Payments"] }, "map", "create");
   dryland(repo, { effort: "shop", title: "Grill the cart", type: "grilling", report: "What?" }, "ticket", "create");
   dryland(
@@ -96,7 +82,6 @@ test("on a store: shows the tree and legend, reopens the project, and shows maps
   let window = await first.firstWindow();
   await window.getByRole("button", { name: "Open project..." }).click();
 
-  await expect(window.getByText("State store")).toBeVisible();
   await expect(window.getByRole("button", { name: /[▾▸] Shop/ })).toBeVisible();
   await expect(window.getByText("Grill the cart")).toBeVisible();
   await expect(window.getByText("blocked by 01")).toBeVisible();

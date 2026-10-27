@@ -1,20 +1,17 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PANEL_FOLDED, DEFAULT_PANEL_WIDTHS } from "../src/shared/panel-widths.ts";
 import { createUiStateStore } from "../src/main/ui-state.ts";
 
 const stateFile = () => join(mkdtempSync(join(tmpdir(), "dryland-ui-")), "nested", "ui-state.json");
 
-/** Auto-commit on everywhere, and every confirmation asked. */
+/** Every confirmation asked. */
 const SETTINGS_DEFAULTS = {
-  autoCommit: true,
-  projectAutoCommit: {},
-  dontAsk: { "tracker-metadata": false, "user-config": false, "prose-annotation": false },
+  dontAsk: { "tracker-metadata": false, "user-config": false },
   stopConfirmation: "busy-or-unseen",
   resumeOnStart: false,
-  compat: {},
   sessionRetentionDays: 30,
   updateChannel: "latest",
   lastUpdateCheck: null,
@@ -33,21 +30,6 @@ describe("ui state store", () => {
     expect(createUiStateStore(file).read().openProjects).toEqual(["/repos/shop"]);
   });
 
-  it("keeps the compatibility decisions per project, dropping what is not an id", () => {
-    const file = stateFile();
-    createUiStateStore(file).update({ compat: { "/repos/shop": { acceptedDeviations: "d1", overrides: ["retro"] } } });
-    expect(createUiStateStore(file).read().compat).toEqual({
-      "/repos/shop": { acceptedDeviations: "d1", overrides: ["retro"] },
-    });
-
-    writeFileSync(
-      file,
-      JSON.stringify({ compat: { "/repos/shop": { acceptedDeviations: 4, overrides: ["retro", 7] } } }),
-    );
-    expect(createUiStateStore(file).read().compat).toEqual({
-      "/repos/shop": { acceptedDeviations: null, overrides: ["retro"] },
-    });
-  });
 
   it("starts with no project and the legend showing", () => {
     expect(createUiStateStore(stateFile()).read()).toEqual({
@@ -149,14 +131,12 @@ describe("ui state store", () => {
     expect(createUiStateStore(file).read().dontAsk).toEqual({
       "tracker-metadata": true,
       "user-config": false,
-      "prose-annotation": false,
     });
 
     writeFileSync(file, JSON.stringify({ dontAsk: { "tracker-metadata": "yes", "user-config": true, other: true } }));
     expect(createUiStateStore(file).read().dontAsk).toEqual({
       "tracker-metadata": false,
       "user-config": true,
-      "prose-annotation": false,
     });
   });
 
@@ -190,18 +170,28 @@ describe("ui state store", () => {
     }
   });
 
-  it("remembers auto-commit globally and per project, dropping overrides that are not on or off", () => {
+  it("drops the settings of the removed tracker paths when it reads an older file", () => {
     const file = stateFile();
-    createUiStateStore(file).update({ autoCommit: false, projectAutoCommit: { "/repos/shop": true } });
-    expect(createUiStateStore(file).read()).toMatchObject({
-      autoCommit: false,
-      projectAutoCommit: { "/repos/shop": true },
-    });
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      JSON.stringify({
+        autoCommit: false,
+        projectAutoCommit: { "/repos/shop": true },
+        compat: { "/repos/shop": { acceptedDeviations: "d1", overrides: [] } },
+        dontAsk: { "tracker-metadata": true, "prose-annotation": true },
+      }),
+    );
 
-    writeFileSync(file, JSON.stringify({ autoCommit: "no", projectAutoCommit: { "/repos/shop": false, "/a": 1 } }));
-    expect(createUiStateStore(file).read()).toMatchObject({
-      autoCommit: true,
-      projectAutoCommit: { "/repos/shop": false },
+    const read = createUiStateStore(file).read();
+
+    expect(read).toEqual({
+      lastProject: null,
+      legendDismissed: false,
+      tabs: {},
+      sessionsLayout: {},
+      ...SETTINGS_DEFAULTS,
+      dontAsk: { "tracker-metadata": true, "user-config": false },
     });
   });
 });

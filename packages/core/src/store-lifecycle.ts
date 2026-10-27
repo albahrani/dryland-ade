@@ -9,10 +9,10 @@ import {
 } from "./state-store.ts";
 import type { Ticket, TriageRole } from "./ticket.ts";
 import { findTicket, parseTicketReference, type TicketReference } from "./tickets.ts";
-import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
+import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./ticket-rules.ts";
 
-// The ticket lifecycle writes on the state store: the behaviour the markdown commands had, as events. The rules and
-// their messages are the same ones; only what they act on changed.
+// The ticket lifecycle writes on the state store: each rule is checked against the state at the head the event is
+// appended to, so of several racing writers one decision wins.
 
 export interface StoreWriteOptions {
   author: AuthorKind;

@@ -1,10 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { networkInterfaces, tmpdir } from "node:os";
-import { join } from "node:path";
+import { networkInterfaces } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { liveLockFile, type LiveEvent, type LiveListener, sendLiveEvent, startLiveListener } from "../src/index.ts";
-
-const appDir = () => mkdtempSync(join(tmpdir(), "dryland-live-"));
+import { type LiveEvent, type LiveListener, sendLiveEvent, startLiveListener } from "../src/index.ts";
 
 const EVENT: LiveEvent = {
   session_id: "session-a",
@@ -17,48 +13,23 @@ afterEach(async () => {
   await Promise.all(listeners.splice(0).map((listener) => listener.close()));
 });
 
-async function listen(dir: string): Promise<{ listener: LiveListener; received: LiveEvent[] }> {
+async function listen(): Promise<{ listener: LiveListener; received: LiveEvent[]; env: Record<string, string> }> {
   const received: LiveEvent[] = [];
-  const listener = await startLiveListener({
-    lockFile: liveLockFile({ DRYLAND_APP_DIR: dir }),
-    onEvent: (e) => received.push(e),
-  });
+  const listener = await startLiveListener({ onEvent: (e) => received.push(e) });
   listeners.push(listener);
-  return { listener, received };
+  return { listener, received, env: { DRYLAND_PORT: String(listener.port), DRYLAND_TOKEN: listener.token } };
 }
 
 describe("live reporting", () => {
-  it("delivers an event sent through the lock file to the running listener", async () => {
-    const dir = appDir();
-    const { received } = await listen(dir);
-
-    const sent = await sendLiveEvent(EVENT, { env: { DRYLAND_APP_DIR: dir } });
-
-    expect(sent).toBe(true);
-    expect(received).toEqual([EVENT]);
-  });
-
   it("reaches the app through DRYLAND_PORT and DRYLAND_TOKEN, as a Dryland terminal sets them", async () => {
-    const { listener, received } = await listen(appDir());
-    const env = { DRYLAND_APP_DIR: appDir(), DRYLAND_PORT: String(listener.port), DRYLAND_TOKEN: listener.token };
-
-    await expect(sendLiveEvent(EVENT, { env })).resolves.toBe(true);
-    expect(received).toEqual([EVENT]);
-  });
-
-  it("falls back to the lock file when DRYLAND_PORT points at an app that has gone", async () => {
-    const dir = appDir();
-    const { listener: gone } = await listen(appDir());
-    await gone.close();
-    const { received } = await listen(dir);
-    const env = { DRYLAND_APP_DIR: dir, DRYLAND_PORT: String(gone.port), DRYLAND_TOKEN: gone.token };
+    const { received, env } = await listen();
 
     await expect(sendLiveEvent(EVENT, { env })).resolves.toBe(true);
     expect(received).toEqual([EVENT]);
   });
 
   it("rejects a request without the listener's token and does not pass it on", async () => {
-    const { listener, received } = await listen(appDir());
+    const { listener, received } = await listen();
 
     const wrongToken = await fetch(`http://127.0.0.1:${listener.port}/events`, {
       method: "POST",
@@ -75,34 +46,17 @@ describe("live reporting", () => {
     expect(received).toEqual([]);
   });
 
-  it("removes the lock file on close, and the next launch writes a new port and token", async () => {
-    const dir = appDir();
-    const lockFile = liveLockFile({ DRYLAND_APP_DIR: dir });
-    const { listener: first } = await listen(dir);
-    expect(JSON.parse(readFileSync(lockFile, "utf8"))).toEqual({ port: first.port, token: first.token });
-
+  it("gives each launch its own token", async () => {
+    const { listener: first } = await listen();
     await first.close();
-    expect(existsSync(lockFile)).toBe(false);
 
-    const { listener: second } = await listen(dir);
+    const { listener: second } = await listen();
+
     expect(second.token).not.toBe(first.token);
-    expect(JSON.parse(readFileSync(lockFile, "utf8"))).toEqual({ port: second.port, token: second.token });
-  });
-
-  it("leaves a newer listener's lock file in place when an older one closes", async () => {
-    const dir = appDir();
-    const { listener: older } = await listen(dir);
-    const { listener: newer, received } = await listen(dir);
-
-    await older.close();
-
-    await expect(sendLiveEvent(EVENT, { env: { DRYLAND_APP_DIR: dir } })).resolves.toBe(true);
-    expect(received).toEqual([EVENT]);
-    expect(newer.port).not.toBe(older.port);
   });
 
   it("rejects a malformed event and does not pass it on", async () => {
-    const { listener, received } = await listen(appDir());
+    const { listener, received } = await listen();
     const post = (body: unknown) =>
       fetch(`http://127.0.0.1:${listener.port}/events`, {
         method: "POST",
@@ -121,17 +75,16 @@ describe("live reporting", () => {
   });
 
   it("carries the Agent CLI's session id when the event has one", async () => {
-    const dir = appDir();
-    const { received } = await listen(dir);
+    const { received, env } = await listen();
     const event: LiveEvent = { ...EVENT, state: "idle", agent_session_id: "cli-session-1" };
 
-    await sendLiveEvent(event, { env: { DRYLAND_APP_DIR: dir } });
+    await sendLiveEvent(event, { env });
 
     expect(received).toEqual([event]);
   });
 
   it("listens on the loopback address only", async () => {
-    const { listener } = await listen(appDir());
+    const { listener } = await listen();
     const external = Object.values(networkInterfaces())
       .flat()
       .find((address) => address !== undefined && address.family === "IPv4" && !address.internal);
@@ -142,25 +95,14 @@ describe("live reporting", () => {
     }
   });
 
-  it("resolves false without throwing when there is no lock file", async () => {
-    await expect(sendLiveEvent(EVENT, { env: { DRYLAND_APP_DIR: appDir() } })).resolves.toBe(false);
+  it("resolves false without throwing when the env names no app", async () => {
+    await expect(sendLiveEvent(EVENT, { env: {} })).resolves.toBe(false);
   });
 
-  it("resolves false without throwing when the lock file is left from a closed app", async () => {
-    const dir = appDir();
-    const { listener } = await listen(dir);
-    const lock = readFileSync(liveLockFile({ DRYLAND_APP_DIR: dir }), "utf8");
+  it("resolves false without throwing when the env names an app that has gone", async () => {
+    const { listener, env } = await listen();
     await listener.close();
-    // A crash leaves the lock file behind with a port nothing listens on any more.
-    writeFileSync(liveLockFile({ DRYLAND_APP_DIR: dir }), lock);
 
-    await expect(sendLiveEvent(EVENT, { env: { DRYLAND_APP_DIR: dir } })).resolves.toBe(false);
-  });
-
-  it("resolves false without throwing when the lock file is unreadable", async () => {
-    const dir = appDir();
-    writeFileSync(liveLockFile({ DRYLAND_APP_DIR: dir }), "{not json");
-
-    await expect(sendLiveEvent(EVENT, { env: { DRYLAND_APP_DIR: dir } })).resolves.toBe(false);
+    await expect(sendLiveEvent(EVENT, { env })).resolves.toBe(false);
   });
 });

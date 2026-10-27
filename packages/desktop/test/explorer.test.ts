@@ -77,8 +77,6 @@ describe("listing a directory", () => {
     const summary = entries.map((e) => `${e.kind}:${e.name}${e.ignored ? " (ignored)" : ""}`);
 
     expect(summary).toEqual([
-      "dir:.scratch",
-      "dir:docs",
       "dir:node_modules (ignored)",
       "dir:src",
       "file:.gitignore",

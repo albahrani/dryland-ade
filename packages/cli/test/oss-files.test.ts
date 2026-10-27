@@ -20,7 +20,6 @@ describe("the files a visitor and a contributor expect", () => {
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/ISSUE_TEMPLATE/bug.yml",
     ".github/ISSUE_TEMPLATE/feature-request.yml",
-    ".github/ISSUE_TEMPLATE/skill-setup-compatibility.yml",
     "docs/manual/README.md",
   ])("%s exists with real content", (file) => {
     expect(existsSync(join(root, file))).toBe(true);
@@ -57,9 +56,9 @@ describe("the files a visitor and a contributor expect", () => {
     }
   });
 
-  it("has issue forms for a bug with doctor output, a feature and a skill-setup compatibility report", () => {
+  it("has issue forms for a bug with doctor output and a feature request", () => {
     expect(read(".github/ISSUE_TEMPLATE/bug.yml")).toContain("dryland doctor");
-    for (const form of ["bug", "feature-request", "skill-setup-compatibility"]) {
+    for (const form of ["bug", "feature-request"]) {
       const text = read(`.github/ISSUE_TEMPLATE/${form}.yml`);
       expect(text).toMatch(/^name: .+/m);
       expect(text).toMatch(/^description: .+/m);

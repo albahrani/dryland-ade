@@ -1,61 +1,20 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DrylandError } from "./errors.ts";
-import {
-  findSection,
-  type MarkdownSection,
-  splitSections,
-  stripAnnotations,
-  stripHtmlComments,
-} from "./local-markdown.ts";
 import { byTicketNumber, type Ticket } from "./ticket.ts";
 
 export interface MapModel {
-  /** The effort's directory name under `.scratch/`. */
+  /** The effort's slug. */
   name: string;
   title: string;
   destination: string;
   /** Not-yet-specified items: the map's fog. */
   fog: string[];
-  /** One entry per line of the Decisions-so-far index. */
+  /** One entry per resolved ticket: Decisions so far, derived from the tickets. */
   decisions: string[];
-  /** Every `## ` section as written, for anything the fields above do not cover. */
-  sections: MarkdownSection[];
 }
 
-/** Bullet items of a section, with wrapped continuation lines joined. A leading "Nothing." means no items. */
-function itemsOf(content: string | undefined): string[] {
-  const text = stripHtmlComments(content ?? "").trim();
-  if (/^(nothing|none)\b/i.test(text)) return [];
-  const items: string[] = [];
-  for (const line of text.split("\n")) {
-    const bullet = /^[-*]\s+(.*)$/.exec(line);
-    if (bullet) items.push((bullet[1] ?? "").trim());
-    else if (line.trim() !== "" && /^\s/.test(line) && items.length > 0) items[items.length - 1] += ` ${line.trim()}`;
-  }
-  return items;
-}
-
-export function parseMap(name: string, markdown: string): MapModel {
-  const lines = stripAnnotations(markdown).split("\n");
-  const { preamble, sections } = splitSections(lines);
-  const section = (heading: string) => findSection(sections, heading);
-  const titleLine =
-    preamble
-      .find((line) => line.startsWith("# "))
-      ?.slice(2)
-      .trim() ?? "";
-  return {
-    name,
-    title: titleLine.replace(/^Map:\s*/i, ""),
-    destination: stripHtmlComments(section("destination") ?? "").trim(),
-    fog: itemsOf(section("not yet specified")),
-    decisions: itemsOf(section("decisions so far")),
-    sections,
-  };
-}
-
-/** Rejects anything that is not the name of a directory directly under `.scratch/`. */
+/** Rejects anything that is not usable as an effort slug, which is also the name of its directory under `.scratch/`. */
 export function assertMapName(name: string): void {
   if (!/^[^/\\\s.][^/\\\s]*$/.test(name)) {
     throw new DrylandError(
@@ -63,22 +22,6 @@ export function assertMapName(name: string): void {
       "Pass the name of a directory under .scratch/, e.g. --map shop.",
     );
   }
-}
-
-/** The text of a map's `map.md`, or a failure with the next action when the map is unknown. */
-export async function readMapText(mainCheckout: string, name: string): Promise<string> {
-  const markdown = await readFile(join(mainCheckout, ".scratch", name, "map.md"), "utf8").catch(() => null);
-  if (markdown === null) {
-    throw new DrylandError(
-      `There is no map "${name}": .scratch/${name}/map.md does not exist.`,
-      "Run `dryland ticket list` to see the maps that have tickets, or start one with /wayfinder.",
-    );
-  }
-  return markdown;
-}
-
-export async function readMapFile(mainCheckout: string, name: string): Promise<MapModel> {
-  return parseMap(name, await readMapText(mainCheckout, name));
 }
 
 /** One map's tickets split the way its screens show them: ready to start, waiting on blockers, and held by a claim. */

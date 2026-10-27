@@ -1,46 +1,32 @@
-import type { Compatibility, SkillSetupReport } from "@dryland/core";
 import { useState } from "react";
 import type { AgentHooksAction } from "../../shared/agent-hooks.ts";
 import { AgentClisTab } from "./AgentClisTab.tsx";
-import { SkillsTab } from "./SkillsTab.tsx";
 import { UpdatesTab } from "./UpdatesTab.tsx";
-import type { StartHandler } from "./StartWork.tsx";
 import type { AppSettings } from "../../shared/api.ts";
 import type { SettingsChange } from "../../shared/settings-change.ts";
 import { STOP_CONFIRMATION_LABELS, STOP_CONFIRMATIONS } from "../../shared/stop-session.ts";
 import { CONFIRMATION_LABELS, CONFIRMATION_TYPES } from "../../shared/tracker-actions.ts";
 
-const TABS = ["General", "Agent CLIs", "Tracker", "Skills", "Write confirmations", "Updates"] as const;
+const TABS = ["General", "Agent CLIs", "Write confirmations", "Updates"] as const;
 type SettingsTab = (typeof TABS)[number];
 
-/** The Settings modal: app-wide preferences by tab, saying which level, global or this project's, a setting sits at. */
+/** The Settings modal: app-wide preferences by tab. */
 export function SettingsDialog({
   settings,
-  projectName,
   legendDismissed,
-  skillSetup,
   hooksRevision,
   onChange,
   onHooks,
-  onRunCheck,
-  onRevokeDeviations,
   onClose,
 }: {
   settings: AppSettings;
-  /** The open project; `null` when none is open, so there is nothing to override. */
-  projectName: string | null;
   legendDismissed: boolean;
-  /** The open project's Skill setup and Compatibility verdict; `null` when none is open or it cannot be read. */
-  skillSetup: { report: SkillSetupReport; compatibility: Compatibility } | null;
   hooksRevision: number;
   onChange: (change: SettingsChange) => void;
   onHooks: (agentId: string, action: AgentHooksAction) => void;
-  onRunCheck: StartHandler;
-  onRevokeDeviations: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("General");
-  const overridden = settings.projectAutoCommit !== null;
   return (
     <div className="modal-backdrop">
       <div className="modal settings" role="dialog" aria-modal="true" aria-label="Settings">
@@ -111,48 +97,6 @@ export function SettingsDialog({
             </>
           )}
           {tab === "Agent CLIs" && <AgentClisTab hooksRevision={hooksRevision} onHooks={onHooks} />}
-          {tab === "Skills" && (
-            <SkillsTab skillSetup={skillSetup} onRunCheck={onRunCheck} onRevoke={onRevokeDeviations} />
-          )}
-          {tab === "Tracker" && (
-            <>
-              <h3>Global</h3>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.globalAutoCommit}
-                  onChange={(event) => onChange({ kind: "auto-commit", value: event.target.checked })}
-                />
-                Auto-commit tracker writes
-              </label>
-              <h3>{projectName === null ? "This project" : `This project (${projectName})`}</h3>
-              {projectName === null ? (
-                <p className="dim">Open a project to override auto-commit for it.</p>
-              ) : (
-                <>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.autoCommit}
-                      onChange={(event) => onChange({ kind: "project-auto-commit", value: event.target.checked })}
-                    />
-                    Auto-commit tracker writes in this project
-                  </label>
-                  {overridden ? (
-                    <p role="status">
-                      Overridden for this project: {settings.projectAutoCommit ? "on" : "off"}, whatever the global
-                      setting says.{" "}
-                      <button onClick={() => onChange({ kind: "project-auto-commit", value: null })}>
-                        Clear override
-                      </button>
-                    </p>
-                  ) : (
-                    <p className="dim">Following the global setting.</p>
-                  )}
-                </>
-              )}
-            </>
-          )}
           {tab === "Write confirmations" && (
             <>
               <p className="dim">Confirmations you chose not to be asked about again. They apply to every project.</p>

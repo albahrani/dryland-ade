@@ -3,24 +3,26 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileS
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { _electron as electron, expect, type Page, test } from "@playwright/test";
+import { _electron as electron, expect, test } from "@playwright/test";
+import { createMap, createTicket, dryland, git, resolveTicket, storeRepo } from "./store-fixture.ts";
 
 const windows = process.platform === "win32";
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
+/** The ticket `ref` as the store holds it, read through the CLI. */
+const show = (repo: string, ref: string) =>
+  JSON.parse(dryland(repo, undefined, "ticket", "show", ref, "--json")) as {
+    status: string;
+    claim: { holder: string } | null;
+  };
 
-/** A committed repo with a ready ticket shop/02, and an uncommitted edit only the main checkout has. */
+/** A committed repo whose store holds the effort shop: a resolved shop/01, a ready shop/02 and shop/03 blocked by it. */
 function fixtureRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "dryland-e2e-work-"));
+  const repo = storeRepo("dryland-e2e-work-");
+  createMap(repo, "shop", "Shop");
+  createTicket(repo, "shop", { title: "Set up repo", report: "Build it." });
+  resolveTicket(repo, "shop/01");
+  createTicket(repo, "shop", { title: "Grill the cart", report: "Build it." });
+  createTicket(repo, "shop", { title: "Build the cart", report: "Build it.", blockedBy: ["shop/02"] });
   const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n\n## Not yet specified\n\nNothing.\n",
-    ".scratch/shop/issues/02-grill.md": ticket("Grill the cart", "Type: task", "Status: ready-for-agent"),
-    ".scratch/shop/issues/03-cart.md": ticket(
-      "Build the cart",
-      "Type: task",
-      "Status: ready-for-agent",
-      "Blocked by: 02",
-    ),
     ".claude/skills/grilling/SKILL.md": "---\nname: grilling\n---\n",
     // The skills the next steps recommend: a setup that differs from the default only pre-types installed ones.
     ...Object.fromEntries(
@@ -33,11 +35,8 @@ function fixtureRepo(): string {
     mkdirSync(dirname(join(repo, file)), { recursive: true });
     writeFileSync(join(repo, file), content);
   }
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
-  git("init", "-q", "-b", "main");
-  git("add", ".");
-  git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "Fixture");
-  writeFileSync(join(repo, ".scratch/shop/issues/03-cart.md"), ticket("Build the basket", "Type: task"));
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "Add skills");
   return repo;
 }
 
@@ -131,11 +130,6 @@ async function launchApp(env: Record<string, string>, userData: string) {
   return app;
 }
 
-/** Answers the modified-setup question the fixture repo raises each time the window loads it. */
-async function skipCompatDialog(window: Page) {
-  await window.getByRole("dialog", { name: "Modified skill setup" }).getByRole("button", { name: "Skip" }).click();
-}
-
 async function openTicket(env: Record<string, string>) {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
@@ -149,8 +143,6 @@ async function openProjectAt(env: Record<string, string>, repo: string, userData
   }, repo);
   const window = await app.firstWindow();
   await window.getByRole("button", { name: "Open project..." }).click();
-  // The fixture repo's skill setup is not the default, which asks what to do about it.
-  await window.getByRole("dialog", { name: "Modified skill setup" }).getByRole("button", { name: "Skip" }).click();
   await window.getByRole("button", { name: "Grill the cart" }).click();
   return { app, window, repo };
 }
@@ -163,10 +155,10 @@ test("starts Claude Code on a ticket in its worktree with the next-step command 
 
   const screen = window.locator(".xterm-rows:visible");
   // The CLI runs in the ticket's own worktree, with the session's identity in its environment.
-  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(screen).toContainText("agent-ready cwd=shop-02-grill-the-cart");
   await expect(screen).toContainText("session=set pane=set port=set token=set");
-  // `dryland` is on PATH in the session and reads the main checkout, uncommitted edits included.
-  await expect(screen).toContainText("Build the basket");
+  // `dryland` is on PATH in the session and reads the project's state store.
+  await expect(screen).toContainText("Build the cart");
   // The next step for the ticket is typed once the CLI is quiet, and Enter is never pressed.
   await expect(screen).toContainText("/implement shop/02");
   await window.waitForTimeout(1000);
@@ -175,7 +167,7 @@ test("starts Claude Code on a ticket in its worktree with the next-step command 
   // The session tab says what was recorded at spawn.
   const header = window.getByLabel("Session", { exact: true });
   await expect(header).toContainText("Claude Code");
-  await expect(header).toContainText("shop/02-grill");
+  await expect(header).toContainText("shop/02-grill-the-cart");
   await app.close();
 });
 
@@ -259,7 +251,7 @@ test("closing a session tab hides the session, which keeps running and shows aga
   await live.getByRole("button", { name: "Show session" }).click();
   await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute("aria-selected", "true");
   // Replayed: what it printed before and while hidden.
-  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(screen).toContainText("agent-ready cwd=shop-02-grill-the-cart");
   await expect(screen).toContainText("/implement shop/02*");
   await expect(screen).toContainText("LATER-OUTPUT");
   await expect(window.getByRole("tablist").getByRole("img", { name: "Unseen output" })).toHaveCount(0);
@@ -299,7 +291,7 @@ test("stops a session from its tab, asking first while it works, and keeps its c
   await expect(header.getByRole("button", { name: "Stop session" })).toHaveCount(0);
 
   // The claim stays, and the session index still has the last state the hooks reported.
-  expect(readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8")).toContain("Status: claimed");
+  expect(show(repo, "shop/02").status).toBe("claimed");
   const index = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")) as unknown;
   expect(JSON.stringify(index)).toContain('"lastState":"idle"');
   await app.close();
@@ -311,13 +303,9 @@ test("quitting with a running session asks first, then stops it and keeps its cl
   const screen = window.locator(".xterm-rows:visible");
   await expect(screen).toContainText("/implement shop/02");
   const pid = Number(/pid=(\d+)/.exec(await screen.innerText())?.[1]);
-  const claimed = () => ({
-    // On disk, not at HEAD: without a git identity, as in CI containers, the claim is written but not committed.
-    ticket: readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8"),
-    commits: execFileSync("git", ["rev-list", "--count", "HEAD"], { cwd: repo, encoding: "utf8" }),
-  });
+  const claimed = () => show(repo, "shop/02");
   const before = claimed();
-  expect(before.ticket).toContain("Status: claimed");
+  expect(before.status).toBe("claimed");
 
   // Cancel: the dialog lists the session, and nothing stops.
   void app.evaluate(({ app }) => app.quit());
@@ -325,7 +313,7 @@ test("quitting with a running session asks first, then stops it and keeps its cl
   await expect(dialog).toContainText("1 session is still running.");
   const row = dialog.getByRole("list", { name: "Running sessions" }).getByRole("listitem").first();
   await expect(row).toContainText("Claude Code shop/02");
-  await expect(row).toContainText("launched · shop/02-grill");
+  await expect(row).toContainText("launched · shop/02-grill-the-cart");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
   await window.locator(".xterm:visible").click();
@@ -333,7 +321,7 @@ test("quitting with a running session asks first, then stops it and keeps its cl
   await expect(screen).toContainText("/implement shop/02x");
   expect(alive(pid)).toBe(true);
 
-  // Closing the window asks the same question; Quit stops the CLI, and the claim and the branch's history are as they were.
+  // Closing the window asks the same question; Quit stops the CLI, and the claim is as it was.
   void app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
   await expect(dialog).toBeVisible();
   const closed = app.waitForEvent("close");
@@ -478,28 +466,6 @@ test("continues a map from its stats card with /wayfinder <map> typed, in the ma
   await app.close();
 });
 
-test("starts a new map with only an Agent CLI chosen, /wayfinder typed in a temporary worktree", async () => {
-  const { app, window, repo } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
-
-  await window.getByRole("button", { name: "Maps" }).click();
-  await window.getByRole("button", { name: "New map" }).click();
-  const dialog = window.getByRole("dialog", { name: "New map" });
-  await dialog.getByRole("button", { name: "Open Claude Code" }).click();
-  await expect(dialog).toHaveCount(0);
-
-  await expect(window.getByRole("tab", { name: "Claude Code new map" })).toHaveAttribute("aria-selected", "true");
-  const screen = window.locator(".xterm-rows:visible");
-  await expect(screen).toContainText("agent-ready cwd=new-map-scratch-wayfinder");
-  await expect(screen).toContainText("/wayfinder");
-  await window.waitForTimeout(1000);
-  await expect(screen).not.toContainText("SUBMITTED");
-  // Dryland wrote no map: the skill does, in its session.
-  expect(execFileSync("git", ["status", "--porcelain", ".scratch"], { cwd: repo, encoding: "utf8" })).toBe(
-    " M .scratch/shop/issues/03-cart.md\n",
-  );
-  await app.close();
-});
-
 test("lists sessions in the Sessions view's Hidden and Open panes and counts them in the status bar", async () => {
   const { app, window } = await openTicket(withPath((dirs) => [stubAgent(), ...dirs]));
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
@@ -512,7 +478,7 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   await expect(openPane.getByRole("button", { name: "Grill the cart" })).toBeVisible();
   await expect(counts).toHaveText("1 open · 0 hidden");
   // The focused session tab is the selected session: its state and branch are in the status bar.
-  await expect(window.getByLabel("Selected session")).toContainText("shop/02-grill");
+  await expect(window.getByLabel("Selected session")).toContainText("shop/02-grill-the-cart");
 
   await window.locator(".xterm:visible").click();
   await window.keyboard.type("!");
@@ -532,7 +498,6 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   await window.getByRole("radio", { name: "Group by none" }).check();
   await openPane.getByRole("button", { name: /Open/ }).click();
   await window.reload();
-  await skipCompatDialog(window);
   await window.getByRole("button", { name: "Sessions", exact: true }).click();
   await expect(hiddenPane.getByRole("button", { name: /Shop/ })).toHaveCount(0);
   await expect(openPane.getByRole("button", { name: /Open/ })).toHaveAttribute("aria-expanded", "false");
@@ -549,7 +514,6 @@ test("lists sessions in the Sessions view's Hidden and Open panes and counts the
   const share = await sash.getAttribute("aria-valuenow");
   expect(Number(share)).toBeLessThan(before);
   await window.reload();
-  await skipCompatDialog(window);
   await window.getByRole("button", { name: "Sessions", exact: true }).click();
   await expect(sash).toHaveAttribute("aria-valuenow", share!);
 
@@ -581,7 +545,7 @@ test("stops a session and resumes it from the paused box, in its worktree with t
   const screen = window.locator(".xterm-rows:visible");
   await expect(screen).toContainText("/implement shop/02");
   const id = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")).items["shop/02"][0].sessionId;
-  const claimed = readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8");
+  const claimed = show(repo, "shop/02");
 
   // Idle, then stopped.
   await window.locator(".xterm:visible").click();
@@ -604,10 +568,10 @@ test("stops a session and resumes it from the paused box, in its worktree with t
 
   // Resume continues the same CLI session in the same worktree; the claim is as it was.
   await box.getByRole("button", { name: "Resume" }).click();
-  await expect(screen).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(screen).toContainText("agent-ready cwd=shop-02-grill-the-cart");
   await expect(screen).toContainText(`resume=${id}`);
   await expect(screen).not.toContainText("/implement shop/02");
-  expect(readFileSync(join(repo, ".scratch/shop/issues/02-grill.md"), "utf8")).toBe(claimed);
+  expect(show(repo, "shop/02")).toEqual(claimed);
   await app.close();
 });
 
@@ -615,7 +579,6 @@ test("stops a session and resumes it from the paused box, in its worktree with t
 async function relaunch(env: Record<string, string>, userData: string) {
   const app = await launchApp(env, userData);
   const window = await app.firstWindow();
-  await skipCompatDialog(window);
   return { app, window };
 }
 
@@ -789,7 +752,7 @@ test("asks before Copilot CLI's first user-config write, writes nothing on cance
     "aria-selected",
     "true",
   );
-  await expect(window.locator(".xterm-rows:visible")).toContainText("copilot-ready cwd=shop-02-grill");
+  await expect(window.locator(".xterm-rows:visible")).toContainText("copilot-ready cwd=shop-02-grill-the-cart");
   expect(existsSync(hookFile)).toBe(true);
   const saved = JSON.parse(readFileSync(join(copilotHome, "config.json"), "utf8")) as {
     theme: string;
@@ -797,7 +760,7 @@ test("asks before Copilot CLI's first user-config write, writes nothing on cance
   };
   expect(saved.theme).toBe("dark");
   expect(saved.trustedFolders).toHaveLength(1);
-  expect(saved.trustedFolders[0]).toContain("shop-02-grill");
+  expect(saved.trustedFolders[0]).toContain("shop-02-grill-the-cart");
 
   // "Do not ask again" is kept: Settings lists it as not asked.
   await app.evaluate(({ Menu }) => {

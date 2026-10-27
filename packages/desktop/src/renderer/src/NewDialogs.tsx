@@ -33,18 +33,12 @@ function Dialog({ title, children }: { title: string; children: React.ReactNode 
 export function NewTicketDialog({
   tree,
   initialMap,
-  autoCommit,
-  store,
   onCreate,
   onCancel,
 }: {
   tree: TicketsTree;
   /** The map preselected, such as that of the focused tab. */
   initialMap: string | null;
-  /** Whether the write is committed, so the preview names exactly what runs. */
-  autoCommit: boolean;
-  /** Whether the project keeps its tickets in the state store, which `ticket create` fills from one document. */
-  store: boolean;
   onCreate: (ticket: NewTicket) => void;
   onCancel: () => void;
 }) {
@@ -59,8 +53,8 @@ export function NewTicketDialog({
   const candidates = chosen === undefined ? [] : [...chosen.planning, ...chosen.implementation];
   const ticket: NewTicket = { map, title: title.trim(), type, question: question.trim(), blockedBy, status };
   const action = { kind: "create", ticket } as const;
-  const input = trackerInput(action, store);
-  const args = trackerArgs(action, autoCommit, store);
+  const input = trackerInput(action);
+  const args = trackerArgs(action);
   const preview = input === null ? commandLine(args) : commandWithInput(args, input);
   const toggle = (id: string) =>
     setBlockedBy((current) =>
@@ -179,7 +173,7 @@ export function NewScratchDialog({ onStart, onCancel }: { onStart: StartHandler;
 }
 
 /**
- * New map in a project on the state store: the effort slug, a title and the destination, with the exact
+ * New map: the effort slug, a title and the destination, with the exact
  * `dryland map create` command it will run. The record is created at once; tickets are added with New ticket.
  */
 export function NewStoreMapDialog({ onCreate, onCancel }: { onCreate: (map: NewMap) => void; onCancel: () => void }) {
@@ -211,7 +205,7 @@ export function NewStoreMapDialog({ onCreate, onCancel }: { onCreate: (map: NewM
           <textarea rows={3} value={destination} onChange={(event) => setDestination(event.target.value)} />
         </label>
         <code className="command" aria-label="Command">
-          {commandWithInput(trackerArgs(action, false, true), trackerInput(action, true) ?? "")}
+          {commandWithInput(trackerArgs(action), trackerInput(action) ?? "")}
         </code>
         <div className="modal-actions">
           <button type="button" onClick={onCancel}>
@@ -222,22 +216,6 @@ export function NewStoreMapDialog({ onCreate, onCancel }: { onCreate: (map: NewM
           </button>
         </div>
       </form>
-    </Dialog>
-  );
-}
-
-/** New map: only the Agent CLI is chosen; the `/wayfinder` skill charts and names the map in its session. */
-export function NewMapDialog({ onStart, onCancel }: { onStart: StartHandler; onCancel: () => void }) {
-  return (
-    <Dialog title="New map">
-      <p>
-        Maps are charted by the <code>/wayfinder</code> skill in the Agent CLI: describe your idea and name the effort
-        there. It opens in a temporary worktree with <code>/wayfinder</code> typed, not submitted.
-      </p>
-      <StartWork onStart={onStart} label={(agent) => `Open ${agent}`} />
-      <div className="modal-actions">
-        <button onClick={onCancel}>Cancel</button>
-      </div>
     </Dialog>
   );
 }

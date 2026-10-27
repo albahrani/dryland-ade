@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
@@ -27,8 +27,6 @@ const less = findLess();
 test("less, a real full-screen program, repaints to the new size when the window is resized", async ({}, testInfo) => {
   test.skip(less === null, "less is not installed");
   const repo = mkdtempSync(join(tmpdir(), "dryland-e2e-repo-"));
-  mkdirSync(join(repo, "docs/agents"), { recursive: true });
-  writeFileSync(join(repo, "docs/agents/issue-tracker.md"), "# Issue tracker: Local markdown\n");
   execFileSync("git", ["init", "-q", repo]);
   const document = join(repo, "long.txt");
   const total = 300;

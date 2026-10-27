@@ -1,31 +1,20 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
-
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
+import { createMap, createTicket, dryland, git, storeRepo } from "./store-fixture.ts";
 
 /** Claude Code's name for a history folder: every character that is not a letter or digit becomes `-`. */
 const slug = (path: string) => path.replace(/[^a-zA-Z0-9]/g, "-");
 
 test("finds a session started by hand in a claimed ticket's worktree when the window is focused", async () => {
-  const repo = realpathSync.native(mkdtempSync(join(tmpdir(), "dryland-e2e-reconcile-")));
-  const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n\n## Not yet specified\n\nNothing.\n",
-    ".scratch/shop/issues/02-grill.md": ticket("Grill the cart", "Type: task", "Status: claimed"),
-  };
-  for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), content);
-  }
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
-  git("init", "-q", "-b", "main");
-  git("add", ".");
-  git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "Fixture");
-  const worktree = join(`${repo}.worktrees`, "shop-02-grill");
-  git("worktree", "add", "-q", "-b", "shop/02-grill", worktree);
+  const repo = storeRepo("dryland-e2e-reconcile-");
+  createMap(repo, "shop", "Shop");
+  createTicket(repo, "shop", { title: "Grill the cart", report: "Build it." });
+  const worktree = join(`${repo}.worktrees`, "shop-01-grill");
+  git(repo, "worktree", "add", "-q", "-b", "shop/01-grill", worktree);
+  // Claimed from the worktree, the way a session started by hand would claim it.
+  dryland(worktree, undefined, "ticket", "claim", "shop/01");
   // Claude Code's history, kept apart from the user's own.
   const config = mkdtempSync(join(tmpdir(), "dryland-e2e-claude-"));
 

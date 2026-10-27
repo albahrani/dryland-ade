@@ -16,17 +16,17 @@ import { exists, findExecutable } from "./env-fs.ts";
 import { DrylandError } from "./errors.ts";
 import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import { readTrackerKind, type TrackerKind } from "./tracker.ts";
+import { isStoreInitialised } from "./state-store.ts";
 import { listWorktrees } from "./worktree.ts";
 import { TRIAGE_LABELS_DOC } from "./triage-labels.ts";
 
 const SETUP_SKILL = "/setup-matt-pocock-skills";
-/** The docs `setup` checks; the tracker doc is the tracker check's, so a missing one is reported once. */
+/** The docs `setup` checks. */
 const SETUP_DOCS = [TRIAGE_LABELS_DOC, "docs/agents/domain.md"];
 const SKILL_DIRS = [".claude/skills", ".agents/skills"];
 
 export interface DoctorCheck {
-  id: "setup" | "tracker" | "path" | "hooks";
+  id: "setup" | "store" | "path" | "hooks";
   ok: boolean;
   detail: string;
   /** What to do about a failing check; `null` when it passed. */
@@ -77,37 +77,9 @@ async function checkSetup(mainCheckout: string): Promise<DoctorCheck> {
   return pass("setup", "Skills and docs/agents files are present.");
 }
 
-const FORGE_CLI: Record<Exclude<TrackerKind, "local-markdown">, { cli: string; name: string; url: string }> = {
-  github: { cli: "gh", name: "GitHub", url: "https://cli.github.com" },
-  gitlab: {
-    cli: "glab",
-    name: "GitLab",
-    url: "https://gitlab.com/gitlab-org/cli",
-  },
-};
-
-async function checkTracker(runner: ProcessRunner, mainCheckout: string): Promise<DoctorCheck> {
-  let kind: TrackerKind;
-  try {
-    kind = await readTrackerKind(mainCheckout);
-  } catch (error) {
-    if (!(error instanceof DrylandError)) throw error;
-    return fail("tracker", error.message, error.nextAction);
-  }
-  if (kind === "local-markdown") return pass("tracker", "Local Markdown: the Dryland tracker.");
-
-  const { cli, name, url } = FORGE_CLI[kind];
-  if ((await runner.run(cli, ["--version"], { cwd: mainCheckout })).exitCode !== 0) {
-    return fail(
-      "tracker",
-      `${name} tracker, but \`${cli}\` is not installed.`,
-      `Install ${cli} from ${url}, then run \`${cli} auth login\`.`,
-    );
-  }
-  if ((await runner.run(cli, ["auth", "status"], { cwd: mainCheckout })).exitCode !== 0) {
-    return fail("tracker", `${name} tracker, but \`${cli}\` is not logged in.`, `Run \`${cli} auth login\`.`);
-  }
-  return pass("tracker", `${name}: \`${cli}\` is installed and logged in.`);
+async function checkStore(mainCheckout: string): Promise<DoctorCheck> {
+  if (await isStoreInitialised(mainCheckout)) return pass("store", "The Dryland state store exists.");
+  return fail("store", "This repo has no Dryland state store.", "Run `dryland init` to create one.");
 }
 
 async function checkPath(env: Record<string, string | undefined>): Promise<DoctorCheck> {
@@ -248,7 +220,7 @@ export async function removeAgentHooks(
   return { lines, warnings };
 }
 
-/** Checks what the user can fix themselves: setup, tracker, `PATH` and agent hooks. Never throws for a failing check. */
+/** Checks what the user can fix themselves: setup, the state store, `PATH` and agent hooks. Never throws for a failing check. */
 export async function runDoctor(
   runner: ProcessRunner,
   cwd: string,
@@ -258,10 +230,10 @@ export async function runDoctor(
   const env = options.env ?? process.env;
   try {
     const mainCheckout = await findMainCheckout(runner, cwd);
-    checks.push(await checkSetup(mainCheckout), await checkTracker(runner, mainCheckout));
+    checks.push(await checkSetup(mainCheckout), await checkStore(mainCheckout));
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
-    checks.push(fail("setup", error.message, error.nextAction), fail("tracker", error.message, error.nextAction));
+    checks.push(fail("setup", error.message, error.nextAction), fail("store", error.message, error.nextAction));
   }
   checks.push(await checkPath(env), await checkHooks(runner, cwd, env, options.home ?? homedir()));
   return { ok: checks.every((check) => check.ok), checks };

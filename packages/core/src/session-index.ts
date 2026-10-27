@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { type AgentAdapter, CLAUDE_CODE } from "./agent-adapter.ts";
 import { DrylandError } from "./errors.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import { acquireLock, removeLeftoverTemps, writeAtomically } from "./tracker-write.ts";
+import { acquireLock, removeLeftoverTemps, writeAtomically } from "./file-lock.ts";
 import { storeDir } from "./store-dir.ts";
 
 /** How long a session stays in the index after it was last seen, unless the caller says otherwise. */
@@ -230,7 +230,7 @@ export interface RecordSessionOptions {
 }
 
 /**
- * Applies `change` to the session index under the index's own lock beside the tracker lock and atomically, so
+ * Applies `change` to the session index under the index's own lock and atomically, so
  * parallel `dryland` processes lose no entry. Writes nothing when `change` returns the index it was given. Returns
  * warnings about an index it had to replace, and whether it wrote.
  */
@@ -254,7 +254,7 @@ export async function updateSessionIndex(
 }
 
 /**
- * Records `session` against `item` in the session index, under the index's own lock beside the tracker lock and
+ * Records `session` against `item` in the session index, under the index's own lock and
  * atomically, so parallel `dryland` processes lose no entry. Returns warnings about an index it had to replace.
  */
 export async function recordSession(

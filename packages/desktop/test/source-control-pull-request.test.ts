@@ -19,7 +19,6 @@ let existing: unknown[];
 const runner: ProcessRunner = {
   async run(command, args, options) {
     if (command === "git" && args[0] !== "push") return nodeProcessRunner.run(command, args, options);
-    // Listing the worktrees reads the tracker's issues; this project has none.
     if (args[0] === "issue" || (args[0] === "api" && !args.some((a) => a.includes("merge_requests")))) return ok("[]");
     forgeCalls.push([command, ...args].join(" "));
     if (command === "git") return ok();
@@ -27,9 +26,14 @@ const runner: ProcessRunner = {
   },
 };
 
-const setTracker = (title: string) => {
-  writeFileSync(join(repo, "docs/agents/issue-tracker.md"), `# Issue tracker: ${title}\n`);
-  git(repo, "commit", "-qam", "Tracker");
+/** Points `origin` at the forge's host, from which the project's forge is found. */
+const setForge = (host: "github.com" | "gitlab.com") => {
+  try {
+    git(repo, "remote", "remove", "origin");
+  } catch {
+    // No origin yet.
+  }
+  git(repo, "remote", "add", "origin", `https://${host}/acme/shop.git`);
 };
 
 beforeEach(() => {
@@ -47,25 +51,25 @@ beforeEach(() => {
 const sc = () => createSourceControl(runner, repo, createExplorer(runner, repo));
 
 describe("pullRequest", () => {
-  it("is null on a local-markdown project", async () => {
+  it("is null on a project without a forge", async () => {
     expect(await sc().pullRequest(worktree)).toBeNull();
   });
 
   it("offers Open PR on GitHub and Open MR on GitLab", async () => {
-    setTracker("GitHub");
+    setForge("github.com");
     expect(await sc().pullRequest(worktree)).toMatchObject({ forge: "github", name: "PR", request: null });
-    setTracker("GitLab");
+    setForge("gitlab.com");
     expect(await sc().pullRequest(worktree)).toMatchObject({ forge: "gitlab", name: "MR", request: null });
   });
 
   it("shows an existing request with its state and link", async () => {
-    setTracker("GitHub");
+    setForge("github.com");
     existing = [{ number: 8, state: "OPEN", url: "https://x/pull/8" }];
     expect((await sc().pullRequest(worktree))?.request).toEqual({ number: 8, state: "open", url: "https://x/pull/8" });
   });
 
   it("lists what blocks opening it", async () => {
-    setTracker("GitHub");
+    setForge("github.com");
     writeFileSync(join(worktree, "b.txt"), "dirty\n");
     expect((await sc().pullRequest(worktree))?.blockerMessages).toEqual([expect.stringMatching(/uncommitted changes/)]);
   });
@@ -73,7 +77,7 @@ describe("pullRequest", () => {
 
 describe("openRequest", () => {
   it("pushes and creates the PR", async () => {
-    setTracker("GitHub");
+    setForge("github.com");
     const calls = forgeCalls;
     let listed = 0;
     const ask = runner.run;
@@ -90,7 +94,7 @@ describe("openRequest", () => {
   });
 
   it("refuses, with the reason, while a check blocks", async () => {
-    setTracker("GitHub");
+    setForge("github.com");
     writeFileSync(join(worktree, "b.txt"), "dirty\n");
     expect(await sc().openRequest(worktree)).toMatchObject({
       ok: false,

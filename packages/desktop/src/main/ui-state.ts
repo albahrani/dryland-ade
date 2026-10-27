@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { type CompatConfig, DEFAULT_SESSION_RETENTION_DAYS } from "@dryland/core";
+import { DEFAULT_SESSION_RETENTION_DAYS } from "@dryland/core";
 import { DEFAULT_STOP_CONFIRMATION, isStopConfirmation, type StopConfirmation } from "../shared/stop-session.ts";
 import { isRetentionDays } from "../shared/settings-change.ts";
 import { parseSessionsLayout, type SessionsLayout } from "../shared/sessions-view.ts";
@@ -32,18 +32,12 @@ export interface UiState {
   panelWidths: PanelWidths;
   /** Which side panels are folded away. */
   panelFolded: PanelFolded;
-  /** Whether the app's tracker writes are committed, unless a project overrides it. */
-  autoCommit: boolean;
-  /** Auto-commit overrides, by project path. */
-  projectAutoCommit: Record<string, boolean>;
   /** Each confirmation type's "do not ask again" flag. */
   dontAsk: DontAsk;
   /** When stopping a session asks first. */
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
   resumeOnStart: boolean;
-  /** What the user decided about each project's modified skill setup, by project path. */
-  compat: Record<string, CompatConfig>;
   /** Days a session stays in the session index after it was last seen. */
   sessionRetentionDays: number;
   /** The release channel updates are checked on. */
@@ -60,12 +54,9 @@ const DEFAULTS: UiState = {
   sessionsLayout: {},
   panelWidths: DEFAULT_PANEL_WIDTHS,
   panelFolded: DEFAULT_PANEL_FOLDED,
-  autoCommit: true,
-  projectAutoCommit: {},
   dontAsk: ASK_ALWAYS,
   stopConfirmation: DEFAULT_STOP_CONFIRMATION,
   resumeOnStart: false,
-  compat: {},
   sessionRetentionDays: DEFAULT_SESSION_RETENTION_DAYS,
   updateChannel: DEFAULT_UPDATE_CHANNEL,
   lastUpdateCheck: null,
@@ -84,27 +75,6 @@ function parseAllTabs(raw: unknown): Record<string, TabsState> {
 function parseAllLayouts(raw: unknown): Record<string, SessionsLayout> {
   if (raw === null || typeof raw !== "object") return {};
   return Object.fromEntries(Object.entries(raw).map(([project, layout]) => [project, parseSessionsLayout(layout)]));
-}
-
-function parseOverrides(raw: unknown): Record<string, boolean> {
-  if (raw === null || typeof raw !== "object") return {};
-  return Object.fromEntries(
-    Object.entries(raw).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
-  );
-}
-
-function parseCompat(raw: unknown): Record<string, CompatConfig> {
-  if (raw === null || typeof raw !== "object") return {};
-  return Object.fromEntries(
-    Object.entries(raw).map(([project, config]) => {
-      const fields = config !== null && typeof config === "object" ? (config as Record<string, unknown>) : {};
-      const overrides = Array.isArray(fields.overrides)
-        ? fields.overrides.filter((id): id is string => typeof id === "string")
-        : [];
-      const accepted = typeof fields.acceptedDeviations === "string" ? fields.acceptedDeviations : null;
-      return [project, { acceptedDeviations: accepted, overrides }];
-    }),
-  );
 }
 
 function parseDontAsk(raw: unknown): DontAsk {
@@ -129,12 +99,9 @@ function parse(text: string): UiState {
     sessionsLayout: parseAllLayouts(raw.sessionsLayout),
     panelWidths: parsePanelWidths(raw.panelWidths),
     panelFolded: parsePanelFolded(raw.panelFolded),
-    autoCommit: typeof raw.autoCommit === "boolean" ? raw.autoCommit : DEFAULTS.autoCommit,
-    projectAutoCommit: parseOverrides(raw.projectAutoCommit),
     dontAsk: parseDontAsk(raw.dontAsk),
     stopConfirmation: isStopConfirmation(raw.stopConfirmation) ? raw.stopConfirmation : DEFAULTS.stopConfirmation,
     resumeOnStart: typeof raw.resumeOnStart === "boolean" ? raw.resumeOnStart : DEFAULTS.resumeOnStart,
-    compat: parseCompat(raw.compat),
     sessionRetentionDays: isRetentionDays(raw.sessionRetentionDays)
       ? raw.sessionRetentionDays
       : DEFAULTS.sessionRetentionDays,

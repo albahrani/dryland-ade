@@ -3,10 +3,6 @@ import { link, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "nod
 import { basename, dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { DrylandError } from "./errors.ts";
-import { findMainCheckout } from "./main-checkout.ts";
-import type { ProcessRunner } from "./process-runner.ts";
-import type { AuthorKind } from "./state-store.ts";
-import { readTrackerKind } from "./tracker.ts";
 
 /** How long a writer waits for the lock before giving up. */
 const LOCK_TIMEOUT_MS = 30_000;
@@ -14,34 +10,6 @@ const LOCK_TIMEOUT_MS = 30_000;
 const UNREADABLE_LOCK_MS = 2_000;
 /** A lock this old is broken even when its pid is alive: the pid may have been reused after a crash. */
 const LOCK_MAX_AGE_MS = 10 * 60_000;
-
-export interface TrackerChange {
-  /** Path relative to the main checkout, with forward slashes. */
-  path: string;
-  content: string;
-}
-
-export interface TrackerWrite<T> {
-  changes: TrackerChange[];
-  /** The commit message; one commit covers all `changes`. */
-  message: string;
-  value: T;
-  /** Things the user should know about this write, reported with the result. */
-  warnings?: string[];
-}
-
-export interface TrackerWriteOptions {
-  /** `false` leaves the change on disk without a commit. `undefined` reads git's `dryland.autoCommit`, on by default. */
-  autoCommit?: boolean;
-  /** Who writes, for the event a state-store write appends; markdown writes ignore it. Defaults to a person. */
-  author?: AuthorKind;
-}
-
-export interface TrackerWriteResult<T> {
-  value: T;
-  /** Things the user should know that did not stop the write. */
-  warnings: string[];
-}
 
 function pidAlive(pid: number): boolean {
   try {
@@ -128,7 +96,7 @@ async function breakStaleLock(lockPath: string): Promise<boolean> {
 }
 
 /**
- * Takes the lock at `lockPath` (the tracker lock or another beside it), waiting for a live holder.
+ * Takes the lock at `lockPath` (a lock file beside the file it guards), waiting for a live holder.
  * Returns the function that releases it.
  */
 export async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
@@ -197,91 +165,5 @@ export async function writeAtomically(path: string, content: string): Promise<vo
     }
   } finally {
     await rm(temp, { force: true });
-  }
-}
-
-/** The repo's default branch: origin's HEAD, else `init.defaultBranch`, `main` or `master`; `null` when none exists. */
-export async function defaultBranch(runner: ProcessRunner, mainCheckout: string): Promise<string | null> {
-  const git = async (...args: string[]) => {
-    const result = await runner.run("git", args, { cwd: mainCheckout });
-    return result.exitCode === 0 ? result.stdout.trim() : "";
-  };
-  const remoteHead = await git("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD");
-  if (remoteHead.startsWith("origin/")) return remoteHead.slice("origin/".length);
-  const configured = await git("config", "--get", "init.defaultBranch");
-  for (const name of [...(configured === "" ? [] : [configured]), "main", "master"]) {
-    if ((await git("rev-parse", "--verify", "--quiet", `refs/heads/${name}`)) !== "") return name;
-  }
-  return null;
-}
-
-/**
- * The write path of the local-markdown tracker. Locates the main checkout from `cwd`, takes the lock,
- * lets `produce` read the current state and say what to change, writes those files atomically and
- * commits only their paths. Nothing else in the main checkout is staged or committed.
- */
-export async function writeTracker<T>(
-  runner: ProcessRunner,
-  cwd: string,
-  options: TrackerWriteOptions,
-  produce: (mainCheckout: string) => Promise<TrackerWrite<T>>,
-): Promise<TrackerWriteResult<T>> {
-  const mainCheckout = await findMainCheckout(runner, cwd);
-  // A repo whose tracker doc is missing or unreadable keeps writing locally. A remote tracker is written through its
-  // backend (`remoteBackend`), never here, so reaching this with one is a bug in the caller.
-  const kind = await readTrackerKind(mainCheckout).catch(() => "local-markdown" as const);
-  if (kind !== "local-markdown") {
-    throw new DrylandError(
-      `Writing tickets to the ${kind} tracker must go through its backend, not the lock and commit of local markdown.`,
-      "This is a bug in dryland; please report it.",
-    );
-  }
-  const git = (args: string[]) => runner.run("git", args, { cwd: mainCheckout });
-  const warnings: string[] = [];
-
-  const common = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-  const lockPath = join(common.stdout.trim(), "dryland", "tracker.lock");
-
-  const release = await acquireLock(lockPath);
-  try {
-    const { changes, message, value, warnings: produced = [] } = await produce(mainCheckout);
-    warnings.push(...produced);
-    // Nothing to change, such as a claim its holder already has: nothing is written or committed.
-    if (changes.length === 0) return { value, warnings };
-    for (const change of changes) {
-      const target = join(mainCheckout, change.path);
-      await removeLeftoverTemps(dirname(target));
-      await writeAtomically(target, change.content);
-    }
-
-    const current = (await git(["symbolic-ref", "--quiet", "--short", "HEAD"])).stdout.trim();
-    const expected = await defaultBranch(runner, mainCheckout);
-    if (expected !== null && current !== expected) {
-      warnings.push(
-        `The main checkout is on ${current === "" ? "a detached HEAD" : `branch ${current}`}, not the default branch ${expected}. ` +
-          `Tracker changes are being recorded there; switch the main checkout back to ${expected} when you can.`,
-      );
-    }
-
-    const autoCommit =
-      options.autoCommit ??
-      (await git(["config", "--type=bool", "--get", "dryland.autoCommit"])).stdout.trim() !== "false";
-    if (autoCommit) {
-      const paths = changes.map((change) => change.path);
-      // `add` makes a new ticket file known to git; `commit -- <paths>` then takes only those paths,
-      // leaving anything else staged or dirty in the main checkout alone.
-      const added = await git(["add", "--", ...paths]);
-      const committed = added.exitCode === 0 ? await git(["commit", "--quiet", "-m", message, "--", ...paths]) : added;
-      if (committed.exitCode !== 0) {
-        const reason = (committed.stderr || committed.stdout).trim().split("\n").slice(-3).join(" ");
-        warnings.push(
-          `The change is saved on disk but was not committed (${reason}). ` +
-            `Fix the cause and run: git -C "${mainCheckout}" commit -m ${JSON.stringify(message)} -- ${paths.join(" ")}`,
-        );
-      }
-    }
-    return { value, warnings };
-  } finally {
-    await release();
   }
 }

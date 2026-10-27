@@ -358,7 +358,7 @@ export function ItemTab({
         open={header.open}
         onToggle={header.onToggle}
       >
-        <Field name="Directory">.scratch/{detail.name}</Field>
+        <Field name="Effort">{detail.name}</Field>
         {map !== undefined && (
           <Field name="Progress">
             <ProgressBar map={map} />
@@ -368,7 +368,7 @@ export function ItemTab({
       <NextUpSection marker={marker} nextUp={nextUp} />
       <div className="content">
         {detail.markdown === "" ? (
-          <p className="empty">This map has no map.md yet.</p>
+          <p className="empty">This map has no description yet.</p>
         ) : (
           <Markdown>{detail.markdown}</Markdown>
         )}

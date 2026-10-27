@@ -10,8 +10,6 @@ export interface OpenProject {
 export interface ProjectSummary {
   path: string;
   name: string;
-  /** Where its tickets live; `null` when the project cannot be read. */
-  tracker: string | null;
   /** Sessions in this project whose Agent CLI still runs. */
   liveSessions: number;
   /** The item its best next step points at; `null` when none does or the project cannot be read. */

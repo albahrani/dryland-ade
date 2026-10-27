@@ -1,18 +1,23 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { checkMerge, createWorktree, mergeWorktree, nodeProcessRunner } from "../src/index.ts";
+import {
+  checkMerge,
+  createWorktree,
+  mergeWorktree,
+  nodeProcessRunner,
+  resolveStoreTicket,
+  seedStore,
+} from "../src/index.ts";
 
 const runner = nodeProcessRunner;
 
-function fixture(): string {
+async function fixture(): Promise<string> {
   const repo = realpathSync.native(mkdtempSync(join(tmpdir(), "dryland-merge-")));
+  process.env["DRYLAND_DATA_DIR"] ??= mkdtempSync(join(tmpdir(), "dryland-data-"));
   const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n",
-    ".scratch/shop/issues/01-cart.md": "# Cart\n\nType: task\nStatus: ready-for-agent\n\nBuild it.\n",
     "src/a.ts": "a1\n",
   };
   for (const [file, content] of Object.entries(files)) {
@@ -25,6 +30,9 @@ function fixture(): string {
   git(repo, "config", "commit.gpgsign", "false");
   git(repo, "add", ".");
   git(repo, "commit", "-q", "-m", "Fixture");
+  await seedStore(repo, [
+    { effort: "shop", map: { title: "Shop" }, tickets: [{ title: "Cart", report: "Build it." }] },
+  ]);
   return repo;
 }
 
@@ -39,12 +47,8 @@ function commitFile(cwd: string, file: string, content: string, message: string)
 
 /** A repo with a ticket worktree one commit ahead; the ticket is resolved when `resolved`. */
 async function withWork(resolved = true) {
-  const repo = fixture();
-  if (resolved) {
-    const file = join(repo, ".scratch/shop/issues/01-cart.md");
-    writeFileSync(file, readFileSync(file, "utf8").replace("Status: ready-for-agent", "Status: resolved"));
-    git(repo, "commit", "-qam", "Resolve 01");
-  }
+  const repo = await fixture();
+  if (resolved) await resolveStoreTicket(repo, "shop/01", "Done.", { author: "engine" });
   const wt = await createWorktree(runner, repo, { ticket: "shop/01" });
   commitFile(wt.path, "src/b.ts", "b1\n", "Add b");
   return { repo, wt };
