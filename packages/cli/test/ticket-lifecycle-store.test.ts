@@ -92,16 +92,25 @@ describe("dryland ticket claim on the store", () => {
     expect((await show(repo, "shop/01")).claim?.holder).toBe(winners[0]);
   });
 
-  it("refuses a resolved ticket and accepts --commit and --no-commit, which the store has no use for", async () => {
+  it("refuses a resolved ticket", async () => {
     const repo = await shopRepo();
-    expect((await repo.run(["ticket", "claim", "shop/01", "--no-commit"])).exitCode).toBe(0);
-    expect((await repo.run(["ticket", "release", "shop/01", "--commit"])).exitCode).toBe(0);
     await repo.run(["ticket", "resolve", "shop/01", "--answer", "Done."]);
 
     const result = await repo.run(["ticket", "claim", "shop/01"]);
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("already resolved");
+  });
+
+  it("refuses --commit and --no-commit, which the store has no use for", async () => {
+    const repo = await shopRepo();
+
+    for (const flag of ["--commit", "--no-commit"]) {
+      const result = await repo.run(["ticket", "claim", "shop/01", flag]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(`${flag} is not an option of dryland`);
+    }
+    expect((await show(repo, "shop/01")).status).toBe("open");
   });
 });
 

@@ -9,7 +9,6 @@ import {
   openPullRequest,
   pruneWorktree,
   pullRequestBlockers,
-  readTrackerKind,
   requestName,
   type MergeStrategy,
   type ProcessRunner,
@@ -169,8 +168,8 @@ export function createSourceControl(
     return known.branch;
   }
 
-  /** The forge of the project's tracker; `null` for local markdown, which has no PR or MR. */
-  const forge = async () => forgeOf(await readTrackerKind(projectPath));
+  /** The forge of the project's `origin` remote; `null` has none, so no PR or MR. */
+  const forge = () => forgeOf(runner, projectPath);
 
   /** Runs a core action, turning its refusal into a message for the pane. */
   async function guarded<T>(
@@ -253,7 +252,8 @@ export function createSourceControl(
 
   async function openRequest(root: string): Promise<PullRequestActionResult> {
     const kind = await forge();
-    if (kind === null) return { ok: false, message: "This project's tracker has no forge to open a PR or MR on." };
+    if (kind === null)
+      return { ok: false, message: "This project has no GitHub or GitLab origin to open a PR or MR on." };
     const branch = await branchOf(root);
     try {
       return { ok: true, request: await openPullRequest(runner, projectPath, kind, branch) };

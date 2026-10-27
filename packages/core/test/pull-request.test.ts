@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createWorktree,
@@ -16,30 +15,14 @@ import {
   type ProcessRunner,
   requestName,
 } from "../src/index.ts";
+import { storeRepo } from "./store-repo.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 
-function fixture(): string {
-  const repo = realpathSync.native(mkdtempSync(join(tmpdir(), "dryland-pr-")));
-  const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    "src/a.ts": "a1\n",
-  };
-  for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), content);
-  }
-  git(repo, "init", "-q", "-b", "main");
-  git(repo, "config", "user.name", "Test");
-  git(repo, "config", "user.email", "test@example.com");
-  git(repo, "config", "commit.gpgsign", "false");
-  git(repo, "add", ".");
-  git(repo, "commit", "-q", "-m", "Fixture");
-  return repo;
-}
+const fixture = () => storeRepo([], { "src/a.ts": "a1\n" });
 
 async function withBranch() {
-  const repo = fixture();
+  const repo = await fixture();
   const wt = await createWorktree(nodeProcessRunner, repo, { map: "shop", slug: "cart" });
   writeFileSync(join(wt.path, "src/b.ts"), "b1\n");
   git(wt.path, "add", ".");
@@ -64,10 +47,27 @@ function fakeRunner(forge: (command: string, args: string[]) => ProcessResult) {
 }
 
 describe("forgeOf", () => {
-  it("maps a tracker to its forge, and local markdown to none", () => {
-    expect(forgeOf("github")).toBe("github");
-    expect(forgeOf("gitlab")).toBe("gitlab");
-    expect(forgeOf("local-markdown")).toBeNull();
+  const withOrigin = async (url: string | null) => {
+    const repo = await fixture();
+    if (url !== null) git(repo, "remote", "add", "origin", url);
+    return repo;
+  };
+
+  it("maps the origin remote to its forge, by host", async () => {
+    expect(await forgeOf(nodeProcessRunner, await withOrigin("https://github.com/acme/shop.git"))).toBe("github");
+    expect(await forgeOf(nodeProcessRunner, await withOrigin("git@github.com:acme/shop.git"))).toBe("github");
+    expect(await forgeOf(nodeProcessRunner, await withOrigin("https://gitlab.com/acme/shop.git"))).toBe("gitlab");
+    expect(await forgeOf(nodeProcessRunner, await withOrigin("ssh://git@gitlab.example.com/acme/shop.git"))).toBe(
+      "gitlab",
+    );
+  });
+
+  it("is none without an origin or on another host, so no PR is looked up", async () => {
+    expect(await forgeOf(nodeProcessRunner, await withOrigin(null))).toBeNull();
+    expect(await forgeOf(nodeProcessRunner, await withOrigin("https://git.example.com/acme/shop.git"))).toBeNull();
+  });
+
+  it("names the request a forge calls its own", () => {
     expect(requestName("github")).toBe("PR");
     expect(requestName("gitlab")).toBe("MR");
   });

@@ -4,20 +4,21 @@ import { basename, dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import {
+  initStore,
   installAgentHooks,
   nodeProcessRunner,
   readAgentHooks,
   removeAgentHooks,
   runDoctor,
-  type ProcessResult,
   type ProcessRunner,
 } from "../src/index.ts";
 
-function repo(tracker: string): string {
+process.env["DRYLAND_DATA_DIR"] ??= mkdtempSync(join(tmpdir(), "dryland-data-"));
+
+function repo(): string {
   const root = mkdtempSync(join(tmpdir(), "dryland-doctor-"));
   execFileSync("git", ["init", "--quiet"], { cwd: root });
   const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": `# Issue tracker: ${tracker}\n`,
     "docs/agents/triage-labels.md": "# Labels\n",
     "docs/agents/domain.md": "# Domain\n",
     ".agents/skills/tdd/SKILL.md": "# tdd\n",
@@ -29,82 +30,43 @@ function repo(tracker: string): string {
   return root;
 }
 
-/** Real git, faked forge CLIs: `forge` maps `"gh --version"`-style invocations to a result. */
-function runnerWith(forge: Record<string, ProcessResult>): ProcessRunner {
+/** Real git; any other command is not installed. */
+function runnerWith(): ProcessRunner {
   return {
     async run(command, args, options) {
       if (command === "git") return nodeProcessRunner.run(command, args, options);
-      const key = [command, ...args].join(" ");
-      return (
-        forge[key] ?? {
-          stdout: "",
-          stderr: `${command}: command not found`,
-          exitCode: 127,
-        }
-      );
+      return { stdout: "", stderr: `${command}: command not found`, exitCode: 127 };
     },
   };
 }
 
-const ok: ProcessResult = { stdout: "", stderr: "", exitCode: 0 };
-const failed: ProcessResult = {
-  stdout: "",
-  stderr: "not logged in",
-  exitCode: 1,
-};
 const noPath = { env: { PATH: "" } };
 
-describe("runDoctor tracker check", () => {
-  it("passes for GitHub when gh is installed and logged in", async () => {
-    const runner = runnerWith({ "gh --version": ok, "gh auth status": ok });
+describe("runDoctor store check", () => {
+  it("fails in a repo without a state store, naming dryland init", async () => {
+    const report = await runDoctor(runnerWith(), repo(), noPath);
 
-    const report = await runDoctor(runner, repo("GitHub"), noPath);
-
-    expect(report.checks.find((c) => c.id === "tracker")).toMatchObject({
-      ok: true,
-    });
-  });
-
-  it("fails clearly for GitHub when gh is missing, without asking for a token", async () => {
-    const runner = runnerWith({});
-
-    const report = await runDoctor(runner, repo("GitHub"), noPath);
-
-    const tracker = report.checks.find((c) => c.id === "tracker");
-    expect(tracker).toMatchObject({ ok: false });
-    expect(tracker?.detail).toContain("`gh` is not installed");
-    expect(tracker?.nextAction).toContain("gh auth login");
-    expect(JSON.stringify(tracker)).not.toMatch(/token/i);
-  });
-
-  it("fails clearly for GitLab when glab is installed but logged out", async () => {
-    const runner = runnerWith({
-      "glab --version": ok,
-      "glab auth status": failed,
-    });
-
-    const report = await runDoctor(runner, repo("GitLab"), noPath);
-
-    const tracker = report.checks.find((c) => c.id === "tracker");
-    expect(tracker).toMatchObject({ ok: false });
-    expect(tracker?.detail).toContain("`glab` is not logged in");
-    expect(tracker?.nextAction).toContain("glab auth login");
+    const store = report.checks.find((c) => c.id === "store");
+    expect(store).toMatchObject({ ok: false });
+    expect(store?.nextAction).toContain("dryland init");
     expect(report.ok).toBe(false);
   });
 
-  it("does not run any forge CLI for the local Markdown tracker", async () => {
-    const runner = runnerWith({});
-
-    const report = await runDoctor(runner, repo("Local Markdown"), noPath);
-
-    expect(report.checks.find((c) => c.id === "tracker")).toMatchObject({
-      ok: true,
+  it("passes once the repo has a state store, and runs no forge CLI", async () => {
+    const root = repo();
+    execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-qm", "i"], {
+      cwd: root,
     });
+    await initStore(root);
+
+    const report = await runDoctor(runnerWith(), root, noPath);
+
+    expect(report.checks.find((c) => c.id === "store")).toMatchObject({ ok: true });
   });
 });
 
 describe("runDoctor outside a git repository", () => {
-  it("still reports every check, failing setup and tracker with the cause", async () => {
+  it("still reports every check, failing setup and the store with the cause", async () => {
     const outside = mkdtempSync(join(tmpdir(), "dryland-notrepo-"));
 
     const report = await runDoctor(nodeProcessRunner, outside, { ...noPath, home: tmpdir() });
@@ -112,7 +74,7 @@ describe("runDoctor outside a git repository", () => {
     expect(report.ok).toBe(false);
     expect(report.checks.map((c) => [c.id, c.ok])).toEqual([
       ["setup", false],
-      ["tracker", false],
+      ["store", false],
       ["path", false],
       ["hooks", true],
     ]);
@@ -132,7 +94,7 @@ describe("runDoctor hooks check", () => {
   }
 
   it("passes when Copilot CLI is not installed: there are no hooks to check", async () => {
-    const report = await runDoctor(runnerWith({}), repo("Local Markdown"), { ...noPath, home: tmpdir() });
+    const report = await runDoctor(runnerWith(), repo(), { ...noPath, home: tmpdir() });
 
     expect(report.checks.find((c) => c.id === "hooks")).toMatchObject({ ok: true });
   });
@@ -140,7 +102,7 @@ describe("runDoctor hooks check", () => {
   it("fails with the next action when Copilot is installed but has no Dryland hook file", async () => {
     const { options } = withCopilot();
 
-    const report = await runDoctor(runnerWith({}), repo("Local Markdown"), options);
+    const report = await runDoctor(runnerWith(), repo(), options);
 
     expect(report.checks.find((c) => c.id === "hooks")).toMatchObject({
       ok: false,
@@ -150,10 +112,11 @@ describe("runDoctor hooks check", () => {
 
   it("installs the hook file and trusts the linked worktrees, then removes both", async () => {
     const { options, home } = withCopilot();
-    const root = repo("Local Markdown");
+    const root = repo();
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "i", "-q"], {
       cwd: root,
     });
+    await initStore(root);
     const worktree = join(root, "..", `${basename(root)}-wt`);
     execFileSync("git", ["worktree", "add", "-q", "-b", "shop/01-x", worktree], { cwd: root });
     const config = join(home, ".copilot", "config.json");
@@ -180,10 +143,11 @@ describe("readAgentHooks", () => {
   it("reports what Dryland wrote: the hook file's text and the trusted worktrees", async () => {
     const home = mkdtempSync(join(tmpdir(), "dryland-copilot-home-"));
     const options = { env: { PATH: "" }, home };
-    const root = repo("Local Markdown");
+    const root = repo();
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "i", "-q"], {
       cwd: root,
     });
+    await initStore(root);
     const worktree = join(root, "..", `${basename(root)}-wt2`);
     execFileSync("git", ["worktree", "add", "-q", "-b", "shop/02-x", worktree], { cwd: root });
     mkdirSync(join(home, ".copilot"), { recursive: true });

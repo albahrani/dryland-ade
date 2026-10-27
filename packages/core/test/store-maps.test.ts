@@ -136,7 +136,7 @@ describe("the map tab on a store", () => {
 });
 
 describe("the next step of a fresh repo", () => {
-  it("is `dryland init` when the repo has neither a store nor a tracker doc", async () => {
+  it("is `dryland init` when the repo has no store", async () => {
     const path = mkdtempSync(join(tmpdir(), "dryland-fresh-"));
     execFileSync("git", ["init", "--quiet", "--initial-branch=main"], { cwd: path });
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-qm", "init"], {

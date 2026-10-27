@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { isolatedPath, stubCli, TempRepo, tempDir, WINDOWS } from "./harness.ts";
 
 const DOCS = {
-  "docs/agents/issue-tracker.md": "# Issue tracker: Local Markdown\n\nIssues live in `.scratch/`.\n",
   "docs/agents/triage-labels.md": "# Triage labels\n",
   "docs/agents/domain.md": "# Domain Docs\n",
 };
@@ -29,6 +28,9 @@ function dirWithDryland(): string {
 const withDrylandOnPath = () => isolatedPath(dirWithDryland());
 const withoutDrylandOnPath = () => isolatedPath(tempDir("dryland-empty-"));
 
+/** A repo with the skills, the docs and a state store: the healthy default. */
+const healthyRepo = (): Promise<TempRepo> => TempRepo.createStore([], { ...DOCS, ...SKILL });
+
 function doctor(repo: TempRepo, env: Record<string, string>, ...args: string[]) {
   return repo.run(["doctor", ...args], repo.path, env);
 }
@@ -40,20 +42,20 @@ async function checks(repo: TempRepo, env: Record<string, string>): Promise<Chec
 
 describe("dryland doctor", () => {
   it("reports every check as OK and exits 0 in a healthy default repo", async () => {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const repo = await healthyRepo();
 
     const result = await doctor(repo, withDrylandOnPath());
 
     expect(result.stderr).toBe("");
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toMatch(/OK\s+setup/);
-    expect(result.stdout).toMatch(/OK\s+tracker/);
+    expect(result.stdout).toMatch(/OK\s+store/);
     expect(result.stdout).toMatch(/OK\s+path/);
     expect(result.stdout).not.toMatch(/FAIL/);
   });
 
   it("names what is missing and the next action, and exits non-zero, when dryland is not on PATH", async () => {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const repo = await healthyRepo();
 
     const result = await doctor(repo, withoutDrylandOnPath());
 
@@ -64,19 +66,30 @@ describe("dryland doctor", () => {
   });
 
   it("reports a repo without the skills set up, with /setup-matt-pocock-skills as the next action", async () => {
-    const repo = TempRepo.create({});
+    const repo = await TempRepo.createStore([]);
 
     const result = await doctor(repo, withDrylandOnPath());
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toMatch(/FAIL\s+setup/);
     expect(result.stdout).toContain("skills");
-    expect(result.stdout).toContain("docs/agents/issue-tracker.md");
+    expect(result.stdout).toContain("docs/agents/triage-labels.md");
     expect(result.stdout).toContain("Next: Run /setup-matt-pocock-skills");
   });
 
+  it("reports a repo without a state store, naming `dryland init`", async () => {
+    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+
+    const result = await doctor(repo, withDrylandOnPath());
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toMatch(/FAIL\s+store\s+This repo has no Dryland state store/);
+    expect(result.stdout).toContain("Next: Run `dryland init`");
+    expect(result.stdout).toMatch(/OK\s+setup/);
+  });
+
   it("returns the checks as structured data with --json, still exiting non-zero on a failure", async () => {
-    const repo = TempRepo.create({ ...DOCS });
+    const repo = await TempRepo.createStore([], { ...DOCS });
 
     const result = await doctor(repo, withDrylandOnPath(), "--json");
 
@@ -88,7 +101,7 @@ describe("dryland doctor", () => {
     expect(report.ok).toBe(false);
     expect(report.checks.map((c) => [c.id, c.ok])).toEqual([
       ["setup", false],
-      ["tracker", true],
+      ["store", true],
       ["path", true],
       ["hooks", true],
     ]);
@@ -97,7 +110,7 @@ describe("dryland doctor", () => {
   });
 
   it("works from a linked worktree, reading the main checkout's setup", async () => {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const repo = await healthyRepo();
     const worktree = repo.addWorktree("feature/x");
 
     const result = await repo.run(["doctor"], worktree, withDrylandOnPath());
@@ -105,19 +118,8 @@ describe("dryland doctor", () => {
     expect(result.exitCode).toBe(0);
   });
 
-  it("reports an unreadable tracker doc as a failing tracker check", async () => {
-    const repo = TempRepo.create({
-      ...SKILL,
-      "docs/agents/issue-tracker.md": "# Issue tracker: Jira\n",
-    });
-
-    const list = await checks(repo, withDrylandOnPath());
-
-    expect(list.find((c) => c.id === "tracker")).toMatchObject({ ok: false });
-  });
-
   it("does not count a directory named dryland as the launcher", async () => {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const repo = await healthyRepo();
     const dir = tempDir("dryland-dirbin-");
     mkdirSync(join(dir, "dryland"));
     mkdirSync(join(dir, "dryland.cmd"));
@@ -128,7 +130,7 @@ describe("dryland doctor", () => {
   });
 
   it.skipIf(WINDOWS)("does not count a dryland without the executable bit", async () => {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+    const repo = await healthyRepo();
     const dir = tempDir("dryland-noexec-");
     writeFileSync(join(dir, "dryland"), "#!/bin/sh\n");
     chmodSync(join(dir, "dryland"), 0o644);
@@ -137,75 +139,14 @@ describe("dryland doctor", () => {
 
     expect(list.find((c) => c.id === "path")).toMatchObject({ ok: false });
   });
-
-  it("reports a missing tracker doc once, under tracker", async () => {
-    const repo = TempRepo.create({
-      ...SKILL,
-      "docs/agents/triage-labels.md": "x\n",
-      "docs/agents/domain.md": "x\n",
-    });
-
-    const result = await doctor(repo, withDrylandOnPath());
-
-    expect(result.stdout.match(/docs\/agents\/issue-tracker\.md/g)).toHaveLength(1);
-    expect(result.stdout).toMatch(/OK\s+setup/);
-    expect(result.stdout).toMatch(/FAIL\s+tracker/);
-  });
-
-  describe.each([
-    { tracker: "GitHub", cli: "gh" },
-    { tracker: "GitLab", cli: "glab" },
-  ])("with a $tracker tracker", ({ tracker, cli }) => {
-    const repo = () =>
-      TempRepo.create({ ...DOCS, ...SKILL, "docs/agents/issue-tracker.md": `# Issue tracker: ${tracker}\n` });
-    const withCli = (authExit: number) => {
-      const stub = stubCli(cli, authExit);
-      return { ...isolatedPath(dirWithDryland(), stub.dir), ...stub.env };
-    };
-
-    it("passes when the CLI is installed and logged in", async () => {
-      const result = await doctor(repo(), withCli(0));
-
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain(`OK    tracker  ${tracker}: \`${cli}\` is installed and logged in.`);
-    });
-
-    it("fails with an install step when the CLI is missing", async () => {
-      const result = await doctor(repo(), withDrylandOnPath());
-
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout).toContain(`FAIL  tracker  ${tracker} tracker, but \`${cli}\` is not installed.`);
-      expect(result.stdout).toContain(`Next: Install ${cli} from`);
-    });
-
-    it("fails with a login step when the CLI is logged out", async () => {
-      const result = await doctor(repo(), withCli(1));
-
-      expect(result.exitCode).toBe(1);
-      expect(result.stdout).toContain(`FAIL  tracker  ${tracker} tracker, but \`${cli}\` is not logged in.`);
-      expect(result.stdout).toContain(`Next: Run \`${cli} auth login\`.`);
-    });
-  });
-});
-
-describe("dryland doctor --compat-prompt", () => {
-  it("prints the compatibility prompt with the verdict format and the setup fingerprint", async () => {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
-    const result = await doctor(repo, withDrylandOnPath(), "--compat-prompt");
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(".dryland/compat.md");
-    expect(result.stdout).toContain("dryland-compat: 1");
-    expect(result.stdout).toMatch(/fingerprint: [0-9a-f]{64}/);
-    expect(result.stdout).toContain("- map-frontier:");
-  });
 });
 
 describe("dryland doctor --install-hooks and --remove-hooks", () => {
   const CONFIG = '{\n  "model": "gpt-5",\n  "trustedFolders": [\n    "/somewhere"\n  ],\n  "banner": "never"\n}\n';
 
   /** A repo with a linked worktree, Copilot on PATH, and a Copilot home holding `config`. */
-  function copilotRepo(config: string) {
-    const repo = TempRepo.create({ ...DOCS, ...SKILL });
+  async function copilotRepo(config: string) {
+    const repo = await healthyRepo();
     const worktree = repo.addWorktree("feature/x");
     const stub = stubCli("copilot", 0);
     const home = tempDir("dryland-copilot-home-");
@@ -216,7 +157,7 @@ describe("dryland doctor --install-hooks and --remove-hooks", () => {
   }
 
   it("installs the hook file and trusts the worktrees, reports them, and removes both leaving the config as it was", async () => {
-    const { repo, worktree, home, configFile, env } = copilotRepo(CONFIG);
+    const { repo, worktree, home, configFile, env } = await copilotRepo(CONFIG);
 
     const missing = await doctor(repo, env);
     expect(missing.exitCode).toBe(1);
@@ -238,7 +179,7 @@ describe("dryland doctor --install-hooks and --remove-hooks", () => {
   });
 
   it("skips a config that is not valid JSON with a warning, installing only the hook file", async () => {
-    const { repo, home, configFile, env } = copilotRepo("{ not json");
+    const { repo, home, configFile, env } = await copilotRepo("{ not json");
 
     const result = await doctor(repo, env, "--install-hooks");
 
@@ -248,7 +189,7 @@ describe("dryland doctor --install-hooks and --remove-hooks", () => {
   });
 
   it("is refused when both are given", async () => {
-    const { repo, env } = copilotRepo(CONFIG);
+    const { repo, env } = await copilotRepo(CONFIG);
 
     const result = await doctor(repo, env, "--install-hooks", "--remove-hooks");
 

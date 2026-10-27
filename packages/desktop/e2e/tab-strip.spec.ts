@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
+import { git, storeRepo } from "./store-fixture.ts";
 
 const write = (root: string, file: string, content: string) => {
   mkdirSync(dirname(join(root, file)), { recursive: true });
@@ -10,11 +10,11 @@ const write = (root: string, file: string, content: string) => {
 };
 
 test("keeps the tab strip at full height while a tab with a long file is shown", async () => {
-  const repo = mkdtempSync(join(tmpdir(), "dryland-e2e-tabs-"));
-  write(repo, "docs/agents/issue-tracker.md", "# Issue tracker: Local markdown\n");
+  const repo = storeRepo("dryland-e2e-tabs-");
   write(repo, "short.txt", "short\n");
   write(repo, "long.txt", Array.from({ length: 400 }, (_, i) => `line ${i + 1}`).join("\n") + "\n");
-  execFileSync("git", ["init", "-q", repo]);
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "Add files");
 
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
   const app = await electron.launch({ args: [".", `--user-data-dir=${userData}`] });

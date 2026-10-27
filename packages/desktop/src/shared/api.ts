@@ -1,18 +1,15 @@
 import type { PanelFolded, PanelWidths } from "./panel-widths.ts";
 import type {
   AgentHooks,
+  Forge,
   MergeStrategy,
   MapDetail,
   SessionState,
-  SkillSetupReport,
-  Compatibility,
   TicketDetail,
   TicketRef,
   TicketsTree,
-  TrackerWidgetInfo,
 } from "@dryland/core";
 import type { AgentHooksAction, AgentHooksChange } from "./agent-hooks.ts";
-import type { TrackerWidgetAction } from "./tracker-widget.ts";
 import type { ChangedFile, DiffContent, DirectoryListing, ExplorerRoot, FileContent, RootHint } from "./explorer.ts";
 import type { OpenProject, ProjectSummary } from "./projects.ts";
 import type { QuitAnswer, QuitProgress, QuitRequest } from "./quit.ts";
@@ -47,10 +44,6 @@ export type TreeLoad =
       staleClaims: string[];
       /** The paused session of every claim one holds, by `map/id`: resumable, never stale. */
       pausedClaims: Record<string, PausedSession>;
-      /** How the repo's skills and `docs/agents` files compare to the default setup. */
-      skillSetup: SkillSetupReport;
-      /** Whether to ask about a modified setup, and the verdict's degraded and broken features. */
-      compatibility: Compatibility;
     }
   | { ok: false; message: string; nextAction: string };
 
@@ -59,18 +52,12 @@ export interface ProjectView {
   path: string;
   name: string;
   tree: TreeLoad;
-  /** What the tracker widget shows; `null` when the tracker doc is missing or names no tracker Dryland reads. */
-  tracker: TrackerWidgetInfo | null;
+  /** The forge the project's `origin` remote lives on, which opens its pull or merge requests; `null` has none, so branches merge locally. */
+  forge: Forge | null;
 }
 
 /** The settings the renderer acts on. */
 export interface AppSettings {
-  /** Whether tracker writes in the open project are committed: its override, else the global setting. */
-  autoCommit: boolean;
-  /** The global auto-commit setting, which the open project's override, if any, wins over. */
-  globalAutoCommit: boolean;
-  /** The open project's auto-commit override; `null` when it has none or no project is open. */
-  projectAutoCommit: boolean | null;
   dontAsk: DontAsk;
   stopConfirmation: StopConfirmation;
   /** Whether starting the app resumes every paused session, hidden. */
@@ -167,8 +154,6 @@ export interface DrylandApi {
   /** Each open project's tracker, live session count and next-up item. */
   projectSummaries(): Promise<ProjectSummary[]>;
   dismissLegend(): Promise<void>;
-  /** Carries out the tracker widget's action; resolves with what went wrong, or `null`. */
-  trackerWidgetAction(kind: TrackerWidgetAction["kind"]): Promise<string | null>;
   /** Remembers the widths of the side panels. */
   setPanelWidths(widths: PanelWidths): Promise<void>;
   /** Remembers which side panels are folded. */
@@ -242,19 +227,13 @@ export interface DrylandApi {
    */
   resumeAll(map: string | null): Promise<ResumedAllResult>;
   /** Runs a ticket action through `dryland` in the open project; asking for confirmation is the caller's part. */
-  runTicketAction(action: TicketAction, commit: boolean): Promise<TicketActionResult>;
+  runTicketAction(action: TicketAction): Promise<TicketActionResult>;
   /** Stops asking for confirmations of `type`, until it is reset. */
   dontAskAgain(type: ConfirmationType): Promise<void>;
-  /** Accepts the deviations of the project's modified skill setup; the dialog stays away until the setup changes. */
-  acceptDeviations(): Promise<void>;
-  /** Forgets the accepted deviations, so the modified-setup dialog asks again (unless a valid verdict exists). */
-  revokeDeviations(): Promise<void>;
   /** What Dryland keeps in the user's own config for the CLI; `null` when the CLI keeps none there. */
   agentHooks(agentId: string): Promise<AgentHooks | null>;
   /** Installs or removes that config, as `dryland doctor --install-hooks`/`--remove-hooks` would; the caller has confirmed. */
   changeAgentHooks(agentId: string, action: AgentHooksAction): Promise<AgentHooksChange | null>;
-  /** Turns a rule the Compatibility verdict calls broken back on (`true`) or off again. */
-  overrideRule(ruleId: string, enabled: boolean): Promise<void>;
   /** Applies a change made in the Settings dialog; the new settings reach `onSettingsChanged`. */
   changeSetting(change: SettingsChange): Promise<void>;
   /** The version, release channel and update status the Updates tab shows. */
@@ -287,7 +266,7 @@ export interface DrylandApi {
   onTerminalData(callback: (id: string, data: string) => void): () => void;
   /** Called when a terminal's process ends by itself. Returns an unsubscribe function. */
   onTerminalExit(callback: (id: string, exitCode: number) => void): () => void;
-  /** Called whenever tracker files change on disk. Returns an unsubscribe function. */
+  /** Called whenever the project's state store changes. Returns an unsubscribe function. */
   onProjectChanged(callback: (project: ProjectView) => void): () => void;
   /** Called with the settings whenever they change, such as from the menu. Returns an unsubscribe function. */
   onSettingsChanged(callback: (settings: AppSettings) => void): () => void;

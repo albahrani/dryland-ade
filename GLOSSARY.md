@@ -5,7 +5,7 @@ A desktop agent development environment that reads the artifacts of repos using 
 ## Language
 
 **ADE**:
-The category: a desktop agent development environment, a lens over a repo's skill artifacts and git state, plus an actuator that launches agent CLI sessions.
+The category: a desktop agent development environment that keeps a repo's maps and tickets in a state store, reads its git state, shows what to do next, and launches agent CLI sessions.
 _Avoid_: IDE, editor
 
 **Dryland ADE**:

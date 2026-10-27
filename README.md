@@ -13,7 +13,7 @@ Dryland reads the artifacts those skills leave in a repo (maps, tickets, specs, 
 - **Tickets and maps**: a tree of every map and ticket in the repo, with ready, in-progress, blocked and done states, and the next step marked with a gold bar and a star.
 - **Sessions**: start a ticket's skill in Claude Code or Copilot CLI inside its own git worktree, see which sessions wait for you, and resume paused ones.
 - **Explorer and Source Control**: browse files and diffs of the worktree you are looking at, and merge, prune or open a PR or MR when work is done.
-- **The `dryland` CLI**: the ticket and map operations the skills call, for local markdown, GitHub and GitLab trackers.
+- **The `dryland` CLI**: the ticket and map operations the skills call, over the state store Dryland keeps outside your repo.
 
 See the [user manual](docs/manual/README.md) for the details.
 

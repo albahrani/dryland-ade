@@ -9,7 +9,7 @@ const STRATEGY_LABEL: Record<MergeStrategy, string> = {
 };
 
 /**
- * The Merge section of Source Control for a local-markdown project: the dry-run result, the merge with a chosen
+ * The Merge section of Source Control for a project with no forge: the dry-run result, the merge with a chosen
  * strategy and optional cleanup, and pruning behind a confirmation. Dryland never resolves a conflict; it can
  * hand it to the ticket's session as a pre-typed prompt.
  */

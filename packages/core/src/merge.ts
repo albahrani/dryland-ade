@@ -1,8 +1,7 @@
 import { DrylandError } from "./errors.ts";
-import { findMainCheckout } from "./main-checkout.ts";
+import { defaultBranch, findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { findTicket, parseTicketReference, readTickets } from "./tickets.ts";
-import { defaultBranch } from "./tracker-write.ts";
 import { gitIn, listWorktrees, pruneWorktree } from "./worktree.ts";
 
 /** Something that stops a merge: a dirty tree, conflicts, or a main checkout that cannot take the merge. */
@@ -96,7 +95,7 @@ export async function checkMerge(runner: ProcessRunner, cwd: string, branch: str
   }
 
   if (entry.link.ticket !== null) {
-    const ticket = findTicket(await readTickets(mainCheckout, runner), parseTicketReference(entry.link.ticket));
+    const ticket = findTicket(await readTickets(mainCheckout), parseTicketReference(entry.link.ticket));
     if (ticket.state !== "resolved") hints.push(`ticket ${entry.link.ticket} is not resolved (it is ${ticket.state})`);
   }
   return { branch, base, ahead, blockers, hints };

@@ -76,14 +76,7 @@ describe("listing a directory", () => {
     const { entries } = await explorer.listDirectory(repo, "");
     const summary = entries.map((e) => `${e.kind}:${e.name}${e.ignored ? " (ignored)" : ""}`);
 
-    expect(summary).toEqual([
-      "dir:.scratch",
-      "dir:docs",
-      "dir:node_modules (ignored)",
-      "dir:src",
-      "file:.gitignore",
-      "file:debug.log (ignored)",
-    ]);
+    expect(summary).toEqual(["dir:node_modules (ignored)", "dir:src", "file:.gitignore", "file:debug.log (ignored)"]);
   });
 
   it("lists a subdirectory", async () => {

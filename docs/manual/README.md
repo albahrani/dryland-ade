@@ -13,11 +13,10 @@ Dryland ADE is an unofficial, community-made desktop app for repos that use Matt
 A **project** is a git repository you open in Dryland.
 
 1. Start Dryland and choose **Open project...** (also **File > Open Project...**, `Ctrl/Cmd+O`), then pick the repository's folder.
-2. Dryland reads the repo's tracker from `docs/agents/issue-tracker.md` and shows its maps and tickets. If the repo has no tracker doc, the Tickets view says so.
+2. Dryland reads the repo's maps and tickets from its state store. A repo without one gets `dryland init` as its next step; run it in the repo to create the store. The specs under `.scratch/<effort>/spec.md` stay ordinary files.
 3. Open several projects at once. The project widget at the left of the top bar switches between them, and "all projects" lists every open project with its sessions. Each project keeps its own tabs; closing a project ends its sessions, which then show as paused.
 
-Dryland reopens the projects you had open the next time it starts. For a repo with local markdown tickets, the app refreshes by itself when files in `.scratch/` change. A GitHub or GitLab tracker is read through `gh` or `glab`, so those need to be installed and logged in.
-
+Dryland reopens the projects you had open the next time it starts. The app refreshes by itself when the store changes, whoever wrote to it, and when a spec under `.scratch/` changes. The store lives in Dryland's data directory, outside the repo, and is bound to the repo by an id in its git config.
 ## The views
 
 The activity bar on the left switches the main side panel.
@@ -42,9 +41,9 @@ Select a ticket and use its **Start work** buttons, for example **Start with Cla
 4. Close a session's tab and its process keeps running as a hidden session; a hidden or paused session can be brought back from its ticket, its map or the Sessions view. **Sessions > Resume All Paused Sessions** brings them all back.
 5. When the work is done, resolve the ticket with its button or the CLI, and merge or open a pull request from Source Control.
 
-Writes to the tracker from a button ask for confirmation first; Settings > Write confirmations controls which. The first start with an Agent CLI may need a one-time change to that CLI's own config (for example trusting the folder or installing the status hooks); Dryland explains it and asks before it writes.
+Writes to the store from a button ask for confirmation first; Settings > Write confirmations controls which. The first start with an Agent CLI may need a one-time change to that CLI's own config (for example trusting the folder or installing the status hooks); Dryland explains it and asks before it writes.
 
-**File > New Scratch Session...** starts a session with no ticket in a scratch worktree, and **New Ticket...** and **New Map...** create tracker items.
+**File > New Scratch Session...** starts a session with no ticket in a scratch worktree, and **New Ticket...** and **New Map...** create tickets and maps in the store.
 
 ## The `dryland` CLI
 
@@ -55,7 +54,8 @@ dryland ticket list [--json]
 dryland ticket show <map>/<number>
 dryland ticket claim <map>/<number>
 dryland ticket release <map>/<number>
-dryland ticket create --map <map> --title <title> --type <type> [--question <text>] [--blocked-by <number>,...]
+dryland init [--bind <repo id> | --new-store]
+dryland ticket create [--check] [--help]    # one JSON document on stdin
 dryland ticket resolve <map>/<number> --answer <text> [--amend]
 dryland ticket tick <map>/<number> --criterion <n>
 dryland ticket block <map>/<number> [--add <number>,...] [--remove <number>,...]
@@ -63,16 +63,16 @@ dryland ticket comment <map>/<number> --text <text>
 dryland ticket triage <map>/<number> --role <role>
 dryland map show <map>
 dryland map frontier <map>
-dryland map index <map> --title <title> --link <path> --gist <text>
+dryland map create [--check] [--help]       # one JSON document on stdin
 dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>]
 dryland worktree list
 dryland worktree prune <branch> [--yes]
 dryland status <running|waiting|idle|ended> [--session <id>]
-dryland doctor [--install-hooks | --remove-hooks | --compat-prompt]
+dryland doctor [--install-hooks | --remove-hooks | --link-path | --unlink-path]
 ```
 
-Most commands accept `--json`, and the writing ones accept `--commit` or `--no-commit` to commit the tracker change or leave it. `dryland doctor` checks the repo's tracker doc, skill setup and installed hooks, and its output belongs in a bug report. The CLI works with the app closed, because it only needs the repository.
+Most commands accept `--json`. Creating a ticket or a map takes one JSON document on stdin, which is checked and applied in one step; `--check` stops before applying and `--help` prints the fields. Reads print a document by default, and `--text` renders it for people. `dryland doctor` checks the repo's skill setup and state store, `PATH` and the installed hooks, and its output belongs in a bug report. The CLI works with the app closed, because it only needs the repository. A repo without a store gets an error that names `dryland init`.
 
 ## Settings and About
 
-**File > Settings...** (`Ctrl/Cmd+,`) has tabs for General, Agent CLIs, Tracker, Skills, Write confirmations and Updates. A setting says whether it applies to every project or only to the open one. **Help > About Dryland ADE** states what Dryland is: an unofficial, community-made project that credits Matt Pocock's skills.
+**File > Settings...** (`Ctrl/Cmd+,`) has tabs for General, Agent CLIs, Write confirmations and Updates. **Help > About Dryland ADE** states what Dryland is: an unofficial, community-made project that credits Matt Pocock's skills.

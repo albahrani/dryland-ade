@@ -1,29 +1,17 @@
-import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron, expect, type Page, test } from "@playwright/test";
+import { createMap, createTicket, storeRepo } from "./store-fixture.ts";
 
 const windows = process.platform === "win32";
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
 
-/** A committed repo called `name` with one ready ticket, `title`, on map `map`. */
+/** A committed repo called `name` with one ready ticket, `title` (number 01), on map `map`. */
 function fixtureRepo(name: string, map: string, title: string): string {
-  const repo = join(mkdtempSync(join(tmpdir(), "dryland-e2e-projects-")), name);
-  const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    [`.scratch/${map}/map.md`]: `# Map: ${map}\n\n## Not yet specified\n\nNothing.\n`,
-    [`.scratch/${map}/issues/02-grill.md`]: ticket(title, "Type: task", "Status: ready-for-agent"),
-  };
-  for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), content);
-  }
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
-  git("init", "-q", "-b", "main");
-  git("add", ".");
-  git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "Fixture");
+  const repo = storeRepo("dryland-e2e-projects-", join(mkdtempSync(join(tmpdir(), "dryland-e2e-projects-")), name));
+  createMap(repo, map, map);
+  createTicket(repo, map, { title, report: "Build it." });
   return repo;
 }
 
@@ -141,7 +129,7 @@ test("keeps several projects open, each with its own tabs and sessions, and rest
   await openFromMenu(app, window, shop);
   await window.getByRole("button", { name: "Grill the cart" }).click();
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
-  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready cwd=shop-01-grill-the-cart");
   await expect(counts(window)).toContainText("1 open");
 
   // A second project opens beside the first: its tickets show, the first one's session does not count.
@@ -158,13 +146,12 @@ test("keeps several projects open, each with its own tabs and sessions, and rest
   const dialog = window.getByRole("dialog", { name: "All projects" });
   await expect(dialog.getByRole("listitem").filter({ hasText: "shop" })).toContainText("1 live session");
   await expect(dialog.getByRole("listitem").filter({ hasText: "blog" })).toContainText("0 live sessions");
-  await expect(dialog.getByRole("listitem").filter({ hasText: "blog" })).toContainText("Local markdown");
-  await expect(dialog.getByRole("listitem").filter({ hasText: "blog" })).toContainText("Next up: blog/02");
+  await expect(dialog.getByRole("listitem").filter({ hasText: "blog" })).toContainText("Next up: blog/01");
 
   // Opening one from the dialog switches back to it, tab and running session as they were.
   await dialog.getByRole("button", { name: "Open shop" }).click();
-  await expect(window.getByRole("tab", { name: "Claude Code shop/02" })).toHaveAttribute("aria-selected", "true");
-  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(window.getByRole("tab", { name: "Claude Code shop/01" })).toHaveAttribute("aria-selected", "true");
+  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready cwd=shop-01-grill-the-cart");
   await expect(counts(window)).toContainText("1 open");
   // The session still answers while its project is shown again, and was never interrupted by the switches.
   await window.locator(".xterm:visible").click();
@@ -197,7 +184,7 @@ test("closing a project lists its live sessions first, then ends them and shows 
   await openFromMenu(app, window, shop);
   await window.getByRole("button", { name: "Grill the cart" }).click();
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
-  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready cwd=shop-02-grill");
+  await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready cwd=shop-01-grill-the-cart");
   await openFromMenu(app, window, blog);
 
   await window.getByRole("button", { name: "blog ▾" }).click();
@@ -205,7 +192,7 @@ test("closing a project lists its live sessions first, then ends them and shows 
   const dialog = window.getByRole("dialog", { name: "All projects" });
   await dialog.getByRole("button", { name: "Close shop" }).click();
   const confirm = dialog.getByRole("alertdialog", { name: "Close project" });
-  await expect(confirm.getByRole("list", { name: "Sessions that stop" })).toContainText("Claude Code shop/02");
+  await expect(confirm.getByRole("list", { name: "Sessions that stop" })).toContainText("Claude Code shop/01");
   await confirm.getByRole("button", { name: "Close project" }).click();
 
   await expect(dialog.getByRole("listitem")).toHaveCount(1);

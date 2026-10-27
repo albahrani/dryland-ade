@@ -1,26 +1,21 @@
 import { parsePanelFolded, parsePanelWidths } from "../shared/panel-widths.ts";
 import { basename, join } from "node:path";
 import {
-  type CompatConfig,
   MERGE_STRATEGIES,
-  NO_COMPAT_CONFIG,
-  readSkillSetup,
   type MergeStrategy,
   AGENT_ADAPTERS,
   DrylandError,
   findMainCheckout,
-  isStoreInitialised,
+  forgeOf,
   type LiveEvent,
   type LiveListener,
   type SessionSnapshot,
-  liveLockFile,
   NEXT_UP_COUNT,
   nextSteps,
   nextUpMarkers,
   nodeProcessRunner,
   readMapDetail,
   readProjectState,
-  readTrackerWidget,
   readSessionIndex,
   resumeArgs,
   sessionsOf,
@@ -51,7 +46,6 @@ import {
 import { DEFAULT_SESSIONS_LAYOUT, parseSessionsLayout } from "../shared/sessions-view.ts";
 import { type DocumentRef, EMPTY_TABS, parseTabs, type TabsState, ticketKey } from "../shared/tabs.ts";
 import {
-  autoCommitFor,
   isConfirmationType,
   isTicketAction,
   isTicketRef,
@@ -76,8 +70,6 @@ import { isQuitAnswer, type QuitListing, type QuitRequest } from "../shared/quit
 import { nodePtyProvider } from "./pty/node-pty-provider.ts";
 import { createTerminalManager } from "./terminals.ts";
 import { resolveShell } from "./shell.ts";
-import { TrackerPoller } from "./tracker-poller.ts";
-import { runTrackerWidgetAction } from "./tracker-widget-action.ts";
 import { pausedTickets } from "../shared/paused-session.ts";
 import { resumeAll } from "./resume-all.ts";
 import { createSessionRecorder } from "./session-recording.ts";
@@ -164,8 +156,6 @@ const updater = createUpdater({
       sendToWindow("notice", `Dryland ADE ${status.version} is available: ${status.url}`);
   },
 });
-const autoCommit = (projectPath: string) => autoCommitFor(store.read(), projectPath);
-const compatConfig = (projectPath: string) => store.read().compat[projectPath] ?? NO_COMPAT_CONFIG;
 const work = createWorkStarter({
   terminals,
   runner: nodeProcessRunner,
@@ -173,8 +163,6 @@ const work = createWorkStarter({
   launcherDirs: layout.pathDirs,
   hooksDir: join(app.getPath("userData"), "hooks"),
   dryland,
-  autoCommit,
-  compatConfig,
 });
 const agentHooks = createAgentHooksControl({
   runner: nodeProcessRunner,
@@ -207,9 +195,6 @@ const sessionIn = (id: string) => work.sessions().find((s) => s.terminalId === i
 function settings(): AppSettings {
   const saved = store.read();
   return {
-    autoCommit: project === null ? saved.autoCommit : autoCommitFor(saved, project.path),
-    globalAutoCommit: saved.autoCommit,
-    projectAutoCommit: project === null ? null : (saved.projectAutoCommit[project.path] ?? null),
     dontAsk: saved.dontAsk,
     stopConfirmation: saved.stopConfirmation,
     resumeOnStart: saved.resumeOnStart,
@@ -274,17 +259,12 @@ function onLiveEvent(event: LiveEvent): void {
 }
 
 async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: string | null }> {
-  // Kept when only the tracker read fails (e.g. `gh` logged out), so the project is still watched and polled.
+  // Kept when only the store read fails (e.g. no store yet), so the project is still watched.
   let found: string | null = null;
   try {
     const mainCheckout = (found = await findMainCheckout(nodeProcessRunner, path));
-    // One pass over the tracker files feeds both the tree and the rule engine, so markers and rows never disagree.
-    const { tree, snapshot, skillSetup, compatibility } = await readProjectState(
-      nodeProcessRunner,
-      mainCheckout,
-      liveSessions(path),
-      compatConfig(path),
-    );
+    // One pass over the store feeds both the tree and the rule engine, so markers and rows never disagree.
+    const { tree, snapshot } = await readProjectState(nodeProcessRunner, mainCheckout, liveSessions(path));
     const steps = nextSteps(snapshot);
     const ranked = nextUpMarkers(steps, Infinity);
     const nextUp = { markers: ranked.slice(0, NEXT_UP_COUNT), ranked };
@@ -320,7 +300,7 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
         ];
       }),
     );
-    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims, skillSetup, compatibility }, mainCheckout };
+    return { tree: { ok: true, tree, nextUp, staleClaims, pausedClaims }, mainCheckout };
   } catch (error) {
     if (!(error instanceof DrylandError)) throw error;
     return { tree: { ok: false, message: error.message, nextAction: error.nextAction }, mainCheckout: found };
@@ -330,8 +310,8 @@ async function loadTree(path: string): Promise<{ tree: TreeLoad; mainCheckout: s
 async function projectView(): Promise<{ view: ProjectView; mainCheckout: string | null } | null> {
   if (project === null) return null;
   const { tree, mainCheckout } = await loadTree(project.path);
-  const tracker = mainCheckout === null ? null : await readTrackerWidget(nodeProcessRunner, mainCheckout);
-  return { view: { path: project.path, name: basename(project.path), tree, tracker }, mainCheckout };
+  const forge = mainCheckout === null ? null : await forgeOf(nodeProcessRunner, mainCheckout);
+  return { view: { path: project.path, name: basename(project.path), tree, forge }, mainCheckout };
 }
 
 async function currentState(): Promise<AppState> {
@@ -368,7 +348,7 @@ async function readItem(ref: DocumentRef): Promise<ItemContent> {
   }
 }
 
-/** Makes `path` the open project and starts watching its tracker files. Remembers it only if it loads. */
+/** Makes `path` the open project and starts watching its state store and specs. Remembers it only if it loads. */
 async function openProject(path: string): Promise<void> {
   stopWatching?.();
   stopWatching = null;
@@ -379,10 +359,6 @@ async function openProject(path: string): Promise<void> {
     store.update({ lastProject: path, openProjects: addProject(store.read().openProjects, path) });
   }
   if (loaded?.mainCheckout) stopWatching = watchProject(loaded.mainCheckout, () => void refresh());
-  // A GitHub or GitLab project has no files to watch, so its tickets are polled instead.
-  if (loaded?.view.tracker) trackerPoller.start(loaded.view.tracker.kind);
-  else trackerPoller.stop();
-  // The project's auto-commit override shows in the menu and decides its writes.
   buildMenu();
   sendSettings();
 }
@@ -419,8 +395,6 @@ const refresh = latestOnly(projectView, (loaded) => {
   if (loaded !== null) sendToWindow("project:changed", loaded.view);
 });
 
-const trackerPoller = new TrackerPoller(refresh);
-
 async function pickProject(): Promise<void> {
   if (window === null) return;
   const result = await dialog.showOpenDialog(window, { title: "Open project", properties: ["openDirectory"] });
@@ -455,7 +429,6 @@ async function closeOpenProject(path: string): Promise<void> {
   stopWatching = null;
   explorerWatcher.stop();
   project = null;
-  trackerPoller.stop();
   store.update({ lastProject: null });
   buildMenu();
   sendSettings();
@@ -471,8 +444,8 @@ async function projectSummaries(): Promise<ProjectSummary[]> {
       const { tree } = await loadTree(path);
       const base = { path, name: basename(path), liveSessions: liveSessionCount(sessions, states, path) };
       return tree.ok
-        ? { ...base, tracker: "Local markdown", nextUp: tree.nextUp.markers[0] ?? null, error: null }
-        : { ...base, tracker: null, nextUp: null, error: `${tree.message} ${tree.nextAction}` };
+        ? { ...base, nextUp: tree.nextUp.markers[0] ?? null, error: null }
+        : { ...base, nextUp: null, error: `${tree.message} ${tree.nextAction}` };
     }),
   );
 }
@@ -501,20 +474,13 @@ function createWindow(): void {
     if (askedInWindow && abandonQuit === null) quit = "ask";
     askedInWindow = false;
   });
-  // Git state behind the next steps changes outside the watched tracker files, e.g. a commit made in a terminal.
+  // Git state behind the next steps changes outside the watched specs and store, e.g. a commit made in a terminal.
   window.on("focus", () => {
-    // A polled remote project re-reads through the poller, which never overlaps a read still running.
-    void (trackerPoller.active ? trackerPoller.focus() : refresh());
+    void refresh();
     void reconcileSessions();
   });
   if (process.env.ELECTRON_RENDERER_URL) void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
-}
-
-/** Stores what the user decided about a project's skill setup and reloads the views that depend on it. */
-function changeCompat(projectPath: string, config: CompatConfig): void {
-  store.update({ compat: { ...store.read().compat, [projectPath]: config } });
-  void refresh();
 }
 
 /** Stores a settings change and sends the new settings to the window. */
@@ -602,13 +568,6 @@ ipcMain.handle("sessions-layout:save", (_event, layout: unknown) => {
   const saved = store.read().sessionsLayout;
   store.update({ sessionsLayout: { ...saved, [project.path]: parseSessionsLayout(layout) } });
 });
-ipcMain.handle("tracker:widget-action", (_event, kind: unknown): Promise<string | null> =>
-  runTrackerWidgetAction(kind, {
-    runner: nodeProcessRunner,
-    projectPath: project?.path ?? null,
-    openPath: (path) => shell.openPath(path),
-  }),
-);
 ipcMain.handle("item:read", (_event, ref: DocumentRef) => readItem(ref));
 /** The Explorer reads the open project's worktrees; nothing without a project. */
 const explorerFor = () => {
@@ -763,21 +722,6 @@ ipcMain.handle("work:resume-all", (_event, map: unknown): Promise<ResumedAllResu
   if (map !== null && typeof map !== "string") return Promise.resolve({ resumed: 0, warnings: ["That is not a map."] });
   return resumeAllPaused(map);
 });
-/** Accepting the deviations is stored against the deviation fingerprint, so the dialog stays away until the setup changes. */
-ipcMain.handle("compat:accept", async (): Promise<void> => {
-  if (project === null) return;
-  const report = await readSkillSetup(await findMainCheckout(nodeProcessRunner, project.path));
-  const saved = store.read().compat;
-  changeCompat(project.path, {
-    ...(saved[project.path] ?? NO_COMPAT_CONFIG),
-    acceptedDeviations: report.deviationFingerprint,
-  });
-});
-/** Forgets the accepted deviations: the dialog asks again for a setup without a valid verdict. */
-ipcMain.handle("compat:revoke", (): void => {
-  if (project === null) return;
-  changeCompat(project.path, { ...compatConfig(project.path), acceptedDeviations: null });
-});
 ipcMain.handle("agent-hooks:read", (_event, agentId: unknown) =>
   typeof agentId === "string" ? agentHooks.read(agentId, project?.path ?? null) : null,
 );
@@ -786,23 +730,14 @@ ipcMain.handle("agent-hooks:change", (_event, agentId: unknown, action: unknown)
     ? agentHooks.change(agentId, project?.path ?? null, action)
     : null,
 );
-/** Turns a rule the verdict calls broken back on, or off again. */
-ipcMain.handle("compat:override", (_event, ruleId: unknown, enabled: unknown): void => {
-  if (project === null || typeof ruleId !== "string" || typeof enabled !== "boolean") return;
-  const config = compatConfig(project.path);
-  const others = config.overrides.filter((id) => id !== ruleId);
-  changeCompat(project.path, { ...config, overrides: enabled ? [...others, ruleId] : others });
-});
-ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): Promise<TicketActionResult> => {
-  if (!isTicketAction(action) || typeof commit !== "boolean")
+ipcMain.handle("tracker:run", async (_event, action: unknown): Promise<TicketActionResult> => {
+  if (!isTicketAction(action))
     return { ok: false, message: "That is not a ticket action.", nextAction: "Retry from the ticket." };
   if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
-  // Commits as the renderer said, so a confirmation names exactly what runs; `dryland` finds the main checkout.
-  // A create on a state store sends one document on stdin; a markdown repo takes flags.
-  const store = await isStoreInitialised(project.path);
-  const result = await dryland.run(trackerArgs(action, commit, store), {
+  // `dryland` finds the main checkout; a create sends its one document on stdin.
+  const result = await dryland.run(trackerArgs(action), {
     cwd: project.path,
-    input: trackerInput(action, store) ?? undefined,
+    input: trackerInput(action) ?? undefined,
   });
   void refresh();
   return result;
@@ -822,7 +757,7 @@ ipcMain.handle("updates:open-release", async () => {
 });
 ipcMain.handle("settings:change", (_event, change: unknown) => {
   if (!isSettingsChange(change)) return;
-  changeSettings(settingsPatch(store.read(), change, project?.path ?? null));
+  changeSettings(settingsPatch(store.read(), change));
 });
 ipcMain.on("terminal:write", (_event, id: string, data: string) => {
   work.userTyped(id, data);
@@ -849,7 +784,7 @@ ipcMain.handle("session:stop", (_event, sessionId: unknown) => {
 });
 
 // One app per user: a second launch brings the running app's window to the front and quits, so it never takes over
-// the live-reporting lock file or starts sessions of its own.
+// the live listener or starts sessions of its own.
 const primary = app.requestSingleInstanceLock();
 if (!primary) app.quit();
 app.on("second-instance", () => {
@@ -868,7 +803,7 @@ void app.whenReady().then(async () => {
   ptyEnv[SESSION_RETENTION_ENV] = String(store.read().sessionRetentionDays);
   // Listening before any terminal opens, so every session can report; a new port and token on every launch.
   try {
-    live = await startLiveListener({ lockFile: liveLockFile(process.env), onEvent: onLiveEvent });
+    live = await startLiveListener({ onEvent: onLiveEvent });
     ptyEnv["DRYLAND_PORT"] = String(live.port);
     ptyEnv["DRYLAND_TOKEN"] = live.token;
   } catch (error) {

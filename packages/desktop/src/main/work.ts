@@ -5,8 +5,6 @@ import {
   type AgentAdapter,
   blocksInput,
   commandForTicket,
-  COMPAT_RUN_COMMAND,
-  type CompatConfig,
   createWorktree,
   DrylandError,
   envKey,
@@ -15,13 +13,8 @@ import {
   launchArgs,
   installedSkills,
   nextSteps,
-  NO_COMPAT_CONFIG,
   programFor,
-  readCompatibility,
-  readSkillSetup,
-  skillSetupSnapshot,
   type ProcessRunner,
-  type Ticket,
   readRepoSnapshot,
   readSessionIndex,
   readTickets,
@@ -45,7 +38,6 @@ import { trackerArgs } from "../shared/tracker-actions.ts";
 import {
   chosenSkillCommand,
   MAP_WORKTREE_SLUG,
-  NEW_MAP_EFFORT,
   SCRATCH_EFFORT,
   SCRATCH_SLUG,
   type WorkTarget,
@@ -66,10 +58,6 @@ export interface WorkStarterOptions {
   hooksDir: string;
   /** Runs `dryland`, through which the ticket is claimed for its worktree branch. */
   dryland: DrylandCli;
-  /** Whether tracker writes in the project are committed. */
-  autoCommit: (projectPath: string) => boolean;
-  /** What the user decided about the project's modified skill setup; without it nothing is accepted or overridden. */
-  compatConfig?: (projectPath: string) => CompatConfig;
   pretype?: PretypeTiming;
 }
 
@@ -146,26 +134,8 @@ export function homeOf(env: Record<string, string | undefined>): string | null {
 }
 
 export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
-  const {
-    terminals,
-    runner,
-    env,
-    launcherDirs,
-    hooksDir,
-    dryland,
-    autoCommit,
-    compatConfig = () => NO_COMPAT_CONFIG,
-    pretype = PRETYPE_TIMING,
-  } = options;
+  const { terminals, runner, env, launcherDirs, hooksDir, dryland, pretype = PRETYPE_TIMING } = options;
 
-  /** The repo snapshot with the Compatibility verdict, so a recommended command is never one a rule is off for. */
-  async function snapshotWithSetup(projectPath: string, mainCheckout: string, tickets: Ticket[]) {
-    const config = compatConfig(projectPath);
-    const report = await readSkillSetup(mainCheckout);
-    const compatibility = await readCompatibility(mainCheckout, report, config);
-    const setup = skillSetupSnapshot(report, compatibility, config);
-    return readRepoSnapshot(runner, mainCheckout, tickets, undefined, null, setup);
-  }
   const started: SessionInfo[] = [];
   /** The pre-typer of each terminal that has one, so the user's first key can stand it down. */
   const pretypers = new Map<string, Pretyper>();
@@ -262,11 +232,11 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
         command =
           skill !== null
             ? chosenSkillCommand(skill, target)
-            : commandForTicket(nextSteps(await snapshotWithSetup(projectPath, mainCheckout, tickets)), ticket);
+            : commandForTicket(nextSteps(await readRepoSnapshot(runner, mainCheckout, tickets)), ticket);
         // After the command is chosen, which reads the ticket unclaimed, and before the agent starts, so it finds
         // the claim made. Run in the worktree, so its branch holds the claim and the claim outlives the session.
         // Never released or taken over here: a claim someone else holds stays theirs.
-        const claim = await dryland.run(trackerArgs({ kind: "claim", ticket }, autoCommit(projectPath)), {
+        const claim = await dryland.run(trackerArgs({ kind: "claim", ticket }), {
           cwd: worktree.path,
           sessionId,
         });
@@ -274,19 +244,13 @@ export function createWorkStarter(options: WorkStarterOptions): WorkStarter {
       } else if (target.kind === "map") {
         worktree = await worktreeForScratch(runner, mainCheckout, target.map, MAP_WORKTREE_SLUG);
         command = skill !== null ? chosenSkillCommand(skill, target) : `/wayfinder ${target.map}`;
-      } else if (target.kind === "scratch" || target.kind === "compat-check") {
+      } else {
         // Always a new worktree: each ticketless session is its own exploration.
         worktree = await createWorktree(runner, mainCheckout, { map: SCRATCH_EFFORT, slug: SCRATCH_SLUG });
         command = skill !== null ? chosenSkillCommand(skill, target) : null;
-      } else {
-        // Always a new worktree: each new map is its own exploration, named only once the skill has charted it.
-        worktree = await createWorktree(runner, mainCheckout, { map: NEW_MAP_EFFORT, slug: MAP_WORKTREE_SLUG });
-        command = skill !== null ? chosenSkillCommand(skill, target) : "/wayfinder ";
       }
       await prepareUserConfig(adapter, worktree.path, warnings);
-      // The compatibility prompt is a sentence, not a skill, so it is typed as it is.
-      const typed =
-        target.kind === "compat-check" ? COMPAT_RUN_COMMAND : command === null ? null : skillCommand(adapter, command);
+      const typed = command === null ? null : skillCommand(adapter, command);
       const ticket = target.kind === "ticket" ? { map: target.ticket.map, id: target.ticket.id } : null;
       const map = target.kind === "ticket" ? target.ticket.map : target.kind === "map" ? target.map : null;
       // Dryland picks the CLI's session id and records it before the spawn, so the index knows it before any hook.

@@ -1,9 +1,7 @@
 import { DrylandError } from "./errors.ts";
-import { ghRun } from "./github-backend.ts";
-import { glabRequired, glabRun, PROJECT } from "./gitlab-backend.ts";
+import { forgeOfRemote, ghRun, glabRequired, glabRun, PROJECT } from "./forge-cli.ts";
 import { checkMerge, describeBlocker, type MergeBlocker, type MergeCheck } from "./merge.ts";
 import type { ProcessRunner } from "./process-runner.ts";
-import type { TrackerKind } from "./tracker.ts";
 import { gitIn } from "./worktree.ts";
 
 /** A forge Dryland opens a pull or merge request on, through the user's own `gh` or `glab` login. */
@@ -18,9 +16,10 @@ export interface PullRequest {
   url: string;
 }
 
-/** The forge a tracker lives on; local markdown has none, so it never opens a PR or MR. */
-export function forgeOf(kind: TrackerKind): Forge | null {
-  return kind === "local-markdown" ? null : kind;
+/** The forge the repo's `origin` remote lives on; `null` without an origin or on a host that is neither GitHub nor GitLab. */
+export async function forgeOf(runner: ProcessRunner, cwd: string): Promise<Forge | null> {
+  const origin = await runner.run("git", ["remote", "get-url", "origin"], { cwd });
+  return origin.exitCode === 0 ? forgeOfRemote(origin.stdout) : null;
 }
 
 /** What the forge calls its request: a PR on GitHub, an MR on GitLab. */

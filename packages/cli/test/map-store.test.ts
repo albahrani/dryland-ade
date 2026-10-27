@@ -46,18 +46,6 @@ describe("dryland map show on a store", () => {
   });
 });
 
-describe("dryland map index on a store", () => {
-  it("is refused with the reason: Decisions so far is derived from resolved tickets", async () => {
-    const repo = await TempRepo.createStore([SHOP]);
-
-    const result = await repo.run(["map", "index", "shop", "--title", "T", "--link", "issues/01.md", "--gist", "G"]);
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr).toContain("derived");
-    expect(result.stderr).toContain("dryland ticket resolve");
-  });
-});
-
 describe("dryland init", () => {
   it("makes a fresh repo ready for the first map and ticket", async () => {
     const repo = TempRepo.create();

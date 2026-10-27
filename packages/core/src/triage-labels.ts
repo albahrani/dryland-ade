@@ -4,24 +4,6 @@ import { TRIAGE_ROLES, type TriageRole } from "./ticket.ts";
 
 export const TRIAGE_LABELS_DOC = "docs/agents/triage-labels.md";
 
-/** Maps the label strings a repo uses (lower-cased) to the canonical triage role they stand for. */
-export type TriageVocabulary = Map<string, TriageRole>;
-
-/** The default vocabulary: each role is its own label. */
-export function defaultTriageVocabulary(): TriageVocabulary {
-  return new Map(TRIAGE_ROLES.map((role) => [role, role]));
-}
-
-/**
- * Reads the role table of `docs/agents/triage-labels.md`: first column the canonical role, second the
- * repo's label. A missing doc or row leaves the default label for that role.
- */
-export async function readTriageVocabulary(mainCheckout: string): Promise<TriageVocabulary> {
-  const vocabulary = defaultTriageVocabulary();
-  for (const [role, label] of await readTriageLabels(mainCheckout)) vocabulary.set(label.toLowerCase(), role);
-  return vocabulary;
-}
-
 /** The label the repo uses for each role, as its triage-labels doc writes it; a role without a row is its own label. */
 export async function readTriageLabels(mainCheckout: string): Promise<Map<TriageRole, string>> {
   const labels = new Map<TriageRole, string>(TRIAGE_ROLES.map((role) => [role, role]));

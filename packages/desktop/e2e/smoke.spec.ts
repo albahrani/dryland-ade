@@ -1,34 +1,12 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
+import { dryland, resolveTicket, shopRepo } from "./store-fixture.ts";
 
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\n## Question\n\nWhat?\n`;
+const fixtureRepo = () => shopRepo();
 
-function fixtureRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), "dryland-e2e-repo-"));
-  const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n\n## Destination\n\nSell things.\n\n## Not yet specified\n\n- Payments\n",
-    ".scratch/shop/issues/01-done.md": ticket("Set up repo", "Type: task", "Status: resolved"),
-    ".scratch/shop/issues/02-grill.md": ticket("Grill the cart", "Type: grilling", "Status: ready-for-agent"),
-    ".scratch/shop/issues/03-cart.md": ticket(
-      "Build the cart",
-      "Type: task",
-      "Status: ready-for-agent",
-      "Blocked by: 02",
-    ),
-  };
-  for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), content);
-  }
-  execFileSync("git", ["init", "-q", repo]);
-  return repo;
-}
-
-test("opens a repo, shows its tickets tree, refreshes on disk changes and reopens the project", async () => {
+test("opens a repo, shows its tickets tree, refreshes on store changes and reopens the project", async () => {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
   const launch = () => electron.launch({ args: [".", `--user-data-dir=${userData}`] });
@@ -52,11 +30,8 @@ test("opens a repo, shows its tickets tree, refreshes on disk changes and reopen
   await window.getByRole("button", { name: /1 done/ }).click();
   await expect(window.getByText("Set up repo")).toBeVisible();
 
-  // Editing a ticket file on disk updates the tree without a restart.
-  writeFileSync(
-    join(repo, ".scratch/shop/issues/02-grill.md"),
-    ticket("Grill the cart", "Type: grilling", "Status: resolved"),
-  );
+  // A write to the store from outside the app updates the tree without a restart.
+  resolveTicket(repo, "shop/02");
   await expect(window.getByRole("button", { name: /2 done/ })).toBeVisible();
   await expect(window.getByText("blocked by 02")).toHaveCount(0);
 
@@ -72,7 +47,7 @@ test("opens a repo, shows its tickets tree, refreshes on disk changes and reopen
   await second.close();
 });
 
-test("shows maps with progress, opens tickets and maps in tabs, follows disk edits and restores tabs", async () => {
+test("shows maps with progress, opens tickets and maps in tabs, follows store edits and restores tabs", async () => {
   const repo = fixtureRepo();
   const userData = mkdtempSync(join(tmpdir(), "dryland-e2e-user-"));
   const launch = () => electron.launch({ args: [".", `--user-data-dir=${userData}`] });
@@ -112,11 +87,8 @@ test("shows maps with progress, opens tickets and maps in tabs, follows disk edi
   await expect(window.getByRole("tab")).toHaveCount(2);
   await expect(window.getByRole("tab", { name: "shop/02" })).toHaveAttribute("aria-selected", "true");
 
-  // Content in an open tab follows the file on disk, including its comments.
-  writeFileSync(
-    join(repo, ".scratch/shop/issues/02-grill.md"),
-    `${ticket("Grill the cart", "Type: grilling", "Status: ready-for-agent")}\n## Comments\n\nA fresh remark.\n`,
-  );
+  // Content in an open tab follows the store, including its comments.
+  dryland(repo, undefined, "ticket", "comment", "shop/02", "--text", "A fresh remark.");
   await expect(window.getByText("A fresh remark.")).toBeVisible();
   await first.close();
 

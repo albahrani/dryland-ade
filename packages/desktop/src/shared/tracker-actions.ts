@@ -11,7 +11,7 @@ export type TicketAction =
   | { kind: "resolve"; ticket: TicketRef; answer: string }
   | { kind: "unblock"; ticket: TicketRef; blocker: string }
   | { kind: "create"; ticket: NewTicket }
-  /** Creates an effort's map record; only a state store has one to create. */
+  /** Creates an effort's map record. */
   | { kind: "create-map"; map: NewMap };
 
 /** A map as the New map dialog describes it: the effort slug, a title and the destination. */
@@ -53,9 +53,9 @@ export type ActionSource = "ticket" | "general-button";
 
 /**
  * The kinds of confirmed write, each with its own "do not ask again" flag. `tracker-metadata` and `user-config` are
- * asked for so far; `prose-annotation` is kept so the Settings dialog can show and reset it.
+ * asked for.
  */
-export const CONFIRMATION_TYPES = ["tracker-metadata", "user-config", "prose-annotation"] as const;
+export const CONFIRMATION_TYPES = ["tracker-metadata", "user-config"] as const;
 export type ConfirmationType = (typeof CONFIRMATION_TYPES)[number];
 export const isConfirmationType = (value: unknown): value is ConfirmationType =>
   CONFIRMATION_TYPES.includes(value as ConfirmationType);
@@ -64,57 +64,36 @@ export const isConfirmationType = (value: unknown): value is ConfirmationType =>
 export const CONFIRMATION_LABELS: Record<ConfirmationType, string> = {
   "tracker-metadata": "tracker metadata writes from a button",
   "user-config": "Dryland-owned user-config writes",
-  "prose-annotation": "prose annotations",
 };
 
 /** The "do not ask again" flag of each confirmation type; `true` means it is no longer asked. */
 export type DontAsk = Record<ConfirmationType, boolean>;
-export const ASK_ALWAYS: DontAsk = { "tracker-metadata": false, "user-config": false, "prose-annotation": false };
+export const ASK_ALWAYS: DontAsk = { "tracker-metadata": false, "user-config": false };
 
-/**
- * The `dryland` arguments of an action, saying whether to commit, so the app's setting wins over git's. On a state
- * store a create takes one document on stdin (see `trackerInput`) and there is nothing to commit.
- */
-export function trackerArgs(action: TicketAction, autoCommit: boolean, store = false): string[] {
-  if (action.kind === "create-map") return ["map", "create"];
-  if (action.kind === "create" && store) return ["ticket", "create"];
-  const args = ((): string[] => {
-    switch (action.kind) {
-      case "claim":
-      case "release":
-        return ["ticket", action.kind, ticketKey(action.ticket)];
-      case "resolve":
-        return ["ticket", "resolve", ticketKey(action.ticket), "--answer", action.answer];
-      case "unblock":
-        return ["ticket", "block", ticketKey(action.ticket), "--remove", action.blocker];
-      case "create": {
-        const { map, title, type, question, blockedBy, status } = action.ticket;
-        return [
-          "ticket",
-          "create",
-          "--map",
-          map,
-          "--title",
-          title,
-          "--type",
-          type,
-          ...(question === "" ? [] : ["--question", question]),
-          ...(blockedBy.length === 0 ? [] : ["--blocked-by", blockedBy.join(",")]),
-          ...(status === undefined ? [] : ["--status", status]),
-        ];
-      }
-    }
-  })();
-  return [...args, autoCommit ? "--commit" : "--no-commit"];
+/** The `dryland` arguments of an action. A create takes one document on stdin (see `trackerInput`). */
+export function trackerArgs(action: TicketAction): string[] {
+  switch (action.kind) {
+    case "create-map":
+      return ["map", "create"];
+    case "create":
+      return ["ticket", "create"];
+    case "claim":
+    case "release":
+      return ["ticket", action.kind, ticketKey(action.ticket)];
+    case "resolve":
+      return ["ticket", "resolve", ticketKey(action.ticket), "--answer", action.answer];
+    case "unblock":
+      return ["ticket", "block", ticketKey(action.ticket), "--remove", action.blocker];
+  }
 }
 
 /** The JSON document an action sends on stdin, or `null` when it sends none. */
-export function trackerInput(action: TicketAction, store: boolean): string | null {
+export function trackerInput(action: TicketAction): string | null {
   if (action.kind === "create-map") {
     const { map, title, destination } = action.map;
     return JSON.stringify({ effort: map, title, ...(destination === "" ? {} : { destination }) });
   }
-  if (action.kind !== "create" || !store) return null;
+  if (action.kind !== "create") return null;
   const { map, title, type, question, blockedBy, status } = action.ticket;
   return JSON.stringify({
     effort: map,
@@ -192,16 +171,4 @@ function isNewTicket(value: unknown): value is NewTicket {
     Array.isArray(value.blockedBy) &&
     value.blockedBy.every((n) => typeof n === "string" && NUMBER.test(n))
   );
-}
-
-export interface AutoCommitSettings {
-  /** Whether tracker writes from the app are committed, unless a project says otherwise. */
-  autoCommit: boolean;
-  /** Per-project overrides, by project path. */
-  projectAutoCommit: Record<string, boolean>;
-}
-
-/** Whether the app's tracker writes in `project` are committed: its override if it has one, else the global setting. */
-export function autoCommitFor(settings: AutoCommitSettings, project: string): boolean {
-  return settings.projectAutoCommit[project] ?? settings.autoCommit;
 }

@@ -3,16 +3,10 @@ import { isRecord, isTicketRef, MAP_NAME } from "./tracker-actions.ts";
 import { ticketKey } from "./tabs.ts";
 
 /**
- * What a session starts on: a ticket, a map to continue, a map the `/wayfinder` skill has yet to chart, or nothing
- * (exploratory work in a scratch worktree of its own), or the Compatibility check, which runs in one too.
+ * What a session starts on: a ticket, a map to continue, or nothing
+ * (exploratory work in a scratch worktree of its own).
  */
-export type WorkTarget =
-  | { kind: "ticket"; ticket: TicketRef }
-  | { kind: "map"; map: string }
-  | { kind: "new-map" }
-  | { kind: "scratch" }
-  /** A scratch session pre-typed to run the compatibility prompt (Run check). */
-  | { kind: "compat-check" };
+export type WorkTarget = { kind: "ticket"; ticket: TicketRef } | { kind: "map"; map: string } | { kind: "scratch" };
 
 /** The effort a ticketless session's worktree is named after, as `scratch/scratch-session`. */
 export const SCRATCH_EFFORT = "scratch";
@@ -20,10 +14,7 @@ export const SCRATCH_EFFORT = "scratch";
 /** The name part of a ticketless session's scratch worktree. */
 export const SCRATCH_SLUG = "session";
 
-/** The effort a new map's temporary worktree is named after, as `new-map/scratch-wayfinder`, until the skill names it. */
-export const NEW_MAP_EFFORT = "new-map";
-
-/** The scratch worktree slug of a map's own sessions and of a new map's: `<map>/scratch-wayfinder`. */
+/** The scratch worktree slug of a map's own sessions: `<map>/scratch-wayfinder`. */
 export const MAP_WORKTREE_SLUG = "wayfinder";
 
 /** Same rule as core's `SKILL_NAME`, kept here because this module runs in the renderer too. */
@@ -37,9 +28,7 @@ export function isWorkTarget(value: unknown): value is WorkTarget {
       return isTicketRef(value.ticket);
     case "map":
       return typeof value.map === "string" && MAP_NAME.test(value.map);
-    case "new-map":
     case "scratch":
-    case "compat-check":
       return true;
     default:
       return false;
@@ -52,7 +41,7 @@ export const isSkillChoice = (value: unknown): value is string | null =>
 
 /**
  * The rule-engine-style command to pre-type when the user picked `skill` instead of the recommended one: the skill
- * naming what it works on, which the user can edit before submitting. A new map has nothing to name yet.
+ * naming what it works on, which the user can edit before submitting.
  */
 export function chosenSkillCommand(skill: string, target: WorkTarget): string {
   switch (target.kind) {
@@ -60,9 +49,7 @@ export function chosenSkillCommand(skill: string, target: WorkTarget): string {
       return `/${skill} ${ticketKey(target.ticket)}`;
     case "map":
       return `/${skill} ${target.map}`;
-    case "new-map":
     case "scratch":
-    case "compat-check":
       return `/${skill} `;
   }
 }

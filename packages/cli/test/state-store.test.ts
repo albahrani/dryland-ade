@@ -343,6 +343,34 @@ describe("reads outside a store repo", () => {
     expect(result.stderr).toContain("Next:");
   });
 
+  it("fail in a repo without a store and name `dryland init`, whatever the old tracker files say", async () => {
+    const repo = TempRepo.create({
+      "docs/agents/issue-tracker.md": "# Issue tracker: Local Markdown\n",
+      ".scratch/shop/map.md": "# Map: Shop\n",
+      ".scratch/shop/issues/01-cart.md": "# Cart\n\nType: task\n",
+    });
+    const doc = JSON.stringify({ effort: "shop", title: "Cart", type: "task" });
+
+    const runs = [
+      await repo.run(["ticket", "list"]),
+      await repo.run(["ticket", "show", "shop/01"]),
+      await repo.run(["ticket", "claim", "shop/01"]),
+      await repo.run(["ticket", "resolve", "shop/01", "--answer", "Done."]),
+      await repo.run(["map", "show", "shop"]),
+      await repo.run(["map", "frontier", "shop"]),
+      await repo.run(["worktree", "create", "shop/01"]),
+      await repo.runWithInput(["ticket", "create"], doc),
+      await repo.runWithInput(["map", "create"], JSON.stringify({ effort: "shop", title: "Shop", destination: "x" })),
+    ];
+
+    for (const run of runs) {
+      expect(run.exitCode).toBe(1);
+      expect(run.stderr).toContain("no Dryland state store");
+      expect(run.stderr).toContain("Next: Run `dryland init`");
+    }
+    expect(existsSync(join(repo.path, ".scratch", "shop", "issues", "01-cart.md"))).toBe(true);
+  });
+
   it("report an empty store as no tickets", async () => {
     const repo = await TempRepo.createStore();
     expect(JSON.parse((await repo.run(["ticket", "list"])).stdout).tickets).toEqual([]);

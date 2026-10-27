@@ -1,7 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createWorktree,
@@ -11,36 +10,22 @@ import {
   type ProcessRunner,
   readRepoSnapshot,
   readTickets,
+  resolveStoreTicket,
 } from "../src/index.ts";
+import { SHOP_CART, storeRepo } from "./store-repo.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 
-/** A GitHub-tracked repo whose resolved ticket shop/01 has a worktree one commit ahead. */
+/** A repo with a GitHub origin whose resolved ticket shop/01 has a worktree one commit ahead. */
 async function fixture() {
-  const repo = realpathSync.native(mkdtempSync(join(tmpdir(), "dryland-snap-pr-")));
-  const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n",
-    ".scratch/shop/issues/01-cart.md": "# Cart\n\nType: task\nStatus: resolved\n\nBuild it.\n",
-  };
-  for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), content);
-  }
-  git(repo, "init", "-q", "-b", "main");
-  git(repo, "config", "user.name", "Test");
-  git(repo, "config", "user.email", "test@example.com");
-  git(repo, "config", "commit.gpgsign", "false");
-  git(repo, "add", ".");
-  git(repo, "commit", "-q", "-m", "Fixture");
+  const repo = await storeRepo(SHOP_CART);
+  git(repo, "remote", "add", "origin", "https://github.com/acme/shop.git");
+  await resolveStoreTicket(repo, "shop/01", "Done.", { author: "engine" });
   const wt = await createWorktree(nodeProcessRunner, repo, { ticket: "shop/01" });
   writeFileSync(join(wt.path, "b.txt"), "b\n");
   git(wt.path, "add", ".");
   git(wt.path, "commit", "-q", "-m", "Add b");
-  const tickets = await readTickets(repo);
-  // The tracker doc is read for the forge; switch it once the tickets are read from disk.
-  writeFileSync(join(repo, "docs/agents/issue-tracker.md"), "# Issue tracker: GitHub\n");
-  return { repo, tickets };
+  return { repo, tickets: await readTickets(repo) };
 }
 
 const ok = (stdout: string): ProcessResult => ({ stdout, stderr: "", exitCode: 0 });
@@ -81,6 +66,23 @@ describe("readRepoSnapshot on a forge", () => {
   it("leaves it unknown when gh cannot answer", async () => {
     const broken = forgeAnswering(() => ({ stdout: "", stderr: "no", exitCode: 1 }));
     const { snapshot } = await commands(broken);
+    expect(snapshot.git?.worktrees[0]?.prExists).toBeNull();
+  });
+
+  it("asks no forge when the origin is on another host or there is none", async () => {
+    const { repo, tickets } = await fixture();
+    git(repo, "remote", "set-url", "origin", "https://git.example.com/acme/shop.git");
+    const asked: string[] = [];
+    const spy: ProcessRunner = {
+      run: (command, args, options) => {
+        if (command === "gh" || command === "glab") asked.push(command);
+        return nodeProcessRunner.run(command, args, options);
+      },
+    };
+
+    const snapshot = await readRepoSnapshot(spy, repo, tickets);
+
+    expect(asked).toEqual([]);
     expect(snapshot.git?.worktrees[0]?.prExists).toBeNull();
   });
 });

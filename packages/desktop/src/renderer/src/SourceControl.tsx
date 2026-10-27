@@ -19,9 +19,9 @@ interface Loaded {
   status: SourceControlStatus;
   graph: CommitGraph;
   unlinked: UnlinkedBranch[];
-  /** The dry run for a linked worktree of a local-markdown project; `null` elsewhere or when git cannot say. */
+  /** The dry run for a linked worktree of a project with no forge; `null` elsewhere or when git cannot say. */
   merge: MergeCheckView | null;
-  /** The PR/MR section for a linked worktree of a GitHub or GitLab project; `null` elsewhere. */
+  /** The PR/MR section for a linked worktree of a project whose origin is on GitHub or GitLab; `null` elsewhere. */
   pullRequest: PullRequestSection | null;
 }
 
@@ -39,7 +39,7 @@ const LINK_NOTE: Record<ExplorerRoot["link"], string | null> = {
 export function SourceControl({
   hint,
   projectView,
-  localTracker,
+  noForge,
   revision,
   onOpenDiff,
   onShowWorktree,
@@ -48,8 +48,8 @@ export function SourceControl({
   hint: RootHint;
   /** The project as last read; a new one may mean a worktree was made or removed, so the root is resolved again. */
   projectView: unknown;
-  /** Whether the project's tracker is local markdown, the only one the Merge section serves. */
-  localTracker: boolean;
+  /** Whether the project has no GitHub or GitLab origin, the only kind the Merge section serves. */
+  noForge: boolean;
   revision: number;
   onOpenDiff: (root: string, path: string) => void;
   /** Shows another worktree in this pane and the Explorer, until the selection changes. */
@@ -90,8 +90,8 @@ export function SourceControl({
 
   const rootPath = root?.path;
   const linked = root !== null && !root.main && root.branch !== null;
-  const mergeable = localTracker && linked;
-  const requestable = !localTracker && linked;
+  const mergeable = noForge && linked;
+  const requestable = !noForge && linked;
   const load = useCallback(async () => {
     if (rootPath === undefined) return;
     try {

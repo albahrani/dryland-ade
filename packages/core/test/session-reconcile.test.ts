@@ -1,18 +1,20 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   claudeHistoryDir,
+  claimStoreTicket,
   claudeProjectSlug,
   createWorktree,
   nodeProcessRunner,
   reconcileIndex,
   reconcileSessionIndex,
+  resolveStoreTicket,
   type SessionIndex,
   sessionIndexPath,
 } from "../src/index.ts";
+import { storeRepo } from "./store-repo.ts";
 
 const NOW = new Date("2026-10-18T12:00:00.000Z");
 const minutesAgo = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
@@ -153,29 +155,21 @@ describe("reconcileIndex", () => {
   });
 });
 
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\nBuild it.\n`;
-
-function fixture() {
-  const repo = realpathSync(mkdtempSync(join(tmpdir(), "dryland-reconcile-repo-")));
+async function fixture() {
+  const repo = await storeRepo(
+    [
+      {
+        effort: "shop",
+        map: { title: "Shop" },
+        tickets: [{ title: "Cart" }, { title: "Pay" }, { title: "Ship" }],
+      },
+    ],
+    {},
+  );
   const home = mkdtempSync(join(tmpdir(), "dryland-reconcile-home-"));
-  const files: Record<string, string> = {
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n\n## Not yet specified\n\nNothing.\n",
-    ".scratch/shop/issues/01-cart.md": ticket("Cart", "Type: task", "Status: claimed"),
-    ".scratch/shop/issues/02-pay.md": ticket("Pay", "Type: task", "Status: claimed"),
-    ".scratch/shop/issues/03-ship.md": ticket("Ship", "Type: task", "Status: ready-for-agent"),
-  };
-  for (const [file, content] of Object.entries(files)) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), content);
+  for (const id of ["01", "02"]) {
+    await claimStoreTicket(repo, `shop/${id}`, { author: "engine", holder: `shop/${id}-branch` });
   }
-  const git = (...args: string[]) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.com");
-  git("config", "commit.gpgsign", "false");
-  git("add", ".");
-  git("commit", "-q", "-m", "Fixture");
   return { repo, home };
 }
 
@@ -193,7 +187,7 @@ const readIndex = async (repo: string) =>
 
 describe("reconcileSessionIndex", () => {
   it("finds a session started by hand in a claimed ticket's worktree", async () => {
-    const { repo, home } = fixture();
+    const { repo, home } = await fixture();
     const worktree = await createWorktree(nodeProcessRunner, repo, { ticket: "shop/01" });
     writeHistory(home, worktree.path, "by-hand", minutesAgo(3));
 
@@ -206,7 +200,7 @@ describe("reconcileSessionIndex", () => {
   });
 
   it("finds a session in a scratch worktree under its map", async () => {
-    const { repo, home } = fixture();
+    const { repo, home } = await fixture();
     const worktree = await createWorktree(nodeProcessRunner, repo, { map: "shop", slug: "wayfinder" });
     writeHistory(home, worktree.path, "map-session", minutesAgo(3));
 
@@ -216,14 +210,11 @@ describe("reconcileSessionIndex", () => {
   });
 
   it("removes the entries of a resolved ticket and of a released claim", async () => {
-    const { repo, home } = fixture();
+    const { repo, home } = await fixture();
     const { recordSession } = await import("../src/index.ts");
     await recordSession(nodeProcessRunner, repo, "shop/02", { adapter: "claude-code", sessionId: "x" }, { now: NOW });
     await recordSession(nodeProcessRunner, repo, "shop/03", { adapter: "claude-code", sessionId: "y" }, { now: NOW });
-    writeFileSync(
-      join(repo, ".scratch/shop/issues/02-pay.md"),
-      ticket("Pay", "Type: task", "Status: resolved") + "\n## Answer\n\nDone.\n",
-    );
+    await resolveStoreTicket(repo, "shop/02", "Done.", { author: "engine" });
 
     await reconcileSessionIndex(nodeProcessRunner, repo, { home, env: {}, now: NOW });
 
@@ -231,7 +222,7 @@ describe("reconcileSessionIndex", () => {
   });
 
   it("removes a Claude Code entry whose history file is gone", async () => {
-    const { repo, home } = fixture();
+    const { repo, home } = await fixture();
     const { recordSession } = await import("../src/index.ts");
     const worktree = await createWorktree(nodeProcessRunner, repo, { ticket: "shop/01" });
     const old = new Date(NOW.getTime() - 3 * 60 * 60_000);
@@ -250,7 +241,7 @@ describe("reconcileSessionIndex", () => {
   });
 
   it("does not write the index when nothing changed", async () => {
-    const { repo, home } = fixture();
+    const { repo, home } = await fixture();
     const worktree = await createWorktree(nodeProcessRunner, repo, { ticket: "shop/01" });
     writeHistory(home, worktree.path, "by-hand", minutesAgo(3));
     await reconcileSessionIndex(nodeProcessRunner, repo, { home, env: {}, now: NOW });
@@ -264,7 +255,7 @@ describe("reconcileSessionIndex", () => {
   });
 
   it("writes no index at all for a repo with nothing to reconcile", async () => {
-    const { repo, home } = fixture();
+    const { repo, home } = await fixture();
 
     const result = await reconcileSessionIndex(nodeProcessRunner, repo, { home, env: {}, now: NOW });
 

@@ -13,27 +13,38 @@ let stop: (() => void) | undefined;
 afterEach(() => stop?.());
 
 describe("watchProject", () => {
-  it("reports a skill that appears under a skills directory created after the watch began", async () => {
+  it("reports a spec that appears under a .scratch directory created after the watch began", async () => {
     const root = tempRoot();
     const onChange = vi.fn();
     stop = watchProject(root, onChange, 20);
 
-    mkdirSync(join(root, ".agents", "skills", "tdd"), { recursive: true });
+    mkdirSync(join(root, ".scratch", "shop"), { recursive: true });
     await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
     onChange.mockClear();
 
-    writeFileSync(join(root, ".agents", "skills", "tdd", "SKILL.md"), "# tdd\n");
+    writeFileSync(join(root, ".scratch", "shop", "spec.md"), "# Spec\n");
     await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
   });
 
-  it("reports an edit to a skill already installed", async () => {
+  it("reports an edit to a spec already there", async () => {
     const root = tempRoot();
-    mkdirSync(join(root, ".claude", "skills", "tdd"), { recursive: true });
+    mkdirSync(join(root, ".scratch", "shop"), { recursive: true });
     const onChange = vi.fn();
     stop = watchProject(root, onChange, 20);
 
-    writeFileSync(join(root, ".claude", "skills", "tdd", "SKILL.md"), "# changed\n");
+    writeFileSync(join(root, ".scratch", "shop", "spec.md"), "# changed\n");
     await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+  });
+
+  it("ignores the skill directories, which no view shows", async () => {
+    const root = tempRoot();
+    mkdirSync(join(root, ".agents", "skills", "tdd"), { recursive: true });
+    const onChange = vi.fn();
+    stop = watchProject(root, onChange, 20);
+
+    writeFileSync(join(root, ".agents", "skills", "tdd", "SKILL.md"), "# changed\n");
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("reports a write to the state store, which sits outside the checkout", async () => {

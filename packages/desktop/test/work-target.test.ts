@@ -4,12 +4,10 @@ import { chosenSkillCommand, isSkillChoice, isWorkTarget, sessionTitle } from ".
 const agent = { name: "Claude Code" };
 
 describe("isWorkTarget", () => {
-  it("accepts a ticket, a map and a new map, and refuses anything else from the renderer", () => {
+  it("accepts a ticket, a map and a scratch session, and refuses anything else from the renderer", () => {
     expect(isWorkTarget({ kind: "ticket", ticket: { map: "shop", id: "02" } })).toBe(true);
     expect(isWorkTarget({ kind: "map", map: "shop" })).toBe(true);
-    expect(isWorkTarget({ kind: "new-map" })).toBe(true);
     expect(isWorkTarget({ kind: "scratch" })).toBe(true);
-    expect(isWorkTarget({ kind: "compat-check" })).toBe(true);
     expect(isWorkTarget({ kind: "map", map: "--json" })).toBe(false);
     expect(isWorkTarget({ kind: "ticket", ticket: { map: "shop" } })).toBe(false);
     expect(isWorkTarget({ map: "shop", id: "02" })).toBe(false);
@@ -32,7 +30,6 @@ describe("chosenSkillCommand", () => {
       "/grilling shop/02",
     );
     expect(chosenSkillCommand("grilling", { kind: "map", map: "shop" })).toBe("/grilling shop");
-    expect(chosenSkillCommand("grilling", { kind: "new-map" })).toBe("/grilling ");
     expect(chosenSkillCommand("grilling", { kind: "scratch" })).toBe("/grilling ");
   });
 });

@@ -7,30 +7,28 @@ export const TRIAGE_ROLES = ["needs-triage", "needs-info", "ready-for-agent", "r
 export type TriageRole = (typeof TRIAGE_ROLES)[number];
 
 export interface Ticket {
-  /** Ticket number within its map, as written in the file name (`01`, `20`). */
+  /** Ticket number within its map (`01`, `20`). */
   id: string;
-  /** The parent map: the effort the ticket belongs to (the directory under `.scratch/`). */
+  /** The parent map: the effort the ticket belongs to. */
   map: string;
   title: string;
   type: TicketType;
   state: TicketState;
-  /** Who holds the claim, when the tracker records it; `null` when unclaimed or not recorded. */
+  /** Who holds the claim; `null` when unclaimed. */
   claimant: string | null;
-  /** Ids of the tickets blocking this one, or `"unknown"` when the backend cannot say. */
+  /** Ids of the tickets blocking this one, or `"unknown"` when they cannot be said. */
   blockers: string[] | "unknown";
   /** The repo's triage role for the ticket, `null` when it carries none. */
   triageRole: TriageRole | null;
-  /** The ticket text between its header fields and its `## Answer` / `## Comments` sections. */
+  /** The ticket's Report. */
   body: string;
-  /** What `## Answer` records; `null` while unanswered. */
+  /** The answer the ticket was resolved with; `null` while unanswered. */
   answer: string | null;
   comments: string[];
-  /** Repo-relative path of the effort's spec the ticket links to; only a store ticket carries it. */
+  /** Repo-relative path of the effort's spec the ticket links to. */
   spec?: string | null;
-  /** The acceptance criteria with their ticks, when the tracker holds them as data (the store). */
+  /** The acceptance criteria with their ticks. */
   criteria?: { text: string; done: boolean }[];
-  /** Backend extras the rules never read; for local markdown, the header fields Dryland does not interpret. */
-  raw: Record<string, string>;
 }
 
 /** Where a ticket sits in the skill workflow. Derived from type, never stored. */

@@ -1,13 +1,11 @@
 import {
   AGENT_ADAPTERS,
-  blockTicket,
+  blockStoreTicket,
   branchHolder,
-  claimTicket,
-  commentOnTicket,
-  compatPrompt,
+  claimStoreTicket,
+  commentOnStoreTicket,
   createStoreMap,
   createStoreTicket,
-  createTicket,
   copilotPaths,
   createWorktree,
   currentAgentSession,
@@ -16,39 +14,33 @@ import {
   formatDiagnostic,
   findMainCheckout,
   hookStateOf,
-  indexMap,
   initStore,
   installAgentHooks,
-  isStoreInitialised,
   listStoreTickets,
   linkLauncher,
   isReportedState,
-  listTickets,
   listWorktrees,
   MAP_INPUT,
-  mapFrontier,
   nodeProcessRunner,
   pruneWorktree,
   readSessionIndex,
-  readSkillSetup,
+  readTriageLabels,
   recordSession,
   retentionDaysFromEnv,
-  releaseTicket,
+  releaseStoreTicket,
   removeAgentHooks,
-  resolveTicket,
+  resolveStoreTicket,
   REPORTED_STATES,
   runDoctor,
   sendLiveEvent,
   sessionsOf,
-  showMap,
   showStoreMap,
   showStoreTicket,
-  showTicket,
   storeFrontier,
   TICKET_INPUT,
-  tickTicket,
+  tickStoreTicket,
   ticketKind,
-  triageTicket,
+  triageStoreTicket,
   unlinkLauncher,
   untrustFolders,
   type DoctorReport,
@@ -124,7 +116,7 @@ function formatTicket(ticket: Ticket, sessions: IndexedSession[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-/** What a store map shows beyond a markdown map: notes, ticket lists read from state, and the out-of-scope items. */
+/** What a map shows beyond its tickets: notes, ticket lists read from state, and the out-of-scope items. */
 interface StoreMapExtras {
   notes: string;
   /** Headed lists printed after the ticket groups. */
@@ -132,10 +124,10 @@ interface StoreMapExtras {
   outOfScope: string[];
 }
 
-function formatMap(map: MapView, extras?: StoreMapExtras): string {
+function formatMap(map: MapView, extras: StoreMapExtras): string {
   const lines = [`Map: ${map.title} (${map.name})`];
   if (map.destination !== "") lines.push("", `Destination: ${map.destination}`);
-  if (extras !== undefined && extras.notes !== "") lines.push("", `Notes: ${extras.notes}`);
+  if (extras.notes !== "") lines.push("", `Notes: ${extras.notes}`);
   const groups = [
     ["Planning", map.tickets.filter((t) => ticketKind(t) === "planning")],
     ["Implementation", map.tickets.filter((t) => ticketKind(t) === "implementation")],
@@ -151,9 +143,9 @@ function formatMap(map: MapView, extras?: StoreMapExtras): string {
           .map((l) => `  ${l}`),
       );
   }
-  for (const { heading, lines: items } of extras?.lists ?? []) lines.push("", `${heading}:`, ...items);
+  for (const { heading, lines: items } of extras.lists) lines.push("", `${heading}:`, ...items);
   if (map.fog.length > 0) lines.push("", "Fog:", ...map.fog.map((item) => `  - ${item}`));
-  if (extras !== undefined && extras.outOfScope.length > 0) {
+  if (extras.outOfScope.length > 0) {
     lines.push("", "Out of scope:", ...extras.outOfScope.map((item) => `  - ${item}`));
   }
   return `${lines.join("\n")}\n`;
@@ -172,7 +164,6 @@ const asTicket = (d: TicketDocument): Ticket => ({
   body: d.report,
   answer: d.answer,
   comments: d.comments,
-  raw: {},
 });
 
 function formatStoreTicket(d: TicketDocument, sessions: IndexedSession[]): string {
@@ -195,7 +186,6 @@ function formatStoreMap(d: MapDocument): string {
     destination: d.map?.destination ?? "",
     fog: d.map?.fog ?? [],
     decisions: d.decisions,
-    sections: [],
     tickets: d.tickets.map(asTicket),
   };
   const tickets = view.tickets;
@@ -234,27 +224,22 @@ const USAGE = [
   "Usage: dryland init [--bind <repo id> | --new-store] [--json]",
   "       dryland ticket list [--text] [--json]",
   "       dryland ticket show <map>/<number> [--text] [--json]",
-  "       dryland ticket claim <map>/<number> [--commit | --no-commit] [--json]",
-  "       dryland ticket release <map>/<number> [--commit | --no-commit] [--json]",
-  "       dryland ticket create [--check] [--help]   (state store: a JSON document on stdin)",
-  "       dryland ticket create --map <map> --title <title> --type <type> [--question <text>]",
-  "                             [--blocked-by <number>[,<number>...]] [--status <role>] [--commit | --no-commit] [--json]",
-  "       dryland ticket resolve <map>/<number> --answer <text> [--amend] [--commit | --no-commit] [--json]",
-  "       dryland ticket tick <map>/<number> --criterion <n> [--commit | --no-commit] [--json]",
-  "       dryland ticket block <map>/<number> [--add <number>[,<number>...]] [--remove <number>[,<number>...]]",
-  "                            [--commit | --no-commit] [--json]",
-  "       dryland ticket comment <map>/<number> --text <text> [--commit | --no-commit] [--json]",
-  "       dryland ticket triage <map>/<number> --role <role> [--commit | --no-commit] [--json]",
-  "       dryland map create [--check] [--help]   (state store: a JSON document on stdin)",
+  "       dryland ticket claim <map>/<number> [--json]",
+  "       dryland ticket release <map>/<number> [--json]",
+  "       dryland ticket create [--check] [--help]   (a JSON document on stdin)",
+  "       dryland ticket resolve <map>/<number> --answer <text> [--amend] [--json]",
+  "       dryland ticket tick <map>/<number> --criterion <n> [--json]",
+  "       dryland ticket block <map>/<number> [--add <number>[,<number>...]] [--remove <number>[,<number>...]] [--json]",
+  "       dryland ticket comment <map>/<number> --text <text> [--json]",
+  "       dryland ticket triage <map>/<number> --role <role> [--json]",
+  "       dryland map create [--check] [--help]   (a JSON document on stdin)",
   "       dryland map show <map> [--text] [--json]",
   "       dryland map frontier <map> [--text] [--json]",
-  "       dryland map index <map> --title <title> --link <path> --gist <text> [--commit | --no-commit] [--json]",
-  "                          (markdown only: a state store derives Decisions so far from resolved tickets)",
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
   "       dryland status <running|waiting|idle|ended> [--session <id>] [--json]",
-  "       dryland doctor [--install-hooks | --remove-hooks | --link-path | --unlink-path | --compat-prompt] [--json]",
+  "       dryland doctor [--install-hooks | --remove-hooks | --link-path | --unlink-path] [--json]",
   "",
 ].join("\n");
 
@@ -270,8 +255,6 @@ interface Output {
 }
 
 interface Flags {
-  /** `true` with `--commit`, `false` with `--no-commit`, `undefined` to let git's `dryland.autoCommit` decide. */
-  commit: boolean | undefined;
   /** Command-specific switches given, by name without the leading `--`. */
   switches: Set<string>;
   /** Options that take a value, by name without the leading `--`. */
@@ -328,9 +311,6 @@ async function recordAgentSession(ticket: string): Promise<string[]> {
   }
 }
 
-/** Whether to commit: `--commit` or `--no-commit` when given, so the app's setting wins; otherwise git's `dryland.autoCommit` decides. */
-const autoCommit = (flags: Flags) => flags.commit;
-
 /** Whether this command runs inside an Agent CLI session, which makes an agent its author. */
 const callerAuthor = (): "human" | "agent" =>
   currentAgentSession(AGENT_ADAPTERS, process.env) !== null || !!process.env["DRYLAND_SESSION_ID"] ? "agent" : "human";
@@ -373,49 +353,37 @@ const COMMANDS: Record<
   "ticket list": {
     target: false,
     run: async () => {
-      if (await isStoreInitialised(process.cwd())) {
-        const list = await listStoreTickets(process.cwd());
-        return { value: list, structured: true, text: formatTickets(list.tickets.map(asTicket)) };
-      }
-      const tickets = await listTickets(nodeProcessRunner, process.cwd());
-      return { value: tickets, text: formatTickets(tickets) };
+      const list = await listStoreTickets(process.cwd());
+      return { value: list, structured: true, text: formatTickets(list.tickets.map(asTicket)) };
     },
   },
   "ticket show": {
     target: true,
     run: async (target) => {
-      if (await isStoreInitialised(process.cwd())) {
-        const document = await showStoreTicket(process.cwd(), target);
-        const { index, warnings } = await readSessionIndex(nodeProcessRunner, process.cwd());
-        const sessions = sessionsOf(index, document.ref);
-        return {
-          value: { ...document, sessions },
-          structured: true,
-          text: formatStoreTicket(document, sessions),
-          warnings,
-        };
-      }
-      const ticket = await showTicket(nodeProcessRunner, process.cwd(), target);
+      const document = await showStoreTicket(process.cwd(), target);
       const { index, warnings } = await readSessionIndex(nodeProcessRunner, process.cwd());
-      const sessions = sessionsOf(index, `${ticket.map}/${ticket.id}`);
-      return { value: { ...ticket, sessions }, text: formatTicket(ticket, sessions), warnings };
+      const sessions = sessionsOf(index, document.ref);
+      return {
+        value: { ...document, sessions },
+        structured: true,
+        text: formatStoreTicket(document, sessions),
+        warnings,
+      };
     },
   },
   "ticket claim": {
     target: true,
     recordsSession: true,
-    run: async (target, flags) => {
+    run: async (target) => {
       // Always the branch, even inside a Dryland session: a claim outlives its session (ADR 0010).
       const holder = await branchHolder(nodeProcessRunner, process.cwd());
-      const { ticket, warnings, alreadyHeld } = await claimTicket(nodeProcessRunner, process.cwd(), target, {
+      const { ticket, warnings, alreadyHeld } = await claimStoreTicket(process.cwd(), target, {
         holder,
         session:
           process.env["DRYLAND_SESSION_ID"] ?? currentAgentSession(AGENT_ADAPTERS, process.env)?.sessionId ?? null,
-        autoCommit: autoCommit(flags),
         author: callerAuthor(),
       });
       const name = `${ticket.map}/${ticket.id}`;
-      // On GitHub the claimant is the `gh` login, not the branch.
       const claimant = ticket.claimant ?? holder;
       const text = alreadyHeld ? `${claimant} already holds ${name}.\n` : `Claimed ${name} for ${claimant}.\n`;
       return { value: ticket, text, warnings };
@@ -424,55 +392,34 @@ const COMMANDS: Record<
   "ticket release": {
     target: true,
     recordsSession: true,
-    run: async (target, flags) => {
-      const { ticket, warnings } = await releaseTicket(nodeProcessRunner, process.cwd(), target, {
-        autoCommit: autoCommit(flags),
-        author: callerAuthor(),
-      });
+    run: async (target) => {
+      const { ticket, warnings } = await releaseStoreTicket(process.cwd(), target, { author: callerAuthor() });
       return { value: ticket, text: `Released ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
   "ticket create": {
     target: false,
+    // Refused with a pointer to the document, rather than reported as unknown flags.
     options: ["map", "title", "type", "question", "blocked-by", "status"],
     switches: ["check"],
     help: documentHelp("dryland ticket create [--check] [--json] < ticket.json", TICKET_INPUT),
     run: async (_target, flags) => {
-      if (await isStoreInitialised(process.cwd())) {
-        const flagged = Object.keys(flags.values).filter((name) => name !== "text");
-        if (flagged.length > 0) {
-          throw new DrylandError(
-            `--${flagged[0]} is not an option of \`dryland ticket create\` in a repo with a state store.`,
-            "Pipe one JSON document to the command instead; run it with --help for the fields and an example.",
-          );
-        }
-        const { ticket, written } = await createStoreTicket(process.cwd(), await readDocument(), {
-          author: callerAuthor(),
-          checkOnly: flags.switches.has("check"),
-        });
-        const ref = `${ticket.effort}/${ticket.id}`;
-        return {
-          value: { ref, written, ticket },
-          text: written ? `Created ${ref}: ${ticket.title}\n` : `Checked: this would create ${ref}.\n`,
-        };
+      const flagged = Object.keys(flags.values).filter((name) => name !== "text");
+      if (flagged.length > 0) {
+        throw new DrylandError(
+          `--${flagged[0]} is not an option of \`dryland ticket create\`.`,
+          "Pipe one JSON document to the command instead; run it with --help for the fields and an example.",
+        );
       }
-      const { ticket, warnings } = await createTicket(
-        nodeProcessRunner,
-        process.cwd(),
-        {
-          map: required(flags, "map"),
-          title: required(flags, "title"),
-          type: required(flags, "type"),
-          question: flags.values["question"],
-          status: flags.values["status"],
-          blockedBy: flags.values["blocked-by"]
-            ?.split(",")
-            .map((number) => number.trim())
-            .filter((number) => number !== ""),
-        },
-        { autoCommit: autoCommit(flags) },
-      );
-      return { value: ticket, text: `Created ${ticket.map}/${ticket.id}: ${ticket.title}\n`, warnings };
+      const { ticket, written } = await createStoreTicket(process.cwd(), await readDocument(), {
+        author: callerAuthor(),
+        checkOnly: flags.switches.has("check"),
+      });
+      const ref = `${ticket.effort}/${ticket.id}`;
+      return {
+        value: { ref, written, ticket },
+        text: written ? `Created ${ref}: ${ticket.title}\n` : `Checked: this would create ${ref}.\n`,
+      };
     },
   },
   "ticket resolve": {
@@ -482,13 +429,10 @@ const COMMANDS: Record<
     switches: ["amend"],
     run: async (target, flags) => {
       const amend = flags.switches.has("amend");
-      const { ticket, warnings } = await resolveTicket(
-        nodeProcessRunner,
-        process.cwd(),
-        target,
-        required(flags, "answer"),
-        { autoCommit: autoCommit(flags), amend, author: callerAuthor() },
-      );
+      const { ticket, warnings } = await resolveStoreTicket(process.cwd(), target, required(flags, "answer"), {
+        amend,
+        author: callerAuthor(),
+      });
       const verb = amend ? "Amended the answer of" : "Resolved";
       return { value: ticket, text: `${verb} ${ticket.map}/${ticket.id}.\n`, warnings };
     },
@@ -499,10 +443,7 @@ const COMMANDS: Record<
     options: ["criterion"],
     run: async (target, flags) => {
       const criterion = Number(required(flags, "criterion"));
-      const { ticket, warnings } = await tickTicket(nodeProcessRunner, process.cwd(), target, criterion, {
-        autoCommit: autoCommit(flags),
-        author: callerAuthor(),
-      });
+      const { ticket, warnings } = await tickStoreTicket(process.cwd(), target, criterion, { author: callerAuthor() });
       return { value: ticket, text: `Ticked criterion ${criterion} of ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
@@ -511,12 +452,11 @@ const COMMANDS: Record<
     recordsSession: true,
     options: ["add", "remove"],
     run: async (target, flags) => {
-      const { ticket, warnings } = await blockTicket(
-        nodeProcessRunner,
+      const { ticket, warnings } = await blockStoreTicket(
         process.cwd(),
         target,
         { add: numberList(flags, "add"), remove: numberList(flags, "remove") },
-        { autoCommit: autoCommit(flags), author: callerAuthor() },
+        { author: callerAuthor() },
       );
       const ids = ticket.blockers === "unknown" ? [] : ticket.blockers;
       const blockers = ids.length === 0 ? "none" : ids.join(", ");
@@ -528,13 +468,9 @@ const COMMANDS: Record<
     recordsSession: true,
     options: ["text"],
     run: async (target, flags) => {
-      const { ticket, warnings } = await commentOnTicket(
-        nodeProcessRunner,
-        process.cwd(),
-        target,
-        required(flags, "text"),
-        { autoCommit: autoCommit(flags), author: callerAuthor() },
-      );
+      const { ticket, warnings } = await commentOnStoreTicket(process.cwd(), target, required(flags, "text"), {
+        author: callerAuthor(),
+      });
       return { value: ticket, text: `Commented on ${ticket.map}/${ticket.id}.\n`, warnings };
     },
   },
@@ -543,12 +479,13 @@ const COMMANDS: Record<
     recordsSession: true,
     options: ["role"],
     run: async (target, flags) => {
-      const { ticket, warnings } = await triageTicket(
-        nodeProcessRunner,
+      const labels = await readTriageLabels(await findMainCheckout(nodeProcessRunner, process.cwd()));
+      const { ticket, warnings } = await triageStoreTicket(
         process.cwd(),
         target,
         required(flags, "role"),
-        { autoCommit: autoCommit(flags), author: callerAuthor() },
+        { author: callerAuthor() },
+        labels,
       );
       return { value: ticket, text: `Triaged ${ticket.map}/${ticket.id} as ${ticket.triageRole}.\n`, warnings };
     },
@@ -573,44 +510,16 @@ const COMMANDS: Record<
   "map show": {
     target: true,
     run: async (target) => {
-      if (await isStoreInitialised(process.cwd())) {
-        const document = await showStoreMap(process.cwd(), target);
-        return { value: document, structured: true, text: formatStoreMap(document) };
-      }
-      const map = await showMap(nodeProcessRunner, process.cwd(), target);
-      return { value: map, text: formatMap(map) };
+      const document = await showStoreMap(process.cwd(), target);
+      return { value: document, structured: true, text: formatStoreMap(document) };
     },
   },
   "map frontier": {
     target: true,
     run: async (target) => {
-      if (await isStoreInitialised(process.cwd())) {
-        const document = await storeFrontier(process.cwd(), target);
-        const tickets = document.tickets.map(asTicket);
-        return { value: document, structured: true, text: formatTickets(tickets, "No frontier tickets.") };
-      }
-      const tickets = await mapFrontier(nodeProcessRunner, process.cwd(), target);
-      return { value: tickets, text: formatTickets(tickets, "No frontier tickets.") };
-    },
-  },
-  "map index": {
-    target: true,
-    options: ["title", "link", "gist"],
-    run: async (target, flags) => {
-      if (await isStoreInitialised(process.cwd())) {
-        throw new DrylandError(
-          "`dryland map index` does nothing in a repo with a state store: Decisions so far is derived from the resolved tickets.",
-          `Resolve the ticket with \`dryland ticket resolve ${target === "" ? "<map>/<number>" : `${target}/<number>`} --answer <text>\`; its title and the first sentence of its answer appear in \`dryland map show ${target}\`.`,
-        );
-      }
-      const { value, warnings } = await indexMap(
-        nodeProcessRunner,
-        process.cwd(),
-        target,
-        { title: required(flags, "title"), link: required(flags, "link"), gist: required(flags, "gist") },
-        { autoCommit: autoCommit(flags) },
-      );
-      return { value, text: `Indexed "${flags.values["title"]}" in the ${target} map.\n`, warnings };
+      const document = await storeFrontier(process.cwd(), target);
+      const tickets = document.tickets.map(asTicket);
+      return { value: document, structured: true, text: formatTickets(tickets, "No frontier tickets.") };
     },
   },
   status: {
@@ -626,13 +535,8 @@ const COMMANDS: Record<
   },
   doctor: {
     target: false,
-    switches: ["install-hooks", "remove-hooks", "link-path", "unlink-path", "compat-prompt"],
+    switches: ["install-hooks", "remove-hooks", "link-path", "unlink-path"],
     run: async (_target, flags) => {
-      if (flags.switches.has("compat-prompt")) {
-        const mainCheckout = await findMainCheckout(nodeProcessRunner, process.cwd());
-        const prompt = compatPrompt(await readSkillSetup(mainCheckout));
-        return { value: { prompt }, text: prompt };
-      }
       const link = flags.switches.has("link-path");
       if (link && flags.switches.has("unlink-path")) {
         throw new DrylandError("--link-path and --unlink-path contradict each other.", "Pass one of them.");
@@ -742,11 +646,15 @@ async function run(args: string[]): Promise<number> {
   }
   const json = args.includes("--json");
   const asText = args.includes("--text");
-  if (args.includes("--commit") && args.includes("--no-commit")) {
-    throw new DrylandError("--commit and --no-commit contradict each other.", "Pass one of them, or neither.");
+  for (const gone of ["--commit", "--no-commit"]) {
+    if (args.includes(gone)) {
+      throw new DrylandError(
+        `${gone} is not an option of dryland.`,
+        "Remove it: the state store has no files to commit, and every command writes straight to it.",
+      );
+    }
   }
-  const commit = args.includes("--commit") ? true : args.includes("--no-commit") ? false : undefined;
-  const flags: Flags = { commit, switches: new Set(), values: {} };
+  const flags: Flags = { switches: new Set(), values: {} };
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
@@ -759,7 +667,7 @@ async function run(args: string[]): Promise<number> {
       flags.values[name] = value;
     } else if (SWITCHES.has(name)) {
       flags.switches.add(name);
-    } else if (!["--json", "--text", "--help", "--commit", "--no-commit"].includes(arg)) {
+    } else if (!["--json", "--text", "--help"].includes(arg)) {
       positional.push(arg);
     }
   }

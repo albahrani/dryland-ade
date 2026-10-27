@@ -1,8 +1,5 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer, type AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { liveLockFile, type LiveEvent, type LiveListener, startLiveListener } from "@dryland/core";
+import { type LiveEvent, type LiveListener, startLiveListener } from "@dryland/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { TempRepo } from "./harness.ts";
 
@@ -11,30 +8,25 @@ afterEach(async () => {
   await Promise.all(listeners.splice(0).map((listener) => listener.close()));
 });
 
-/** A running app's listener in a fresh app directory, and the env that makes `dryland` find it. */
+/** A running app's listener, and the env a Dryland terminal gets to reach it. */
 async function runningApp(): Promise<{ env: Record<string, string>; received: LiveEvent[] }> {
-  const dir = mkdtempSync(join(tmpdir(), "dryland-app-"));
   const received: LiveEvent[] = [];
-  listeners.push(
-    await startLiveListener({ lockFile: liveLockFile({ DRYLAND_APP_DIR: dir }), onEvent: (e) => received.push(e) }),
-  );
-  return { env: { DRYLAND_APP_DIR: dir }, received };
+  const listener = await startLiveListener({ onEvent: (e) => received.push(e) });
+  listeners.push(listener);
+  return { env: { DRYLAND_PORT: String(listener.port), DRYLAND_TOKEN: listener.token }, received };
 }
 
-const TICKET = (title: string, status = "ready-for-agent") => `# ${title}\n\nType: task\nStatus: ${status}\n\nBody.\n`;
-
-function shopRepo(): TempRepo {
-  return TempRepo.create({
-    "docs/agents/issue-tracker.md": "# Issue tracker: Local Markdown\n",
-    ".scratch/shop/map.md": "# Map: Shop\n\n## Destination\n\nSell things.\n\n## Decisions so far\n\n",
-    ".scratch/shop/issues/01-cart.md": TICKET("Build the cart"),
-    ".scratch/shop/issues/02-pay.md": TICKET("Take payments"),
-  });
-}
+const SHOP: Parameters<typeof TempRepo.createStore>[0] = [
+  {
+    effort: "shop",
+    map: { title: "Shop", destination: "Sell things." },
+    tickets: [{ title: "Build the cart" }, { title: "Take payments" }],
+  },
+];
 
 describe("ticket commands", () => {
   it("send the app nothing: only session state reports use the channel", async () => {
-    const repo = shopRepo();
+    const repo = await TempRepo.createStore(SHOP);
     const { env, received } = await runningApp();
 
     for (const args of [
@@ -91,17 +83,28 @@ describe("dryland status", () => {
     expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
   });
 
-  it("gives up quickly and silently when the lock file points at something that never answers", async () => {
+  it("reaches no app from a terminal that was not given one, even while an app runs", async () => {
     const repo = TempRepo.create();
-    const dir = mkdtempSync(join(tmpdir(), "dryland-app-"));
+    const { received } = await runningApp();
+
+    const result = await repo.run(["status", "running"]);
+
+    expect(result).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+    expect(received).toEqual([]);
+  });
+
+  it("gives up quickly and silently when the port in the env points at something that never answers", async () => {
+    const repo = TempRepo.create();
     // Accepts connections and never replies, like a hung app or an unrelated program on a reused port.
     const silent = createServer(() => undefined);
     await new Promise<void>((resolve) => silent.listen(0, "127.0.0.1", resolve));
     const { port } = silent.address() as AddressInfo;
-    writeFileSync(liveLockFile({ DRYLAND_APP_DIR: dir }), JSON.stringify({ port, token: "stale" }));
 
     const started = Date.now();
-    const result = await repo.run(["status", "running"], repo.path, { DRYLAND_APP_DIR: dir });
+    const result = await repo.run(["status", "running"], repo.path, {
+      DRYLAND_PORT: String(port),
+      DRYLAND_TOKEN: "stale",
+    });
     const elapsed = Date.now() - started;
     silent.close();
 

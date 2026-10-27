@@ -5,7 +5,7 @@ import { delimiter, join } from "node:path";
 import { createWorktree, envKey, nodeProcessRunner } from "@dryland/core";
 import { describe, expect, it } from "vitest";
 import { removeAgentShims, writeLauncher } from "../src/main/launcher.ts";
-import { fixtureRepo, ticket } from "./fixture-repo.ts";
+import { dryland, fixtureRepo } from "./fixture-repo.ts";
 
 // Built by the CLI's global setup before any test runs.
 const CLI_BUNDLE = join(import.meta.dirname, "../../cli/dist/dryland.mjs");
@@ -32,8 +32,8 @@ describe("the dryland launcher", () => {
   it("runs as `dryland` from a worktree and reports the main checkout's tickets", async () => {
     const repo = fixtureRepo();
     const { path } = await createWorktree(nodeProcessRunner, repo, { ticket: "shop/02" });
-    // Uncommitted, so only the main checkout has it.
-    writeFileSync(join(repo, ".scratch/shop/issues/03-cart.md"), ticket("Build the basket", "Type: task"));
+    // Created after the worktree, so only the store, which every worktree shares, has it.
+    dryland(repo, { effort: "shop", title: "Build the basket", type: "task" }, "ticket", "create");
 
     const out = inShell("dryland ticket list", path, launcher());
     expect(out).toContain("shop/02");

@@ -3,33 +3,26 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
-
-const ticket = (title: string, ...header: string[]) => `# ${title}\n\n${header.join("\n")}\n\n## Question\n\nWhat?\n`;
+import { createMap, createTicket, git, storeRepo } from "./store-fixture.ts";
 
 const write = (root: string, file: string, content: string) => {
   mkdirSync(dirname(join(root, file)), { recursive: true });
   writeFileSync(join(root, file), content);
 };
 
-/** A committed repo with ticket shop/02 (which has a worktree) and shop/03 (which has none). */
+/** A committed repo with ticket shop/01 (which has a worktree) and shop/02 (which has none). */
 function fixture(): { repo: string; worktree: string } {
-  const repo = realpathSync.native(mkdtempSync(join(tmpdir(), "dryland-e2e-explorer-")));
-  write(repo, "docs/agents/issue-tracker.md", "# Issue tracker: Local markdown\n");
-  write(repo, ".scratch/shop/map.md", "# Map: Shop\n\n## Not yet specified\n\nNothing.\n");
-  write(repo, ".scratch/shop/issues/02-grill.md", ticket("Grill the cart", "Type: task", "Status: ready-for-agent"));
-  write(repo, ".scratch/shop/issues/03-cart.md", ticket("Build the cart", "Type: task", "Status: ready-for-agent"));
+  const repo = storeRepo("dryland-e2e-explorer-");
+  createMap(repo, "shop", "Shop");
+  createTicket(repo, "shop", { title: "Grill the cart" });
+  createTicket(repo, "shop", { title: "Build the cart" });
   write(repo, ".gitignore", "node_modules/\n");
   write(repo, "src/greeting.ts", "export const greeting = 'hello';\n");
   write(repo, "node_modules/dep/index.js", "module.exports = 1;\n");
-  const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" });
-  git(repo, "init", "-q", "-b", "main");
-  git(repo, "config", "user.name", "Test");
-  git(repo, "config", "user.email", "test@example.com");
-  git(repo, "config", "commit.gpgsign", "false");
   git(repo, "add", ".");
-  git(repo, "commit", "-q", "-m", "Fixture");
+  git(repo, "commit", "-q", "-m", "Fixture files");
   const worktree = join(repo, "..", `${repo.split(/[\\/]/).at(-1)}-wt`);
-  git(repo, "worktree", "add", "-q", "-b", "shop/02-grill", worktree);
+  git(repo, "worktree", "add", "-q", "-b", "shop/01-grill", worktree);
   write(worktree, "src/greeting.ts", "export const greeting = 'hello world';\n");
   return { repo, worktree: realpathSync.native(worktree) };
 }
@@ -56,8 +49,8 @@ test("shows the selected ticket's worktree, opens files and diffs read-only, and
 
   // A ticket with a worktree switches to it, and says which.
   await window.getByRole("button", { name: "Grill the cart" }).click();
-  await expect(explorer.getByRole("heading", { name: "Worktree shop/02-grill" })).toBeVisible();
-  await expect(explorer.getByRole("heading", { name: "Worktree shop/02-grill" })).toHaveAttribute("title", worktree);
+  await expect(explorer.getByRole("heading", { name: "Worktree shop/01-grill" })).toBeVisible();
+  await expect(explorer.getByRole("heading", { name: "Worktree shop/01-grill" })).toHaveAttribute("title", worktree);
 
   // The changed file shows in Changes; a file opens read-only with highlighting.
   await explorer.getByRole("button", { name: /^[▸▾] src$/ }).click();

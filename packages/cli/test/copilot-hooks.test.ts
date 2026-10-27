@@ -9,7 +9,6 @@ import {
   copilotPaths,
   envKey,
   installCopilotHooks,
-  liveLockFile,
   type LiveEvent,
   type LiveListener,
   startLiveListener,
@@ -31,9 +30,9 @@ afterEach(async () => {
 async function session({ inDryland = true } = {}) {
   const appDir = mkdtempSync(join(tmpdir(), "dryland-app-"));
   const received: LiveEvent[] = [];
-  listeners.push(
-    await startLiveListener({ lockFile: liveLockFile({ DRYLAND_APP_DIR: appDir }), onEvent: (e) => received.push(e) }),
-  );
+  const listener = await startLiveListener({ onEvent: (e) => received.push(e) });
+  listeners.push(listener);
+  const endpoint = { DRYLAND_PORT: String(listener.port), DRYLAND_TOKEN: listener.token };
   const paths = copilotPaths({}, mkdtempSync(join(tmpdir(), "dryland-copilot-home-")));
   await installCopilotHooks(paths, COPILOT_CLI);
   const pathKey = envKey(process.env, "PATH");
@@ -43,7 +42,7 @@ async function session({ inDryland = true } = {}) {
   const env = {
     ...inherited,
     [pathKey]: [drylandOnPath(), process.env[pathKey]].join(delimiter),
-    DRYLAND_APP_DIR: appDir,
+    ...endpoint,
     ...(inDryland ? { DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" } : {}),
   };
   /** Fires `event` in the fake CLI and returns the events the app received. */
@@ -57,7 +56,7 @@ async function session({ inDryland = true } = {}) {
   /** Runs the hook command with exactly `input` on stdin, without a shell that could change the bytes. */
   const hookWithInput = async (event: string, input: string) => {
     const before = received.length;
-    const stdinEnv = { DRYLAND_APP_DIR: appDir, DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" };
+    const stdinEnv = { ...endpoint, DRYLAND_SESSION_ID: "session-a", DRYLAND_PANE_KEY: "pane-1" };
     await runDryland(["agent-hook", COPILOT_CLI.id, event], { cwd: appDir, env: stdinEnv, input });
     await vi.waitFor(() => expect(received.length).toBeGreaterThan(before));
     return received.slice(before).map((e) => e.state);

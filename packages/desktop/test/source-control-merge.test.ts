@@ -1,11 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { nodeProcessRunner, worktreeForTicket } from "@dryland/core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createExplorer } from "../src/main/explorer.ts";
 import { createSourceControl } from "../src/main/source-control.ts";
-import { fixtureRepo } from "./fixture-repo.ts";
+import { dryland, fixtureRepo } from "./fixture-repo.ts";
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
 const commitFile = (cwd: string, file: string, content: string, message: string) => {
@@ -44,9 +44,7 @@ beforeEach(async () => {
 });
 
 const resolveTicket = () => {
-  const file = join(repo, ".scratch/shop/issues/02-grill.md");
-  writeFileSync(file, readFileSync(file, "utf8").replace("Status: ready-for-agent", "Status: resolved"));
-  git(repo, "commit", "-qam", "Resolve 02");
+  dryland(repo, undefined, "ticket", "resolve", "shop/02", "--answer", "Done.");
 };
 
 describe("mergeCheck", () => {

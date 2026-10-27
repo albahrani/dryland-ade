@@ -16,12 +16,10 @@ import {
 } from "../../shared/sessions-view.ts";
 import type { AgentHooksAction } from "../../shared/agent-hooks.ts";
 import { stateLabel } from "../../shared/session-meta.ts";
-import { AllProjectsDialog, ProjectWidget, TrackerWidget } from "./ProjectsUi.tsx";
+import { AllProjectsDialog, ProjectWidget } from "./ProjectsUi.tsx";
 import { projectSessions } from "../../shared/projects.ts";
 import { SessionsView } from "./SessionsView.tsx";
 import { AboutDialog } from "./AboutDialog.tsx";
-import { CompatDialog } from "./CompatDialog.tsx";
-import { SkillSetupPanel } from "./SkillSetupPanel.tsx";
 import { sessionTitle } from "../../shared/work-target.ts";
 import {
   activeItem,
@@ -47,7 +45,7 @@ import type { RootHint } from "../../shared/explorer.ts";
 import { baseName, dirName } from "../../shared/paths.ts";
 import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
-import { NewMapDialog, NewScratchDialog, NewStoreMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
+import { NewScratchDialog, NewStoreMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
@@ -231,8 +229,6 @@ export function App() {
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
   const [dialog, setDialog] = useState<MenuCommand | "all-projects" | null>(null);
-  // The setup (by project and fingerprint) whose Compatibility dialog was skipped; skipping asks again once it changes.
-  const [skippedSetup, setSkippedSetup] = useState<string | null>(null);
   /** Counts installs and removals of the CLI hooks, so the Agent CLIs tab reads them again. */
   const [hooksRevision, setHooksRevision] = useState(0);
   // The tabs each project had when the user left it, terminals included, so coming back finds them as they were.
@@ -391,8 +387,6 @@ export function App() {
         },
     );
   };
-  /** The setup the skipped dialog was for: skipping asks again once the project or its setup changes. */
-  const setupKey = project?.tree.ok ? `${project.path}|${project.tree.skillSetup.fingerprint}` : null;
   /** Starts work; the first start with a CLI that keeps its hooks in the user's own config asks before it writes there. */
   const startWork: StartWorkHandler = async (target, agentId, skill) => {
     if (!settings.dontAsk["user-config"]) {
@@ -539,12 +533,10 @@ export function App() {
     terminalsOpened.current += 1;
     showTerminal(id, `Terminal ${terminalsOpened.current}`);
   };
-  // Whether the open project keeps its tickets and maps in the state store, which creates them from documents.
-  const onStore = project?.tracker?.kind === "state-store";
   /** Runs an action through `dryland` and reports its error or warnings; resolves with whether it made the change. */
   const runAction = async (action: TicketAction): Promise<boolean> => {
     setNotice(null);
-    const result = await window.dryland.runTicketAction(action, settings.autoCommit);
+    const result = await window.dryland.runTicketAction(action);
     if (!result.ok) setNotice(`${result.message} ${result.nextAction}`);
     else if (result.warnings.length > 0) setNotice(result.warnings.join(" "));
     return result.ok;
@@ -552,8 +544,8 @@ export function App() {
   /** A ticket's own actions run at once; a general button asks first, unless the user said not to (ADR 0003). */
   const requestAction = async (action: TicketAction, source: ActionSource): Promise<boolean> => {
     if (source === "ticket" || settings.dontAsk["tracker-metadata"]) return runAction(action);
-    const args = trackerArgs(action, settings.autoCommit, onStore);
-    const input = trackerInput(action, onStore);
+    const args = trackerArgs(action);
+    const input = trackerInput(action);
     setPending({
       action,
       type: "tracker-metadata",
@@ -625,7 +617,6 @@ export function App() {
           onOpen={() => void openProject()}
           onAll={() => setDialog("all-projects")}
         />
-        {project !== null && <TrackerWidget info={project.tracker} onError={setNotice} />}
         <button className="project-widget" disabled={project === null} onClick={() => void newTerminal()}>
           New terminal
         </button>
@@ -649,9 +640,6 @@ export function App() {
       </nav>
       <aside className="sidebar">
         {!legendDismissed && <Legend onDismiss={dismissLegend} />}
-        {project?.tree.ok && (
-          <SkillSetupPanel report={project.tree.skillSetup} compatibility={project.tree.compatibility} />
-        )}
         <Sidebar
           view={activity}
           project={project}
@@ -811,7 +799,7 @@ export function App() {
             <SourceControl
               hint={worktreeHint}
               projectView={project}
-              localTracker={project.tracker?.kind === "local-markdown"}
+              noForge={project.forge === null}
               revision={explorerRevision}
               onOpenDiff={(root, path) => setTabs(openTab(tabs, { kind: "diff", root, path }))}
               onShowWorktree={(path) => setPinned({ tab: tabs.active, path })}
@@ -836,8 +824,6 @@ export function App() {
                 ? activeTab.name
                 : activeTab.map
           }
-          autoCommit={settings.autoCommit}
-          store={onStore}
           onCancel={() => setDialog(null)}
           onCreate={(ticket) => {
             setDialog(null);
@@ -845,33 +831,13 @@ export function App() {
           }}
         />
       )}
-      {dialog === "new-map" && project !== null && onStore && (
+      {dialog === "new-map" && project !== null && (
         <NewStoreMapDialog
           onCancel={() => setDialog(null)}
           onCreate={(map) => {
             setDialog(null);
             void requestAction({ kind: "create-map", map }, "general-button");
           }}
-        />
-      )}
-      {dialog === "new-map" && project !== null && !onStore && (
-        <NewMapDialog
-          onCancel={() => setDialog(null)}
-          onStart={async (agentId, skill) => {
-            setDialog(null);
-            await startWork({ kind: "new-map" }, agentId, skill);
-          }}
-        />
-      )}
-      {project?.tree.ok && project.tree.compatibility.needsDialog && skippedSetup !== setupKey && (
-        <CompatDialog
-          report={project.tree.skillSetup}
-          onRunCheck={async (agentId, skill) => {
-            setSkippedSetup(setupKey);
-            await startWork({ kind: "compat-check" }, agentId, skill);
-          }}
-          onSkip={() => setSkippedSetup(setupKey)}
-          onAccept={() => void window.dryland.acceptDeviations()}
         />
       )}
       {dialog === "new-scratch" && project !== null && (
@@ -886,23 +852,9 @@ export function App() {
       {dialog === "settings" && (
         <SettingsDialog
           settings={settings}
-          projectName={project?.name ?? null}
           legendDismissed={legendDismissed}
-          skillSetup={
-            project?.tree.ok ? { report: project.tree.skillSetup, compatibility: project.tree.compatibility } : null
-          }
           hooksRevision={hooksRevision}
           onHooks={(agentId, action) => void changeHooks(agentId, action)}
-          onRunCheck={async (agentId, skill) => {
-            setSkippedSetup(setupKey);
-            setDialog(null);
-            await startWork({ kind: "compat-check" }, agentId, skill);
-          }}
-          onRevokeDeviations={() => {
-            // The dialog asks again at once, even if it was skipped earlier in this session.
-            setSkippedSetup(null);
-            void window.dryland.revokeDeviations();
-          }}
           onChange={(change) => {
             if (change.kind === "reset-legend") setState({ ...state, legendDismissed: false });
             void window.dryland.changeSetting(change);

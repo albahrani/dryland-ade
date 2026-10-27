@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  autoCommitFor,
   commandLine,
   commandWithInput,
   CONFIRMATION_TYPES,
@@ -12,63 +11,34 @@ import {
 const ticket = { map: "shop", id: "02" };
 
 describe("trackerArgs", () => {
-  it("turns each ticket action into its dryland command", () => {
-    expect(trackerArgs({ kind: "claim", ticket }, true)).toEqual(["ticket", "claim", "shop/02", "--commit"]);
-    expect(trackerArgs({ kind: "release", ticket }, true)).toEqual(["ticket", "release", "shop/02", "--commit"]);
-    expect(trackerArgs({ kind: "resolve", ticket, answer: "Built it." }, true)).toEqual([
+  it("turns each ticket action into its dryland command, with no commit flag", () => {
+    expect(trackerArgs({ kind: "claim", ticket })).toEqual(["ticket", "claim", "shop/02"]);
+    expect(trackerArgs({ kind: "release", ticket })).toEqual(["ticket", "release", "shop/02"]);
+    expect(trackerArgs({ kind: "resolve", ticket, answer: "Built it." })).toEqual([
       "ticket",
       "resolve",
       "shop/02",
       "--answer",
       "Built it.",
-      "--commit",
     ]);
-    expect(trackerArgs({ kind: "unblock", ticket: { map: "shop", id: "03" }, blocker: "02" }, true)).toEqual([
+    expect(trackerArgs({ kind: "unblock", ticket: { map: "shop", id: "03" }, blocker: "02" })).toEqual([
       "ticket",
       "block",
       "shop/03",
       "--remove",
       "02",
-      "--commit",
     ]);
   });
 
-  it("creates a ticket with the dialog's fields, leaving out an empty question and no blockers", () => {
-    const created = { map: "shop", title: "Pay by card", type: "task" as const, question: "", blockedBy: [] };
-    expect(trackerArgs({ kind: "create", ticket: created }, true)).toEqual([
-      "ticket",
-      "create",
-      "--map",
-      "shop",
-      "--title",
-      "Pay by card",
-      "--type",
-      "task",
-      "--commit",
-    ]);
-    const full = { ...created, type: "grilling" as const, question: "Which cards?", blockedBy: ["02", "03"] };
-    expect(commandLine(trackerArgs({ kind: "create", ticket: full }, false))).toBe(
-      'dryland ticket create --map shop --title "Pay by card" --type grilling --question "Which cards?" --blocked-by 02,03 --no-commit',
-    );
-  });
-
-  it("passes --status exactly when the dialog chose a role", () => {
+  it("accepts a triage role exactly when the dialog chose a valid one", () => {
     const created = { map: "shop", title: "Pay", type: "task" as const, question: "", blockedBy: [] };
-    expect(trackerArgs({ kind: "create", ticket: created }, true)).not.toContain("--status");
     const triaged = { ...created, status: "needs-triage" as const };
-    expect(commandLine(trackerArgs({ kind: "create", ticket: triaged }, true))).toBe(
-      "dryland ticket create --map shop --title Pay --type task --status needs-triage --commit",
-    );
     expect(isTicketAction({ kind: "create", ticket: triaged })).toBe(true);
     expect(isTicketAction({ kind: "create", ticket: { ...created, status: "--json" } })).toBe(false);
   });
-
-  it("tells dryland not to commit when auto-commit is off", () => {
-    expect(trackerArgs({ kind: "claim", ticket }, false)).toEqual(["ticket", "claim", "shop/02", "--no-commit"]);
-  });
 });
 
-describe("creating on a state store", () => {
+describe("creating tickets and maps", () => {
   const created = {
     map: "shop",
     title: "Pay by card",
@@ -78,10 +48,10 @@ describe("creating on a state store", () => {
     status: "needs-triage" as const,
   };
 
-  it("pipes one ticket document to `ticket create` and passes no commit flag", () => {
+  it("pipes one ticket document to `ticket create`", () => {
     const action = { kind: "create" as const, ticket: created };
-    expect(trackerArgs(action, true, true)).toEqual(["ticket", "create"]);
-    expect(JSON.parse(trackerInput(action, true) ?? "null")).toEqual({
+    expect(trackerArgs(action)).toEqual(["ticket", "create"]);
+    expect(JSON.parse(trackerInput(action) ?? "null")).toEqual({
       effort: "shop",
       title: "Pay by card",
       type: "grilling",
@@ -91,15 +61,14 @@ describe("creating on a state store", () => {
     });
   });
 
-  it("leaves out an empty question, no blockers and no role, and sends nothing for a markdown repo", () => {
+  it("leaves out an empty question, no blockers and no role, and sends nothing for an action without a document", () => {
     const action = { kind: "create" as const, ticket: { ...created, question: "", blockedBy: [], status: undefined } };
-    expect(JSON.parse(trackerInput(action, true) ?? "null")).toEqual({
+    expect(JSON.parse(trackerInput(action) ?? "null")).toEqual({
       effort: "shop",
       title: "Pay by card",
       type: "grilling",
     });
-    expect(trackerInput(action, false)).toBeNull();
-    expect(trackerInput({ kind: "claim", ticket }, true)).toBeNull();
+    expect(trackerInput({ kind: "claim", ticket })).toBeNull();
   });
 
   it("creates a map from a document of effort, title and destination", () => {
@@ -107,8 +76,8 @@ describe("creating on a state store", () => {
       kind: "create-map" as const,
       map: { map: "shop", title: "Shop", destination: "Sell things." },
     };
-    expect(trackerArgs(action, true, true)).toEqual(["map", "create"]);
-    expect(JSON.parse(trackerInput(action, true) ?? "null")).toEqual({
+    expect(trackerArgs(action)).toEqual(["map", "create"]);
+    expect(JSON.parse(trackerInput(action) ?? "null")).toEqual({
       effort: "shop",
       title: "Shop",
       destination: "Sell things.",
@@ -159,17 +128,8 @@ describe("isTicketAction", () => {
   });
 });
 
-describe("autoCommitFor", () => {
-  it("uses the project's override when it has one, the global setting otherwise", () => {
-    const settings = { autoCommit: false, projectAutoCommit: { "/repos/shop": true } };
-    expect(autoCommitFor(settings, "/repos/shop")).toBe(true);
-    expect(autoCommitFor(settings, "/repos/blog")).toBe(false);
-    expect(autoCommitFor({ autoCommit: true, projectAutoCommit: {} }, "/repos/blog")).toBe(true);
-  });
-});
-
 describe("CONFIRMATION_TYPES", () => {
-  it("names the three kinds of confirmed write", () => {
-    expect(CONFIRMATION_TYPES).toEqual(["tracker-metadata", "user-config", "prose-annotation"]);
+  it("names the kinds of confirmed write", () => {
+    expect(CONFIRMATION_TYPES).toEqual(["tracker-metadata", "user-config"]);
   });
 });

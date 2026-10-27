@@ -1,11 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { readFileSync, rmSync } from "node:fs";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { createServer, request } from "node:http";
 import type { AddressInfo } from "node:net";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
 
 /** The states a hook reports; the app marks a session it just spawned `launched` itself, before any report. */
 export const REPORTED_STATES = ["running", "waiting", "idle", "ended"] as const;
@@ -28,21 +23,6 @@ export interface LiveEvent {
 
 type Env = Record<string, string | undefined>;
 
-/** Where the running app writes its port and token, read by `dryland` to reach it. */
-export function liveLockFile(
-  env: Env = process.env,
-  platform: NodeJS.Platform = process.platform,
-  home: string = homedir(),
-): string {
-  return join(env["DRYLAND_APP_DIR"] || appDir(env, platform, home), "live.json");
-}
-
-function appDir(env: Env, platform: NodeJS.Platform, home: string): string {
-  if (platform === "win32") return join(env["LOCALAPPDATA"] || join(home, "AppData", "Local"), "Dryland");
-  if (platform === "darwin") return join(home, "Library", "Application Support", "Dryland");
-  return join(env["XDG_STATE_HOME"] || join(home, ".local", "state"), "dryland");
-}
-
 /** The event `value` describes, or `null` when it is not a well-formed live event. */
 export function parseLiveEvent(value: unknown): LiveEvent | null {
   if (value === null || typeof value !== "object") return null;
@@ -63,12 +43,11 @@ interface Endpoint {
 
 export interface LiveListener extends Endpoint {
   host: string;
-  /** Stops listening and removes the lock file, unless a newer listener has replaced it. */
+  /** Stops listening. */
   close(): Promise<void>;
 }
 
 export interface LiveListenerOptions {
-  lockFile: string;
   onEvent(event: LiveEvent): void;
 }
 
@@ -76,18 +55,8 @@ const HOST = "127.0.0.1";
 /** Events are small; anything bigger is not from `dryland`. */
 const MAX_BODY_BYTES = 64 * 1024;
 
-function readEndpoint(lockFile: string): Endpoint | null {
-  try {
-    const { port, token } = JSON.parse(readFileSync(lockFile, "utf8")) as Partial<Endpoint>;
-    if (typeof port === "number" && typeof token === "string") return { port, token };
-  } catch {
-    // No app running, or a lock file nobody can read: there is nobody to tell.
-  }
-  return null;
-}
-
-/** Listens on `127.0.0.1` on a random port and writes the port and a fresh token to `lockFile`. */
-export async function startLiveListener({ lockFile, onEvent }: LiveListenerOptions): Promise<LiveListener> {
+/** Listens on `127.0.0.1` on a random port; the port and a fresh token reach terminals through their env. */
+export async function startLiveListener({ onEvent }: LiveListenerOptions): Promise<LiveListener> {
   const token = randomUUID();
   const expected = Buffer.from(`Bearer ${token}`);
   const authorized = (header: string | undefined) => {
@@ -129,37 +98,15 @@ export async function startLiveListener({ lockFile, onEvent }: LiveListenerOptio
     server.listen(0, HOST, resolve);
   });
   const { port } = server.address() as AddressInfo;
-  await mkdir(dirname(lockFile), { recursive: true });
-  // Renamed into place, so `dryland` never reads half a lock file.
-  const temp = `${lockFile}.${token}.tmp`;
-  await writeFile(temp, JSON.stringify({ port, token } satisfies Endpoint));
-  // Windows refuses to replace a file `dryland` has open for a moment; retry briefly.
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await rename(temp, lockFile);
-      break;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (attempt >= 20 || (code !== "EPERM" && code !== "EACCES" && code !== "EBUSY")) {
-        server.close();
-        await rm(temp, { force: true });
-        throw error;
-      }
-      await sleep(25);
-    }
-  }
   return {
     host: HOST,
     port,
     token,
-    close: () => {
-      // Synchronous, so the lock file is gone even when the app quits without waiting for this promise.
-      if (readEndpoint(lockFile)?.token === token) rmSync(lockFile, { force: true });
-      return new Promise<void>((resolve) => {
+    close: () =>
+      new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
-      });
-    },
+      }),
   };
 }
 
@@ -177,20 +124,15 @@ export interface SendOptions {
 }
 
 /**
- * Sends `event` to the running app: the one that spawned this terminal, else the one the lock file names.
- * Resolves `false`, never rejects, when it cannot be delivered.
+ * Sends `event` to the app that spawned this terminal, which set `DRYLAND_PORT` and `DRYLAND_TOKEN` in its env.
+ * Resolves `false`, never rejects, when it cannot be delivered, so a terminal outside the app reports nothing.
  */
 export async function sendLiveEvent(
   event: LiveEvent,
   { env = process.env, timeoutMs = 300 }: SendOptions = {},
 ): Promise<boolean> {
-  const body = JSON.stringify(event);
-  const fromEnv = endpointFromEnv(env);
-  if (fromEnv !== null && (await post(fromEnv, body, timeoutMs))) return true;
-  // A terminal can outlive the app that set its env; the lock file names the app running now.
-  const fromLock = readEndpoint(liveLockFile(env));
-  if (fromLock === null || (fromLock.port === fromEnv?.port && fromLock.token === fromEnv.token)) return false;
-  return post(fromLock, body, timeoutMs);
+  const endpoint = endpointFromEnv(env);
+  return endpoint === null ? false : post(endpoint, JSON.stringify(event), timeoutMs);
 }
 
 function post(endpoint: Endpoint, body: string, timeoutMs: number): Promise<boolean> {

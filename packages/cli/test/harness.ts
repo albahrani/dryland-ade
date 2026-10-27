@@ -25,16 +25,13 @@ export interface RunResult {
   exitCode: number;
 }
 
-/** An app directory with no running app in it, so tests never report to a real Dryland on this machine. */
-const NO_APP_DIR = mkdtempSync(join(tmpdir(), "dryland-no-app-"));
-
 /** Runs the real bundled `dryland` command, with `input` as its stdin when given. */
 export function runDryland(
   args: string[],
   opts: { cwd: string; env?: Record<string, string>; input?: string },
 ): Promise<RunResult> {
   return new Promise((resolve, reject) => {
-    const env: Record<string, string | undefined> = { ...process.env, DRYLAND_APP_DIR: NO_APP_DIR, ...opts.env };
+    const env: Record<string, string | undefined> = { ...process.env, ...opts.env };
     // The tests may run inside an Agent CLI session, whose id would otherwise be recorded by every ticket command.
     const sessionVars = AGENT_ADAPTERS.flatMap((adapter) => (adapter.sessionEnv === null ? [] : [adapter.sessionEnv]));
     for (const name of ["DRYLAND_PORT", "DRYLAND_TOKEN", ...sessionVars]) {

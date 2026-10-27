@@ -9,7 +9,6 @@ import {
   holdsClaim,
   type PausedSessionSnapshot,
   type RepoSnapshot,
-  type SkillSetupSnapshot,
   type SessionSnapshot,
   type WorktreeGitState,
 } from "./next-step.ts";
@@ -18,13 +17,12 @@ import { findPullRequestCached, type Forge, forgeOf, type PullRequest } from "./
 import { readSessionIndex, sessionsOf } from "./session-index.ts";
 import { isStoreInitialised } from "./state-store.ts";
 import type { Ticket } from "./ticket.ts";
-import { readTrackerKind, TRACKER_DOC } from "./tracker.ts";
 import { readTicketWorktreeStates, type TicketWorktreeState } from "./worktree.ts";
 
 /**
  * Reads the artifacts under `mainCheckout` into the snapshot the next-step rules take. `efforts` saves a second
  * pass over `.scratch/` when the caller has read them already. `sessions` are the live Dryland sessions, which only
- * the app knows; `null` leaves them unknown. `skillSetup` carries the Compatibility verdict; `null` disables no rule.
+ * the app knows; `null` leaves them unknown.
  */
 export async function readRepoSnapshot(
   runner: ProcessRunner,
@@ -32,11 +30,10 @@ export async function readRepoSnapshot(
   tickets: Ticket[],
   efforts?: EffortSnapshot[],
   sessions: SessionSnapshot[] | null = null,
-  skillSetup: SkillSetupSnapshot | null = null,
 ): Promise<RepoSnapshot> {
   const adrs = await readdir(join(mainCheckout, "docs", "adr")).catch(() => []);
   return {
-    setupConfigPresent: (await isStoreInitialised(mainCheckout)) || (await exists(join(mainCheckout, TRACKER_DOC))),
+    hasStore: await isStoreInitialised(mainCheckout),
     efforts: efforts ?? (await readEfforts(mainCheckout)),
     tickets,
     hasGlossary: await exists(join(mainCheckout, "GLOSSARY.md")),
@@ -44,7 +41,6 @@ export async function readRepoSnapshot(
     git: await readGitState(runner, mainCheckout, tickets),
     sessions:
       sessions === null ? null : [...sessions, ...(await pausedSessions(runner, mainCheckout, tickets, sessions))],
-    skillSetup,
   };
 }
 
@@ -73,16 +69,6 @@ async function pausedSessions(
     const was = newest.lastState === undefined || newest.lastState === "idle" ? null : PAUSED_WAS[newest.lastState];
     return [{ id: newest.sessionId, ticket: { map: ticket.map, id: ticket.id }, state: "paused" as const, was }];
   });
-}
-
-/** The forge the repo's tracker lives on; `null` for local markdown or a repo without a readable tracker doc. */
-async function readForge(mainCheckout: string): Promise<Forge | null> {
-  try {
-    return forgeOf(await readTrackerKind(mainCheckout));
-  } catch (error) {
-    if (error instanceof DrylandError) return null;
-    throw error;
-  }
 }
 
 /**
@@ -126,8 +112,8 @@ async function withPullRequests(
 async function readGitState(runner: ProcessRunner, mainCheckout: string, tickets: Ticket[]): Promise<GitState | null> {
   const states = await readTicketWorktreeStates(runner, mainCheckout, tickets);
   if (states === null) return null;
-  const forge = await readForge(mainCheckout);
-  // Local markdown has no forge to ask, so whether a PR exists is unknown, which the rules treat as "no PR".
+  const forge = await forgeOf(runner, mainCheckout);
+  // Without a GitHub or GitLab origin there is no forge to ask, so whether a PR exists is unknown, which the rules treat as "no PR".
   if (forge === null) return { worktrees: states.map((state) => ({ ...state, prExists: null })) };
   return { worktrees: await withPullRequests(runner, mainCheckout, forge, states) };
 }

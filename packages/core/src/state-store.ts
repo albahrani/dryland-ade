@@ -6,7 +6,9 @@ import { DatabaseSync } from "node:sqlite";
 import { type Diagnostic, parseDocument, WriteFailure } from "./documents.ts";
 import { DrylandError } from "./errors.ts";
 import { gitOk as gitOkIn, runGit as runGitIn } from "./git-exec.ts";
+import { findMainCheckout } from "./main-checkout.ts";
 import { assertMapName, type MapModel } from "./map.ts";
+import { nodeProcessRunner } from "./process-runner.ts";
 import { type BindOptions, bindStore, CopiedRepoError, storeDir } from "./store-dir.ts";
 import { MAP_INPUT, TICKET_INPUT } from "./store-schemas.ts";
 import type { Ticket, TicketState, TicketType, TriageRole } from "./ticket.ts";
@@ -134,10 +136,19 @@ function notCopied(error: unknown): null {
   return null;
 }
 
+/**
+ * The error of a repo without a store. A directory that is no git repository, or a bare one, gets the error that says
+ * so first, since `dryland init` cannot help there.
+ */
+async function noStore(cwd: string): Promise<never> {
+  await findMainCheckout(nodeProcessRunner, cwd);
+  throw notInitialised();
+}
+
 /** The store of the repo containing `cwd`, with its head; fails with the next action when there is none. */
 async function openStore(cwd: string): Promise<{ dir: string; git: StoreGit; head: string }> {
   const dir = await storeDir(cwd).catch(notCopied);
-  if (dir === null) throw notInitialised();
+  if (dir === null) return noStore(cwd);
   const git = inStore(dir);
   const head = await stateHead(git);
   if (head === null) throw notInitialised();
@@ -374,7 +385,6 @@ export function toTicket(t: StoreTicket): Ticket {
     comments: t.comments,
     spec: t.spec,
     criteria: t.criteria,
-    raw: {},
   };
 }
 
@@ -406,7 +416,6 @@ export function toMapModel(m: StoreMap, tickets: StoreTicket[]): MapModel {
     destination: m.destination,
     fog: m.fog,
     decisions: decisionsOf(tickets, m.effort),
-    sections: [],
   };
 }
 

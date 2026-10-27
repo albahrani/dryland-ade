@@ -1,14 +1,13 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { exists } from "./env-fs.ts";
-import { parseMap } from "./map.ts";
 import type { EffortSnapshot } from "./next-step.ts";
 import { isStoreInitialised, readStoreState, toMapModel } from "./state-store.ts";
 
 /**
- * Every effort of `mainCheckout`, in name order, with its map parsed. The one pass that the tickets tree and the repo
- * snapshot share. A repo on the state store takes its maps from the store, and the specs from `.scratch/<effort>/`;
- * a markdown repo reads both from `.scratch/`.
+ * Every effort of `mainCheckout`, in name order: the maps come from the state store and the specs from
+ * `.scratch/<effort>/spec.md`, the only thing read from `.scratch`. A repo without a store has efforts for its spec
+ * directories alone, each without a map.
  */
 export async function readEfforts(mainCheckout: string): Promise<EffortSnapshot[]> {
   const scratch = join(mainCheckout, ".scratch");
@@ -16,20 +15,13 @@ export async function readEfforts(mainCheckout: string): Promise<EffortSnapshot[
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
   const state = (await isStoreInitialised(mainCheckout)) ? await readStoreState(mainCheckout) : null;
-  const stored = state?.maps ?? null;
-  const names = [...new Set([...dirs, ...(stored?.map((m) => m.effort) ?? [])])].sort();
+  const names = [...new Set([...dirs, ...(state?.maps.map((m) => m.effort) ?? [])])].sort();
   const efforts: EffortSnapshot[] = [];
   for (const name of names) {
-    const record = stored?.find((m) => m.effort === name);
-    const mapText = stored === null ? await readFile(join(scratch, name, "map.md"), "utf8").catch(() => null) : null;
+    const record = state?.maps.find((m) => m.effort === name);
     efforts.push({
       name,
-      map:
-        record !== undefined && state !== null
-          ? toMapModel(record, state.tickets)
-          : mapText === null
-            ? null
-            : parseMap(name, mapText),
+      map: record !== undefined && state !== null ? toMapModel(record, state.tickets) : null,
       hasSpec: await exists(join(scratch, name, "spec.md")),
     });
   }

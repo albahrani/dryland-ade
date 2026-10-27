@@ -3,15 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  CLAUDE_CODE,
-  envKey,
-  hookSettings,
-  liveLockFile,
-  type LiveEvent,
-  type LiveListener,
-  startLiveListener,
-} from "@dryland/core";
+import { CLAUDE_CODE, envKey, hookSettings, type LiveEvent, type LiveListener, startLiveListener } from "@dryland/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { drylandOnPath } from "./harness.ts";
 
@@ -29,14 +21,14 @@ afterEach(async () => {
 async function session(settings: unknown) {
   const appDir = mkdtempSync(join(tmpdir(), "dryland-app-"));
   const received: LiveEvent[] = [];
-  listeners.push(
-    await startLiveListener({ lockFile: liveLockFile({ DRYLAND_APP_DIR: appDir }), onEvent: (e) => received.push(e) }),
-  );
+  const listener = await startLiveListener({ onEvent: (e) => received.push(e) });
+  listeners.push(listener);
+  const endpoint = { DRYLAND_PORT: String(listener.port), DRYLAND_TOKEN: listener.token };
   const pathKey = envKey(process.env, "PATH");
   const env = {
     ...process.env,
     [pathKey]: [drylandOnPath(), process.env[pathKey]].join(delimiter),
-    DRYLAND_APP_DIR: appDir,
+    ...endpoint,
     DRYLAND_SESSION_ID: "session-a",
   };
   const args = [FAKE_CLAUDE];
