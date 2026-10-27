@@ -108,7 +108,10 @@ export function releaseStoreTicket(cwd: string, reference: string, opts: StoreWr
 function assertSessionMayResolve(ticket: StoreTicket, state: StoreState, session: string, holder: string | null): void {
   const name = nameOf(ticket);
   const claim = ticket.claim;
-  if (claim === null || (claim.session !== session && (holder === null || claim.holder !== holder))) {
+  // The session id identifies the caller; a claim made with no session is matched by its branch.
+  const mine =
+    claim !== null && (claim.session === null ? holder !== null && claim.holder === holder : claim.session === session);
+  if (claim === null || !mine) {
     throw new DrylandError(
       claim === null
         ? `Ticket ${name} is not claimed, so this session cannot resolve it.`

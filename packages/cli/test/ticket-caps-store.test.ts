@@ -55,7 +55,7 @@ describe("lint", () => {
   const cases: [string, string, string][] = [
     ["hedge", "Maybe pick the first library", "lint-hedge"],
     ["filler", "Simply pick a library", "lint-filler"],
-    ["long sentence", `Pick ${"a very long ".repeat(0)}${"word ".repeat(31)}library`, "lint-long-sentence"],
+    ["long sentence", `Pick ${"word ".repeat(31)}library`, "lint-long-sentence"],
     ["path", "Edit packages/core/src/state-store.ts", "lint-path"],
     ["line number", "Fix the bug on line 42", "lint-line-number"],
     ["bare id", "Follows #12", "lint-bare-id"],
@@ -139,7 +139,13 @@ describe("resolve gates for a session", () => {
     expect(second.stderr).toContain("already resolved shop/01");
     expect(await status(repo, "shop/02")).toBe("claimed");
 
-    const other = await repo.run(["ticket", "resolve", "shop/02", "--answer", "Done."], repo.path, as("s2"));
+    // A person has no session and is not gated.
+    const person = await repo.run(["ticket", "resolve", "shop/02", "--answer", "Done."]);
+    expect(person.exitCode, person.stderr).toBe(0);
+
+    // Another session resolves what it claimed itself.
+    await repo.run(["ticket", "claim", "shop/04"], repo.path, as("s2"));
+    const other = await repo.run(["ticket", "resolve", "shop/04", "--answer", "Done."], repo.path, as("s2"));
     expect(other.exitCode, other.stderr).toBe(0);
   });
 
