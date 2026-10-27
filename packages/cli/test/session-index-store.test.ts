@@ -68,11 +68,13 @@ describe("the session index on the store", () => {
       ["ticket", "block", "shop/01", "--add", "02"],
       ["ticket", "comment", "shop/01", "--text", "Hi."],
       ["ticket", "release", "shop/01"],
+      // A session resolves only what it claimed, so the resolve runs in the session of the claim before it.
+      ["ticket", "claim", "shop/01"],
       ["ticket", "resolve", "shop/01", "--answer", "Done."],
     ];
 
     for (const [i, args] of commands.entries()) {
-      const result = await repo.run(args, repo.path, inSession(`s${i}`));
+      const result = await repo.run(args, repo.path, inSession(`s${Math.min(i, 5)}`));
       expect(result.exitCode, `${args.join(" ")}: ${result.stderr}`).toBe(0);
     }
     const created = await repo.runWithInput(

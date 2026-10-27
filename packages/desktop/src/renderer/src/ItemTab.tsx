@@ -192,8 +192,8 @@ function TicketContent({
       <div className="content">
         <Markdown>{ticket.body}</Markdown>
         {ticket.answer !== null && (
-          <section aria-label="Answer">
-            <h2>Answer</h2>
+          <section aria-label="Solution summary">
+            <h2>Solution summary</h2>
             <Markdown>{ticket.answer}</Markdown>
           </section>
         )}

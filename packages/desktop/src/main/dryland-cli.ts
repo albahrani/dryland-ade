@@ -33,9 +33,13 @@ function parse(exitCode: number, stderr: string): DrylandRun {
   }
   const error = lines.find((l) => l.startsWith("dryland: ") && !l.startsWith(WARNING));
   const next = lines.find((l) => l.startsWith("Next: "));
+  // A rejected document prints one diagnostic line per problem (`path: rule: problem Fix: ...`) before the error.
+  const diagnostics = lines.filter((l) => !l.startsWith("dryland: ") && !l.startsWith("Next: "));
+  const headline =
+    error?.slice("dryland: ".length) ?? (lines.slice(-3).join(" ") || `dryland exited with ${exitCode}.`);
   return {
     ok: false,
-    message: error?.slice("dryland: ".length) ?? (lines.slice(-3).join(" ") || `dryland exited with ${exitCode}.`),
+    message: error === undefined || diagnostics.length === 0 ? headline : `${diagnostics.join(" ")} ${headline}`,
     nextAction: next?.slice("Next: ".length) ?? "See the output above, or run the command in a terminal.",
   };
 }

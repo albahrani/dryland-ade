@@ -2,6 +2,7 @@ export * from "./agent-adapter.ts";
 export * from "./agent-launch.ts";
 export * from "./copilot-config.ts";
 export * from "./doctor.ts";
+export * from "./content-rules.ts";
 export * from "./documents.ts";
 export * from "./efforts.ts";
 export * from "./env-fs.ts";

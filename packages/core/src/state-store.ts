@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { type Diagnostic, parseDocument, WriteFailure } from "./documents.ts";
+import { checkProse } from "./content-rules.ts";
 import { DrylandError } from "./errors.ts";
 import { gitOk as gitOkIn, runGit as runGitIn } from "./git-exec.ts";
 import { findMainCheckout } from "./main-checkout.ts";
@@ -47,6 +48,8 @@ export interface StoreTicket {
   claim: { holder: string; at: string; session: string | null } | null;
   /** What the resolution recorded; `null` while unresolved. */
   answer: string | null;
+  /** The session that resolved it, when there was one; the gate of one resolve per session reads it. */
+  resolvedBy?: string | null;
   comments: string[];
   createdAt: string;
 }
@@ -88,7 +91,7 @@ interface MapCreated extends StoreMap {
 export type LifecycleChange =
   | { kind: "ticket.claimed"; holder: string; session: string | null }
   | { kind: "ticket.released" }
-  | { kind: "ticket.resolved"; answer: string }
+  | { kind: "ticket.resolved"; answer: string; session?: string | null }
   | { kind: "ticket.answer-amended"; answer: string }
   | { kind: "ticket.ticked"; criterion: number }
   | { kind: "ticket.triaged"; role: TriageRole }
@@ -333,6 +336,7 @@ function applyChange(ticket: StoreTicket, event: WithRef<LifecycleChange> & { at
       ticket.status = "resolved";
       ticket.claim = null;
       ticket.answer = event.answer;
+      ticket.resolvedBy = event.session ?? null;
       break;
     case "ticket.answer-amended":
       ticket.answer = event.answer;
@@ -395,7 +399,7 @@ function reduce(events: StateEvent[], base?: StoreState): StoreState {
 }
 
 /** Bumped when the cached shape changes, so an old cache is rebuilt rather than misread. */
-const CACHE_VERSION = "3";
+const CACHE_VERSION = "4";
 
 /** Reads the cache for `head`, or `null` when it is missing, stale or unreadable. */
 function readCache(path: string, head: string): StoreState | null {
@@ -640,7 +644,12 @@ function checkOneLine(path: string, value: string): Diagnostic[] {
 }
 
 function checkTicket(doc: TicketDocument, state: StoreState): Diagnostic[] {
-  const out = [...checkEffort(doc.effort), ...checkOneLine("title", doc.title)];
+  const out = [
+    ...checkEffort(doc.effort),
+    ...checkOneLine("title", doc.title),
+    ...checkProse("title", "title", doc.title),
+    ...(doc.report === undefined ? [] : checkProse("report", "report", doc.report)),
+  ];
   if (doc.spec !== undefined && (/^([a-z]:|[\\/])/i.test(doc.spec) || doc.spec.split(/[\\/]/).includes(".."))) {
     out.push(
       diagnostic(
