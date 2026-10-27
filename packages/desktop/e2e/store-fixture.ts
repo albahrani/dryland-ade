@@ -30,6 +30,7 @@ export interface TicketSpec {
   type?: string;
   report?: string;
   blockedBy?: string[];
+  triageRole?: string;
   criteria?: { text: string; done: boolean }[];
 }
 

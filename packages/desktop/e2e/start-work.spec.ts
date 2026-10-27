@@ -14,14 +14,29 @@ const show = (repo: string, ref: string) =>
     claim: { holder: string } | null;
   };
 
+/** The session index of the repo, which sits beside its state store. */
+const sessionIndexFile = (repo: string): string =>
+  join(
+    process.env.DRYLAND_DATA_DIR ?? "",
+    "stores",
+    `${git(repo, "config", "dryland.repoId")}.git`,
+    "dryland",
+    "sessions.json",
+  );
+
 /** A committed repo whose store holds the effort shop: a resolved shop/01, a ready shop/02 and shop/03 blocked by it. */
 function fixtureRepo(): string {
   const repo = storeRepo("dryland-e2e-work-");
   createMap(repo, "shop", "Shop");
   createTicket(repo, "shop", { title: "Set up repo", report: "Build it." });
   resolveTicket(repo, "shop/01");
-  createTicket(repo, "shop", { title: "Grill the cart", report: "Build it." });
-  createTicket(repo, "shop", { title: "Build the cart", report: "Build it.", blockedBy: ["shop/02"] });
+  createTicket(repo, "shop", { title: "Grill the cart", report: "Build it.", triageRole: "ready-for-agent" });
+  createTicket(repo, "shop", {
+    title: "Build the cart",
+    report: "Build it.",
+    blockedBy: ["shop/02"],
+    triageRole: "ready-for-agent",
+  });
   const files: Record<string, string> = {
     ".claude/skills/grilling/SKILL.md": "---\nname: grilling\n---\n",
     // The skills the next steps recommend: a setup that differs from the default only pre-types installed ones.
@@ -294,7 +309,7 @@ test("stops a session from its tab, asking first while it works, and keeps its c
 
   // The claim stays, and the session index still has the last state the hooks reported.
   expect(show(repo, "shop/02").status).toBe("claimed");
-  const index = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")) as unknown;
+  const index = JSON.parse(readFileSync(sessionIndexFile(repo), "utf8")) as unknown;
   expect(JSON.stringify(index)).toContain('"lastState":"idle"');
   await app.close();
 });
@@ -546,7 +561,7 @@ test("stops a session and resumes it from the paused box, in its worktree with t
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
   const screen = window.locator(".xterm-rows:visible");
   await expect(screen).toContainText("/implement shop/02");
-  const id = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")).items["shop/02"][0].sessionId;
+  const id = JSON.parse(readFileSync(sessionIndexFile(repo), "utf8")).items["shop/02"][0].sessionId;
   const claimed = show(repo, "shop/02");
 
   // Idle, then stopped.
@@ -609,7 +624,7 @@ test("brings session tabs back after a restart, resuming a session only when its
   const { app, window, repo, userData } = await openTicket(env);
   await window.getByRole("button", { name: "Start with Claude Code" }).click();
   await expect(window.locator(".xterm-rows:visible")).toContainText("agent-ready");
-  const id = JSON.parse(readFileSync(join(repo, ".git/dryland/sessions.json"), "utf8")).items["shop/02"][0].sessionId;
+  const id = JSON.parse(readFileSync(sessionIndexFile(repo), "utf8")).items["shop/02"][0].sessionId;
   // Another tab after it, so it is not the one shown after the restart.
   await window.getByRole("button", { name: "Maps" }).click();
   await window.getByRole("button", { name: /^Shop/ }).click();
