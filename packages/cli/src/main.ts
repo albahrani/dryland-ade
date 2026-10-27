@@ -54,6 +54,7 @@ import {
   type DoctorReport,
   type IndexedSession,
   type LiveEvent,
+  mapGroups,
   type MapDocument,
   type MapView,
   type ReportedState,
@@ -198,11 +199,7 @@ function formatStoreMap(d: MapDocument): string {
     tickets: d.tickets.map(asTicket),
   };
   const tickets = view.tickets;
-  const unresolved = (t: Ticket) =>
-    (t.blockers === "unknown" ? [] : t.blockers).filter((id) => {
-      return tickets.some((o) => o.id === id && o.state !== "resolved");
-    });
-  const open = tickets.filter((t) => t.state === "open");
+  const groups = mapGroups(tickets);
   const list = (heading: string, items: Ticket[], detail: (t: Ticket) => string = () => ""): StoreMapExtras["lists"] =>
     items.length === 0
       ? []
@@ -218,20 +215,13 @@ function formatStoreMap(d: MapDocument): string {
   return formatMap(view, {
     notes: d.map?.notes ?? "",
     lists: [
-      ...list(
-        "Frontier",
-        open.filter((t) => unresolved(t).length === 0),
-      ),
+      ...list("Frontier", groups.frontier),
       ...list(
         "Blocked",
-        open.filter((t) => unresolved(t).length > 0),
-        (t) => `  (waits for ${unresolved(t).join(", ")})`,
+        groups.blocked.map((b) => b.ticket),
+        (t) => `  (waits for ${groups.blocked.find((b) => b.ticket === t)?.waitsFor.join(", ")})`,
       ),
-      ...list(
-        "Claimed",
-        tickets.filter((t) => t.state === "claimed"),
-        (t) => `  (${t.claimant ?? "unknown"})`,
-      ),
+      ...list("Claimed", groups.claimed, (t) => `  (${t.claimant ?? "unknown"})`),
       ...(d.decisions.length === 0
         ? []
         : [{ heading: "Decisions so far", lines: d.decisions.map((item) => `  - ${item}`) }]),

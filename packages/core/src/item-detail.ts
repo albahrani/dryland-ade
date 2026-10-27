@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { parseMap, unresolvedBlockers } from "./map.ts";
+import { mapGroups, parseMap } from "./map.ts";
 import {
   decisionsOf,
   isStoreInitialised,
@@ -10,7 +10,7 @@ import {
   type StoreTicket,
   toTicket,
 } from "./state-store.ts";
-import type { TriageRole } from "./ticket.ts";
+import type { Ticket, TriageRole } from "./ticket.ts";
 import { readTickets } from "./tickets.ts";
 import { type TreeTicket, toTreeTicket } from "./tickets-tree.ts";
 
@@ -41,17 +41,8 @@ const list = (items: string[]) => items.map((item) => `- ${item}`).join("\n");
  */
 function renderMap(map: StoreMap, state: StoreState): string {
   const section = (heading: string, items: string[]) => (items.length === 0 ? [] : [`## ${heading}`, list(items)]);
-  const tickets = state.tickets.filter((t) => t.effort === map.effort).sort((a, b) => Number(a.id) - Number(b.id));
-  const open = tickets.filter((t) => t.status === "open");
-  const all = tickets.map(toTicket);
-  // A store ticket's blockers are always known, so the result is never "unknown".
-  const waitsFor = (t: StoreTicket): string[] => {
-    const unresolved = unresolvedBlockers(toTicket(t), all);
-    return unresolved === "unknown" ? [] : unresolved;
-  };
-  const frontier = open.filter((t) => waitsFor(t).length === 0);
-  const blocked = open.filter((t) => waitsFor(t).length > 0);
-  const row = (t: StoreTicket) => `${t.id} ${t.title}`;
+  const { frontier, blocked, claimed } = mapGroups(state.tickets.filter((t) => t.effort === map.effort).map(toTicket));
+  const row = (t: Ticket) => `${t.id} ${t.title}`;
   return [
     `# Map: ${map.title}`,
     "## Destination",
@@ -60,11 +51,11 @@ function renderMap(map: StoreMap, state: StoreState): string {
     ...section("Frontier", frontier.map(row)),
     ...section(
       "Blocked",
-      blocked.map((t) => `${row(t)} (waits for ${waitsFor(t).join(", ")})`),
+      blocked.map(({ ticket, waitsFor }) => `${row(ticket)} (waits for ${waitsFor.join(", ")})`),
     ),
     ...section(
       "Claimed",
-      tickets.filter((t) => t.status === "claimed").map((t) => `${row(t)} (${t.claim?.holder ?? "unknown"})`),
+      claimed.map((t) => `${row(t)} (${t.claimant ?? "unknown"})`),
     ),
     ...section("Decisions so far", decisionsOf(state.tickets, map.effort)),
     ...section("Not yet specified", map.fog),

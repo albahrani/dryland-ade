@@ -81,6 +81,30 @@ export async function readMapFile(mainCheckout: string, name: string): Promise<M
   return parseMap(name, await readMapText(mainCheckout, name));
 }
 
+/** One map's tickets split the way its screens show them: ready to start, waiting on blockers, and held by a claim. */
+export interface MapGroups {
+  frontier: Ticket[];
+  /** Open tickets with their unresolved blockers. */
+  blocked: { ticket: Ticket; waitsFor: string[] }[];
+  claimed: Ticket[];
+}
+
+/** Splits the tickets of one map, lowest number first, so the CLI and the map tab never disagree on a group. */
+export function mapGroups(tickets: Ticket[]): MapGroups {
+  const sorted = [...tickets].sort(byTicketNumber);
+  const blocked = sorted
+    .filter((t) => t.state === "open" && !isUnblocked(t, sorted))
+    .map((ticket) => {
+      const unresolved = unresolvedBlockers(ticket, sorted);
+      return { ticket, waitsFor: unresolved === "unknown" ? [] : unresolved };
+    });
+  return {
+    frontier: frontierOf(sorted),
+    blocked,
+    claimed: sorted.filter((t) => t.state === "claimed"),
+  };
+}
+
 /**
  * The open, unblocked, unclaimed tickets of one map, lowest number first. A ticket is unblocked when every
  * ticket it lists is resolved; a blocker the map does not contain, or unknown blockers, keep it blocked.
