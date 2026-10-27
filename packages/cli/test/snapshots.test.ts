@@ -75,7 +75,7 @@ const createTicket = (repo: TempRepo, title: string) =>
 async function repoWith(count: number): Promise<TempRepo> {
   const repo = TempRepo.create();
   expect((await repo.run(["init"])).exitCode).toBe(0);
-  for (let i = 1; i <= count; i++) expect((await createTicket(repo, `Ticket ${i}`)).exitCode).toBe(0);
+  for (let i = 1; i <= count; i++) expect((await createTicket(repo, `Probe ${i}`)).exitCode).toBe(0);
   return repo;
 }
 
@@ -99,9 +99,9 @@ describe("snapshots", () => {
     clearCache(repo);
     expect(await list(repo)).toBe(expected);
 
-    const made = await createTicket(repo, "Ticket 8");
+    const made = await createTicket(repo, "Probe 8");
     expect(made.exitCode).toBe(0);
-    expect(made.stdout).toBe("Created shop/08: Ticket 8\n");
+    expect(made.stdout).toBe("Created shop/08: Probe 8\n");
   });
 
   it("give the same state as a full replay", async () => {
@@ -125,7 +125,7 @@ describe("snapshots", () => {
     clearCache(repo);
     expect(await list(repo)).toBe(expected);
     // The next write snapshots again.
-    expect((await createTicket(repo, "Ticket 9")).exitCode).toBe(0);
+    expect((await createTicket(repo, "Probe 9")).exitCode).toBe(0);
     expect(snapshots(repo)).toHaveLength(1);
   });
 
