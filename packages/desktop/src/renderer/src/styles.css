@@ -1164,28 +1164,6 @@ ul {
   color: var(--fg);
 }
 
-.skill-setup {
-  margin: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--border, currentColor);
-  border-radius: 4px;
-}
-
-.skill-setup h3 {
-  margin: 0;
-  font-size: 12px;
-}
-
-.skill-setup ul {
-  margin: 4px 0 0;
-  padding-left: 16px;
-}
-
-.skill-setup-banner,
-.skill-setup-warning {
-  border-color: var(--blocked);
-}
-
 .right-side {
   overflow: auto;
 }
@@ -1378,10 +1356,6 @@ ul {
 
 .merge-hint {
   color: var(--fg-dim);
-}
-
-.skill-setup li button {
-  margin-left: 4px;
 }
 
 .panel-resizer {
