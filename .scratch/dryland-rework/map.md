@@ -43,6 +43,7 @@ A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog
 - [Lifecycle writes on the store](issues/43-lifecycle-writes-on-the-store.md): Claim, release, resolve, tick, triage, block and comment append events to the store with the old rules and messages, and the desktop actions run them unchanged.
 - [Map writes, derived Decisions so far and init](issues/44-map-writes-derived-decisions-and-init.md): Decisions so far is derived from resolved tickets, the map tab and `map show` list frontier, blocked and claimed, the dialogs create maps and tickets from documents, and a fresh repo's next step is `dryland init`.
 - [Delete the old tracker path](issues/45-delete-the-old-tracker-path.md): The file-based trackers, tracker doc, compatibility and skill-setup state, auto-commit and both lock files are removed; a repo without a store gets an error naming `dryland init`, and the forge comes from the origin remote.
+- [Snapshots bound replay](issues/38-snapshots-bound-replay.md): Writes and cache rebuilds replay the newest snapshot plus the events after it, with a snapshot every 100 events and identical state without any snapshot or cache.
 
 ## Not yet specified
 
