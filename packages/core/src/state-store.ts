@@ -196,27 +196,109 @@ const EVENT_KINDS: ReadonlySet<string> = new Set([
   "ticket.commented",
 ] satisfies StateEvent["kind"][]);
 
-/** Every event of the commit `head`, oldest first. An event of an unknown schema stops the replay. */
-async function replayEvents(git: StoreGit, head: string): Promise<StateEvent[]> {
-  const listing = await git.ok(["ls-tree", "-r", head]);
-  const files = listing
-    .split("\n")
-    .filter((line) => line !== "")
-    .map((line) => {
-      const [meta = "", path = ""] = line.split("\t");
-      return { sha: meta.split(" ")[2] ?? "", path };
-    })
-    .filter((f) => f.path.startsWith("events/"))
-    .sort((a, b) => a.path.localeCompare(b.path));
+/**
+ * How many events pass between snapshots. A write that finds this many events past the latest snapshot adds a new one
+ * in the same commit, so a replay reads at most this many events. `DRYLAND_SNAPSHOT_EVERY` overrides it for tests.
+ */
+const DEFAULT_SNAPSHOT_EVERY = 100;
+
+function snapshotEvery(): number {
+  const set = Number(process.env["DRYLAND_SNAPSHOT_EVERY"]);
+  return Number.isInteger(set) && set > 0 ? set : DEFAULT_SNAPSHOT_EVERY;
+}
+
+interface TreeFile {
+  sha: string;
+  path: string;
+}
+
+/** The state after the first `upTo` events, kept in the ref as `snapshots/<upTo>.json`. */
+interface Snapshot {
+  schema: number;
+  version: string;
+  upTo: number;
+  state: StoreState;
+}
+
+const sequenceOf = (path: string) => Number(/^(?:events|snapshots)\/(\d+)/.exec(path)?.[1]);
+
+/** The blobs of `files`, in order. */
+async function readBlobs(git: StoreGit, files: TreeFile[]): Promise<string[]> {
   if (files.length === 0) return [];
   const batch = await git.run(["cat-file", "--batch"], { input: files.map((f) => `${f.sha}\n`).join("") });
-  const events: StateEvent[] = [];
+  const blobs: string[] = [];
   let offset = 0;
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
     const newline = batch.raw.indexOf(0x0a, offset);
     const size = Number(batch.raw.subarray(offset, newline).toString("utf8").split(" ")[2]);
     const start = newline + 1;
-    const event = JSON.parse(batch.raw.subarray(start, start + size).toString("utf8")) as StateEvent;
+    blobs.push(batch.raw.subarray(start, start + size).toString("utf8"));
+    offset = start + size + 1;
+  }
+  return blobs;
+}
+
+/** The newest snapshot that is readable, current and consistent; `null` when there is none. A bad one is skipped. */
+async function latestSnapshot(git: StoreGit, snapshots: TreeFile[], eventCount: number): Promise<Snapshot | null> {
+  for (const file of [...snapshots].sort((a, b) => b.path.localeCompare(a.path))) {
+    const [text = ""] = await readBlobs(git, [file]);
+    try {
+      const snap = JSON.parse(text) as Snapshot;
+      if (
+        snap.schema === EVENT_SCHEMA &&
+        snap.version === CACHE_VERSION &&
+        snap.upTo === sequenceOf(file.path) &&
+        snap.upTo <= eventCount &&
+        Array.isArray(snap.state?.tickets) &&
+        Array.isArray(snap.state?.maps)
+      ) {
+        return snap;
+      }
+    } catch {
+      // A corrupt snapshot costs a longer replay, never the state.
+    }
+  }
+  return null;
+}
+
+interface Replayed {
+  state: StoreState;
+  /** Events in the log, whether or not a snapshot covered them. */
+  eventCount: number;
+  /** Events replayed on top of the snapshot, `0` when the snapshot is current. */
+  tail: number;
+}
+
+/**
+ * The state at the commit `head`: the latest usable snapshot plus the events after it, or every event when there is
+ * no snapshot. Only the events past the snapshot are read. An event of an unknown schema stops the replay.
+ */
+async function replayState(git: StoreGit, head: string): Promise<Replayed> {
+  const listing = await git.ok(["ls-tree", "-r", head]);
+  const all = listing
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line): TreeFile => {
+      const [meta = "", path = ""] = line.split("\t");
+      return { sha: meta.split(" ")[2] ?? "", path };
+    });
+  const byPath = (a: TreeFile, b: TreeFile) => a.path.localeCompare(b.path);
+  const eventFiles = all.filter((f) => f.path.startsWith("events/")).sort(byPath);
+  const snapshot = await latestSnapshot(
+    git,
+    all.filter((f) => f.path.startsWith("snapshots/")),
+    eventFiles.length,
+  );
+  const tail = eventFiles.filter((f) => sequenceOf(f.path) > (snapshot?.upTo ?? 0));
+  const events = parseEvents(tail, await readBlobs(git, tail));
+  return { state: reduce(events, snapshot?.state), eventCount: eventFiles.length, tail: events.length };
+}
+
+/** Parses the events of `files` (with their `blobs`), refusing an unknown schema or kind. */
+function parseEvents(files: TreeFile[], blobs: string[]): StateEvent[] {
+  const events: StateEvent[] = [];
+  for (const [i, file] of files.entries()) {
+    const event = JSON.parse(blobs[i] ?? "") as StateEvent;
     if (event.schema !== EVENT_SCHEMA) {
       throw new DrylandError(
         `Event ${file.path} has schema ${String(event.schema)}, but this Dryland reads schema ${EVENT_SCHEMA}.`,
@@ -230,7 +312,6 @@ async function replayEvents(git: StoreGit, head: string): Promise<StateEvent[]> 
       );
     }
     events.push(event);
-    offset = start + size + 1;
   }
   return events;
 }
@@ -273,9 +354,9 @@ function applyChange(ticket: StoreTicket, event: WithRef<LifecycleChange> & { at
   }
 }
 
-/** The state the events add up to. */
-function reduce(events: StateEvent[]): StoreState {
-  const state: StoreState = { tickets: [], maps: [] };
+/** The state the events add up to on top of `base` (not changed), or on an empty store. */
+function reduce(events: StateEvent[], base?: StoreState): StoreState {
+  const state: StoreState = base === undefined ? { tickets: [], maps: [] } : structuredClone(base);
   for (const event of events) {
     if (event.kind === "ticket.created") {
       state.tickets.push({
@@ -357,7 +438,7 @@ export async function readStoreState(cwd: string): Promise<StoreState> {
   const path = join(dir, "dryland", "cache.sqlite");
   const cached = readCache(path, head);
   if (cached !== null) return cached;
-  const state = reduce(await replayEvents(git, head));
+  const { state } = await replayState(git, head);
   // The cache is disposable: failing to write it only costs the next read a replay.
   try {
     await mkdir(join(path, ".."), { recursive: true });
@@ -459,8 +540,7 @@ export async function writeToStore(
   try {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       const { git, head } = await openStore(cwd);
-      const events = await replayEvents(git, head);
-      const current = reduce(events);
+      const { state: current, eventCount, tail } = await replayState(git, head);
       const planned = plan(current);
       if (planned.diagnostics.length > 0) throw new WriteFailure("check", planned.diagnostics);
       // A plan with nothing to add, such as a claim its holder already has, writes nothing.
@@ -471,14 +551,25 @@ export async function writeToStore(
         author: opts.author,
         ...planned.event,
       };
-      const after = reduce([...events, event]);
+      const after = reduce([event], current);
       if (opts.checkOnly) return { state: after, subject: planned.subject, written: false };
-      const name = `events/${String(events.length + 1).padStart(8, "0")}-${randomUUID()}.json`;
+      const seq = eventCount + 1;
+      const name = `events/${String(seq).padStart(8, "0")}-${randomUUID()}.json`;
       const blob = await git.ok(["hash-object", "-w", "--stdin"], { input: `${JSON.stringify(event)}\n` });
       const env = { ...AUTHOR_ENV, GIT_INDEX_FILE: join(scratch, "index") };
       await rm(env.GIT_INDEX_FILE, { force: true });
       await git.ok(["read-tree", head], { env });
       await git.ok(["update-index", "--add", "--cacheinfo", `100644,${blob},${name}`], { env });
+      if (tail + 1 >= snapshotEvery()) {
+        const snapshot: Snapshot = { schema: EVENT_SCHEMA, version: CACHE_VERSION, upTo: seq, state: after };
+        const snap = await git.ok(["hash-object", "-w", "--stdin"], { input: `${JSON.stringify(snapshot)}\n` });
+        await git.ok(
+          ["update-index", "--add", "--cacheinfo", `100644,${snap},snapshots/${String(seq).padStart(8, "0")}.json`],
+          {
+            env,
+          },
+        );
+      }
       const tree = await git.ok(["write-tree"], { env });
       const commit = await git.ok(["commit-tree", tree, "-p", head, "-m", `${event.kind} ${planned.subject}`], { env });
       if ((await git.run(["update-ref", STATE_REF, commit, head])).exitCode === 0) {
