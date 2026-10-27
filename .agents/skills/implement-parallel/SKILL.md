@@ -8,17 +8,19 @@ You are the orchestrator: you instruct, inspect and merge; subagents implement. 
 
 ## Preconditions
 
-Permission mode is accept-edits or an allowlist for `git`, `pnpm`, `rtk`, `docker`. Auto-mode's classifier fails on shell calls here; if shell calls return "no verdict", ask the user to switch mode.
+Permission mode is accept-edits, with the shell allowlist in `.claude/settings.local.json`. Auto-mode's classifier fails on shell calls here; if shell calls return "no verdict", ask the user to switch mode.
 
 ## Wave
 
-1. **Pick.** From the tracker (`docs/agents/issue-tracker.md`; tickets in `.scratch/*/issues/`) take up to 5 tickets with `Status: ready-for-agent` whose every `Blocked by` ticket is `resolved`. Say which and why; when only one is unblocked, run one.
+1. **Pick.** `node scripts/next-tickets.mjs [map]` lists tickets that are `ready-for-agent` with every `Blocked by` ticket `resolved`. Take up to 5. Say which; when only one is unblocked, run one.
 2. **Worktrees.** You create each: `git worktree add -b ticket-N .claude/worktrees/ticket-N main` (local `main`; the Agent tool's `isolation: worktree` cuts from stale `origin/main`). Agents run in the background with `model: sonnet`.
 3. **Brief** each agent (fill N and the ticket path):
 
    > Implement ticket N: `<ticket path>`. Work ONLY in `<abs worktree path>` (branch ticket-N); absolute paths, `git -C`. Follow the ticket's "Read first" list, AGENTS.md, and the tdd skill.
    > - Write/Edit only for files; no heredocs or inline scripts. `rtk vitest run <file>`, `rtk tsc`. Never run `dryland ticket|map`.
-   > - Run unit and integration tests, including `pnpm test`, as often as useful. Only `pnpm test:linux`, `pnpm --filter @dryland/desktop test:e2e` and `pnpm test:e2e:linux` take the lock: `mkdir T:/Development/.test-lock` (retry every 30s), `rmdir` after, release on failure too. Run those once before finishing. Run `pnpm install --offline` first if `node_modules` is missing.
+   > - `.claude/skills/` is absent in your worktree; the skills are in `.agents/skills/<name>/SKILL.md`. Run `pnpm install --offline` first if `node_modules` is missing.
+   > - Tests: run whatever verifies the point you are at, as often as needed (single files, then packages), so you know when you are done. Every run is a verification with a purpose; pick the smallest that serves it. The final full-suite run is the last line of defense for the unforeseen: run `pnpm test` at least once at the end, then the heavy suites as the final quality gate.
+   > - Heavy suites run only through the lock: `node scripts/with-lock.mjs pnpm test:linux`, `node scripts/with-lock.mjs pnpm --filter @dryland/desktop test:e2e`, `node scripts/with-lock.mjs pnpm test:e2e:linux`. All other tests run lock-free in parallel.
    > - Code-review (Standards + Spec) against `main..HEAD` is mandatory; fix real findings, re-test.
    > - Commit the code on ticket-N. Close the ticket per AGENTS.md "Closing a ticket" as a separate commit. Do not merge or push.
    > - Report: commits, tests run with pass/fail, review findings and fixes, known limits.
@@ -27,7 +29,7 @@ Permission mode is accept-edits or an allowlist for `git`, `pnpm`, `rtk`, `docke
 
 ## Merge and verify
 
-Per finished branch, one at a time: read the report, check `git diff --stat main..ticket-N` matches the ticket, then merge (`--ff-only` when possible, else `git merge --no-edit`). After each merge run `pnpm install --offline`, `pnpm test`, `pnpm typecheck`, `pnpm lint` on main. After the wave's last merge run `pnpm test:linux`, and for `packages/desktop` changes both e2e suites (take the lock). Remove the worktree and branch once merged.
+Per finished branch, one at a time: read the report, check `git diff --stat main..ticket-N` matches the ticket, then merge (`--ff-only` when possible, else `git merge --no-edit`). After each merge run `pnpm install --offline`, `pnpm test`, `pnpm typecheck`, `pnpm lint` on main. After the wave's last merge run `pnpm test:linux`, and for `packages/desktop` changes both e2e suites (through `scripts/with-lock.mjs`). Remove the worktree and branch once merged.
 
 Failures on main: fix through a small `fix-N` worktree and agent, or revert the merge; never leave main red.
 

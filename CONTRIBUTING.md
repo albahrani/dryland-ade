@@ -30,7 +30,7 @@ On Windows, a POSIX-only failure (executable bits, `#!/bin/sh` stubs) can hide f
 
 ## How the work is organised
 
-- Work is tracked as local markdown tickets under `.scratch/<map>/issues/`, described in `docs/agents/issue-tracker.md`. Change tickets and map indexes through the `dryland` CLI, not by editing the files.
+- Work is tracked as local markdown tickets under `.scratch/<map>/issues/`, described in `docs/agents/issue-tracker.md`. While the rework is under way, edit tickets and maps by hand and do not run `dryland ticket` or `dryland map`; `AGENTS.md` ("Closing a ticket") has the steps.
 - Behaviour is test-first: write the failing test, then the code. Prefer testing at a seam (the process runner, the Agent adapter, the rule engine) over mocking internals.
 - Use the words in `GLOSSARY.md`. When you coin a term or change what one means, update the glossary in the same PR.
 - A decision that is hard to reverse or would surprise a reader belongs in an ADR under `docs/adr/`. Say in the PR whether your change touches one.
