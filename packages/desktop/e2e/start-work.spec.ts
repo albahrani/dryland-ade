@@ -75,7 +75,9 @@ function stubAgent(): string {
       "const sid = process.env.STUB_WRITES_HISTORY ? (args.includes('--session-id') ? launchedId : args[args.indexOf('--resume') + 1]) : undefined;",
       "console.log(`resume=${args.includes('--resume') ? args[args.indexOf('--resume') + 1] ?? 'picker' : 'no'}`);",
       "console.log(`session=${set('DRYLAND_SESSION_ID')} pane=${set('DRYLAND_PANE_KEY')} port=${set('DRYLAND_PORT')} token=${set('DRYLAND_TOKEN')}`);",
-      "console.log(execSync('dryland ticket list', { encoding: 'utf8' }));",
+      // The store prints each ticket as a JSON document, which would scroll the banner off a small screen: one line each.
+      "const listed = JSON.parse(execSync('dryland ticket list --json', { encoding: 'utf8' }));",
+      "for (const t of Array.isArray(listed) ? listed : Object.values(listed).find(Array.isArray) ?? []) console.log(`ticket ${t.ref} ${t.title}`);",
       `const hooks = require(${JSON.stringify(FAKE_HOOKS)});`,
       "const settings = hooks.settingsFrom(process.argv.slice(2));",
       "process.stdin.setRawMode(true);",

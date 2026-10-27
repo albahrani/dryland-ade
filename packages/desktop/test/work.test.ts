@@ -3,13 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  CLAUDE_CODE,
-  DrylandError,
-  hookSettings,
-  nodeProcessRunner,
-  readSessionIndex,
-} from "@dryland/core";
+import { CLAUDE_CODE, DrylandError, hookSettings, nodeProcessRunner, readSessionIndex } from "@dryland/core";
 import { describe, expect, it, vi } from "vitest";
 import { createDrylandCli } from "../src/main/dryland-cli.ts";
 import { createTerminalManager } from "../src/main/terminals.ts";

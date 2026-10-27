@@ -30,7 +30,6 @@ describe("ui state store", () => {
     expect(createUiStateStore(file).read().openProjects).toEqual(["/repos/shop"]);
   });
 
-
   it("starts with no project and the legend showing", () => {
     expect(createUiStateStore(stateFile()).read()).toEqual({
       lastProject: null,
