@@ -21,11 +21,14 @@ Permission mode is accept-edits, with the shell allowlist in `.claude/settings.l
    > - `.claude/skills/` is absent in your worktree; the skills are in `.agents/skills/<name>/SKILL.md`. Run `pnpm install --offline` first if `node_modules` is missing.
    > - Tests: run whatever verifies the point you are at, as often as needed (single files, then packages), so you know when you are done. Every run is a verification with a purpose; pick the smallest that serves it. The final full-suite run is the last line of defense for the unforeseen: run `pnpm test` at least once at the end, then the heavy suites as the final quality gate.
    > - Heavy suites run only through the lock: `node scripts/with-lock.mjs pnpm test:linux`, `node scripts/with-lock.mjs pnpm --filter @dryland/desktop test:e2e`, `node scripts/with-lock.mjs pnpm test:e2e:linux`. All other tests run lock-free in parallel.
+   > - The e2e suites open the desktop app on the user's screen: run each exactly once, at the very end, and only if `packages/desktop` changed. To debug an e2e failure, run the single spec, not the suite.
+   > - Stuck: after 3 failed attempts at the same failure, or when the ticket and the code disagree, stop and report the blocker with what you tried; do not keep trying. Commit a WIP checkpoint after each coherent chunk.
    > - Code-review (Standards + Spec) against `main..HEAD` is mandatory; fix real findings, re-test.
    > - Commit the code on ticket-N. Close the ticket per AGENTS.md "Closing a ticket" as a separate commit. Do not merge or push.
    > - Report: commits, tests run with pass/fail, review findings and fixes, known limits.
 
-4. **Intervene** when an agent reports blocked, loops, or drifts from its ticket: diagnose, then `SendMessage` the fix. If it names a missing file or stale base, check the worktree base first.
+4. **Watch.** A background agent cannot ask mid-run; it reports only when it ends. While one runs, check its worktree now and then (`git -C <worktree> log --oneline main..HEAD`, `git diff main --shortstat`) against the ticket's scope. No new commits for a long stretch, or a diff far beyond the ticket, means stuck or drifting.
+5. **Intervene** when an agent reports blocked, loops, or drifts from its ticket: diagnose, then `SendMessage` the fix. If it names a missing file or stale base, check the worktree base first.
 
 ## Merge and verify
 
