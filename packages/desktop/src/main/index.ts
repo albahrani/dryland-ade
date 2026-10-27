@@ -9,6 +9,7 @@ import {
   AGENT_ADAPTERS,
   DrylandError,
   findMainCheckout,
+  isStoreInitialised,
   type LiveEvent,
   type LiveListener,
   type SessionSnapshot,
@@ -55,6 +56,7 @@ import {
   isTicketAction,
   isTicketRef,
   trackerArgs,
+  trackerInput,
 } from "../shared/tracker-actions.ts";
 import { createDrylandCli } from "./dryland-cli.ts";
 import { latestOnly } from "./latest-only.ts";
@@ -796,7 +798,12 @@ ipcMain.handle("tracker:run", async (_event, action: unknown, commit: unknown): 
     return { ok: false, message: "That is not a ticket action.", nextAction: "Retry from the ticket." };
   if (project === null) return { ok: false, message: "No project is open.", nextAction: "Open a project first." };
   // Commits as the renderer said, so a confirmation names exactly what runs; `dryland` finds the main checkout.
-  const result = await dryland.run(trackerArgs(action, commit), { cwd: project.path });
+  // A create on a state store sends one document on stdin; a markdown repo takes flags.
+  const store = await isStoreInitialised(project.path);
+  const result = await dryland.run(trackerArgs(action, commit, store), {
+    cwd: project.path,
+    input: trackerInput(action, store) ?? undefined,
+  });
   void refresh();
   return result;
 });

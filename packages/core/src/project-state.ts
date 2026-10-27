@@ -30,7 +30,7 @@ export interface ProjectState {
 /**
  * Reads tickets and efforts once and builds both the tickets tree and the repo snapshot from them. `sessions` are the
  * live Dryland sessions; without them no claim is called stale. A repo without the tracker doc has no tickets rather
- * than an error, so that it still gets its skill setup state and the `/setup-matt-pocock-skills` next step.
+ * than an error, so that it still gets its skill setup state and the `dryland init` next step.
  * `compatConfig` is what the user decided about a modified setup: the deviations accepted and the rules re-enabled.
  */
 export async function readProjectState(

@@ -123,9 +123,18 @@ function formatTicket(ticket: Ticket, sessions: IndexedSession[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-function formatMap(map: MapView): string {
+/** What a store map shows beyond a markdown map: notes, ticket lists read from state, and the out-of-scope items. */
+interface StoreMapExtras {
+  notes: string;
+  /** Headed lists printed after the ticket groups. */
+  lists: { heading: string; lines: string[] }[];
+  outOfScope: string[];
+}
+
+function formatMap(map: MapView, extras?: StoreMapExtras): string {
   const lines = [`Map: ${map.title} (${map.name})`];
   if (map.destination !== "") lines.push("", `Destination: ${map.destination}`);
+  if (extras !== undefined && extras.notes !== "") lines.push("", `Notes: ${extras.notes}`);
   const groups = [
     ["Planning", map.tickets.filter((t) => ticketKind(t) === "planning")],
     ["Implementation", map.tickets.filter((t) => ticketKind(t) === "implementation")],
@@ -141,7 +150,11 @@ function formatMap(map: MapView): string {
           .map((l) => `  ${l}`),
       );
   }
+  for (const { heading, lines: items } of extras?.lists ?? []) lines.push("", `${heading}:`, ...items);
   if (map.fog.length > 0) lines.push("", "Fog:", ...map.fog.map((item) => `  - ${item}`));
+  if (extras !== undefined && extras.outOfScope.length > 0) {
+    lines.push("", "Out of scope:", ...extras.outOfScope.map((item) => `  - ${item}`));
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -180,11 +193,51 @@ function formatStoreMap(d: MapDocument): string {
     title: d.map?.title ?? d.effort,
     destination: d.map?.destination ?? "",
     fog: d.map?.fog ?? [],
-    decisions: [],
+    decisions: d.decisions,
     sections: [],
     tickets: d.tickets.map(asTicket),
   };
-  return formatMap(view);
+  const tickets = view.tickets;
+  const unresolved = (t: Ticket) =>
+    (t.blockers === "unknown" ? [] : t.blockers).filter((id) => {
+      return tickets.some((o) => o.id === id && o.state !== "resolved");
+    });
+  const open = tickets.filter((t) => t.state === "open");
+  const list = (heading: string, items: Ticket[], detail: (t: Ticket) => string = () => ""): StoreMapExtras["lists"] =>
+    items.length === 0
+      ? []
+      : [
+          {
+            heading,
+            lines: formatTickets(items)
+              .trimEnd()
+              .split("\n")
+              .map((l, i) => `  ${l}${detail(items[i] as Ticket)}`),
+          },
+        ];
+  return formatMap(view, {
+    notes: d.map?.notes ?? "",
+    lists: [
+      ...list(
+        "Frontier",
+        open.filter((t) => unresolved(t).length === 0),
+      ),
+      ...list(
+        "Blocked",
+        open.filter((t) => unresolved(t).length > 0),
+        (t) => `  (waits for ${unresolved(t).join(", ")})`,
+      ),
+      ...list(
+        "Claimed",
+        tickets.filter((t) => t.state === "claimed"),
+        (t) => `  (${t.claimant ?? "unknown"})`,
+      ),
+      ...(d.decisions.length === 0
+        ? []
+        : [{ heading: "Decisions so far", lines: d.decisions.map((item) => `  - ${item}`) }]),
+    ],
+    outOfScope: d.map?.outOfScope ?? [],
+  });
 }
 
 const USAGE = [
@@ -206,6 +259,7 @@ const USAGE = [
   "       dryland map show <map> [--text] [--json]",
   "       dryland map frontier <map> [--text] [--json]",
   "       dryland map index <map> --title <title> --link <path> --gist <text> [--commit | --no-commit] [--json]",
+  "                          (markdown only: a state store derives Decisions so far from resolved tickets)",
   "       dryland worktree create [<map>/<number>] [--map <map>] [--slug <slug>] [--json]",
   "       dryland worktree list [--json]",
   "       dryland worktree prune <branch> [--yes] [--session-attached] [--json]",
@@ -553,6 +607,12 @@ const COMMANDS: Record<
     target: true,
     options: ["title", "link", "gist"],
     run: async (target, flags) => {
+      if (await isStoreInitialised(process.cwd())) {
+        throw new DrylandError(
+          "`dryland map index` does nothing in a repo with a state store: Decisions so far is derived from the resolved tickets.",
+          `Resolve the ticket with \`dryland ticket resolve ${target === "" ? "<map>/<number>" : `${target}/<number>`} --answer <text>\`; its title and the first sentence of its answer appear in \`dryland map show ${target}\`.`,
+        );
+      }
       const { value, warnings } = await indexMap(
         nodeProcessRunner,
         process.cwd(),

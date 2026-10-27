@@ -99,6 +99,55 @@ test("on a store: claims, unblocks and resolves from a ticket at once, each show
   await app.close();
 });
 
+test("on a store: creates a ticket from the New ticket dialog, previewing the document and asking first", async () => {
+  const { app, window, repo } = await openProject();
+  const dialog = window.getByRole("dialog", { name: "New ticket" });
+  await app.evaluate(({ Menu }) => {
+    const file = Menu.getApplicationMenu()?.items.find((item) => item.label === "File");
+    file?.submenu?.items.find((item) => item.label === "New Ticket...")?.click();
+  });
+  await dialog.getByLabel("Title").fill("Refund orders");
+  await dialog.getByLabel("Question").fill("Who refunds?");
+  await dialog.getByLabel("01 Build the cart").check();
+  await expect(dialog.getByLabel("Command")).toHaveText(
+    'dryland ticket create < {"effort":"shop","title":"Refund orders","type":"task","report":"Who refunds?","blockedBy":["shop/01"]}',
+  );
+
+  await dialog.getByRole("button", { name: "Create ticket" }).click();
+  const confirm = window.getByRole("dialog", { name: "Confirm write" });
+  await expect(confirm).toContainText('"blockedBy":["shop/01"]');
+  await confirm.getByRole("button", { name: "Confirm" }).click();
+
+  await expect(window.getByRole("region", { name: "Tickets" }).getByText("Refund orders")).toBeVisible();
+  expect(show(repo, "shop/03")).toMatchObject({ status: "open", title: "Refund orders", report: "Who refunds?" });
+  // Nothing reached the repo itself.
+  expect(git(repo, "status", "--porcelain")).toBe("");
+  await app.close();
+});
+
+test("on a store: creates a map from the New map dialog, and its tab shows the destination", async () => {
+  const { app, window, repo } = await openProject();
+  await window.getByRole("button", { name: "Maps" }).click();
+  await window.getByRole("button", { name: "New map" }).click();
+  const dialog = window.getByRole("dialog", { name: "New map" });
+  await dialog.getByLabel("Effort").fill("blog");
+  await dialog.getByLabel("Title").fill("Blog");
+  await dialog.getByLabel("Destination").fill("Publish weekly.");
+  await expect(dialog.getByLabel("Command")).toHaveText(
+    'dryland map create < {"effort":"blog","title":"Blog","destination":"Publish weekly."}',
+  );
+
+  await dialog.getByRole("button", { name: "Create map" }).click();
+  await window.getByRole("dialog", { name: "Confirm write" }).getByRole("button", { name: "Confirm" }).click();
+
+  await expect(window.getByRole("region", { name: "Maps" }).getByText("Blog")).toBeVisible();
+  expect(JSON.parse(dryland(repo, undefined, "map", "show", "blog", "--json"))).toMatchObject({
+    effort: "blog",
+    map: { title: "Blog", destination: "Publish weekly." },
+  });
+  await app.close();
+});
+
 test("on a store: releases a possibly stale claim only after a confirmation the user can turn off", async () => {
   const { app, window, repo } = await openProject();
   const tickets = window.getByRole("region", { name: "Tickets" });

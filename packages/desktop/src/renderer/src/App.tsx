@@ -47,7 +47,7 @@ import type { RootHint } from "../../shared/explorer.ts";
 import { baseName, dirName } from "../../shared/paths.ts";
 import { ItemTab, type ResumeAllHandler, type ResumeHandler, type StartWorkHandler } from "./ItemTab.tsx";
 import { type PausedSession, pausedSessions } from "../../shared/paused-session.ts";
-import { NewMapDialog, NewScratchDialog, NewTicketDialog } from "./NewDialogs.tsx";
+import { NewMapDialog, NewScratchDialog, NewStoreMapDialog, NewTicketDialog } from "./NewDialogs.tsx";
 import { Legend } from "./Legend.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
 import { PanelResizer } from "./PanelResizer.tsx";
@@ -67,7 +67,14 @@ import { stopNeedsConfirmation } from "../../shared/stop-session.ts";
 import { PausedBadge, SessionBadge } from "./status.tsx";
 import { TicketsView } from "./TicketsView.tsx";
 import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts";
-import { type ActionSource, commandLine, type TicketAction, trackerArgs } from "../../shared/tracker-actions.ts";
+import {
+  type ActionSource,
+  commandLine,
+  commandWithInput,
+  type TicketAction,
+  trackerArgs,
+  trackerInput,
+} from "../../shared/tracker-actions.ts";
 
 type ActivityView = "tickets" | "maps" | "sessions";
 
@@ -532,6 +539,8 @@ export function App() {
     terminalsOpened.current += 1;
     showTerminal(id, `Terminal ${terminalsOpened.current}`);
   };
+  // Whether the open project keeps its tickets and maps in the state store, which creates them from documents.
+  const onStore = project?.tracker?.kind === "state-store";
   /** Runs an action through `dryland` and reports its error or warnings; resolves with whether it made the change. */
   const runAction = async (action: TicketAction): Promise<boolean> => {
     setNotice(null);
@@ -543,16 +552,20 @@ export function App() {
   /** A ticket's own actions run at once; a general button asks first, unless the user said not to (ADR 0003). */
   const requestAction = async (action: TicketAction, source: ActionSource): Promise<boolean> => {
     if (source === "ticket" || settings.dontAsk["tracker-metadata"]) return runAction(action);
+    const args = trackerArgs(action, settings.autoCommit, onStore);
+    const input = trackerInput(action, onStore);
     setPending({
       action,
       type: "tracker-metadata",
       text:
         action.kind === "create"
           ? `Create ticket "${action.ticket.title}" on map ${action.ticket.map}?`
-          : action.kind === "release"
-            ? `Release the claim on ${ticketKey(action.ticket)}? Its status goes back to what it was before.`
-            : `Change ${ticketKey(action.ticket)}?`,
-      command: commandLine(trackerArgs(action, settings.autoCommit)),
+          : action.kind === "create-map"
+            ? `Create the map "${action.map.title}" for ${action.map.map}?`
+            : action.kind === "release"
+              ? `Release the claim on ${ticketKey(action.ticket)}? Its status goes back to what it was before.`
+              : `Change ${ticketKey(action.ticket)}?`,
+      command: input === null ? commandLine(args) : commandWithInput(args, input),
     });
     return false;
   };
@@ -824,6 +837,7 @@ export function App() {
                 : activeTab.map
           }
           autoCommit={settings.autoCommit}
+          store={onStore}
           onCancel={() => setDialog(null)}
           onCreate={(ticket) => {
             setDialog(null);
@@ -831,7 +845,16 @@ export function App() {
           }}
         />
       )}
-      {dialog === "new-map" && project !== null && (
+      {dialog === "new-map" && project !== null && onStore && (
+        <NewStoreMapDialog
+          onCancel={() => setDialog(null)}
+          onCreate={(map) => {
+            setDialog(null);
+            void requestAction({ kind: "create-map", map }, "general-button");
+          }}
+        />
+      )}
+      {dialog === "new-map" && project !== null && !onStore && (
         <NewMapDialog
           onCancel={() => setDialog(null)}
           onStart={async (agentId, skill) => {
