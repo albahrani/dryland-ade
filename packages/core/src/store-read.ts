@@ -1,6 +1,13 @@
 import { DrylandError } from "./errors.ts";
 import { assertMapName, frontierOf } from "./map.ts";
-import { readStoreState, type StoreMap, type StoreState, type StoreTicket, toTicket } from "./state-store.ts";
+import {
+  decisionsOf,
+  readStoreState,
+  type StoreMap,
+  type StoreState,
+  type StoreTicket,
+  toTicket,
+} from "./state-store.ts";
 import { READ_SCHEMAS } from "./store-schemas.ts";
 import { findTicket, parseTicketReference } from "./tickets.ts";
 
@@ -60,6 +67,8 @@ export interface MapDocument {
   effort: string;
   /** `null` for an effort that has tickets but no map. */
   map: Omit<StoreMap, "effort"> | null;
+  /** Decisions so far: the resolved tickets, each as its title and the first sentence of its summary. */
+  decisions: string[];
   tickets: TicketDocument[];
 }
 
@@ -81,6 +90,7 @@ export async function showStoreMap(cwd: string, effort: string): Promise<MapDocu
             fog: record.fog,
             outOfScope: record.outOfScope,
           },
+    decisions: decisionsOf(state.tickets, effort),
     tickets: state.tickets
       .filter((t) => t.effort === effort)
       .sort(byRef)

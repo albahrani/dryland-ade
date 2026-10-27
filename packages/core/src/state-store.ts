@@ -378,9 +378,36 @@ export function toTicket(t: StoreTicket): Ticket {
   };
 }
 
-/** A store map record as the map model the tree and the rules read; Decisions so far is derived in ticket 44. */
-export function toMapModel(m: StoreMap): MapModel {
-  return { name: m.effort, title: m.title, destination: m.destination, fog: m.fog, decisions: [], sections: [] };
+/** The first sentence of `text` on one line: up to the first `.`, `!` or `?` followed by a space or the end. */
+export function firstSentence(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return /^.*?[.!?](?=\s|$)/.exec(flat)?.[0] ?? flat;
+}
+
+/**
+ * An effort's Decisions so far: one line per resolved ticket, in ticket order, its title and the first sentence of its
+ * summary. Derived on every read, so no one writes the list and it cannot drift from the tickets.
+ */
+export function decisionsOf(tickets: StoreTicket[], effort: string): string[] {
+  return tickets
+    .filter((t) => t.effort === effort && t.status === "resolved")
+    .sort((a, b) => Number(a.id) - Number(b.id))
+    .map((t) => {
+      const gist = firstSentence(t.answer ?? "");
+      return gist === "" ? t.title : `${t.title}: ${gist}`;
+    });
+}
+
+/** A store map record as the map model the tree and the rules read, with Decisions so far derived from `tickets`. */
+export function toMapModel(m: StoreMap, tickets: StoreTicket[]): MapModel {
+  return {
+    name: m.effort,
+    title: m.title,
+    destination: m.destination,
+    fog: m.fog,
+    decisions: decisionsOf(tickets, m.effort),
+    sections: [],
+  };
 }
 
 /** The commit the state ref points at; `null` when the repo has no store. A cheap change signal for watchers. */
@@ -599,7 +626,12 @@ export async function createStoreMap(cwd: string, text: string, opts: WriteOptio
       const diagnostics = [...checkEffort(doc.effort), ...checkOneLine("title", doc.title)];
       if (state.maps.some((m) => m.effort === doc.effort)) {
         diagnostics.push(
-          diagnostic("effort", "map-exists", `${doc.effort} already has a map.`, "Edit the existing map (ticket 44)."),
+          diagnostic(
+            "effort",
+            "map-exists",
+            `${doc.effort} already has a map.`,
+            `Read it with \`dryland map show ${doc.effort}\`, or pick another effort slug.`,
+          ),
         );
       }
       return {

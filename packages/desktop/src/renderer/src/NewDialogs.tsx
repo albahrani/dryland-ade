@@ -2,12 +2,16 @@ import type { TicketsTree } from "@dryland/core";
 import { useState } from "react";
 import {
   commandLine,
+  commandWithInput,
   CREATE_STATUSES,
   CREATE_TYPES,
   type CreateStatus,
   type CreateType,
+  MAP_NAME,
+  type NewMap,
   type NewTicket,
   trackerArgs,
+  trackerInput,
 } from "../../shared/tracker-actions.ts";
 import { StartWork, type StartHandler } from "./StartWork.tsx";
 
@@ -30,6 +34,7 @@ export function NewTicketDialog({
   tree,
   initialMap,
   autoCommit,
+  store,
   onCreate,
   onCancel,
 }: {
@@ -38,6 +43,8 @@ export function NewTicketDialog({
   initialMap: string | null;
   /** Whether the write is committed, so the preview names exactly what runs. */
   autoCommit: boolean;
+  /** Whether the project keeps its tickets in the state store, which `ticket create` fills from one document. */
+  store: boolean;
   onCreate: (ticket: NewTicket) => void;
   onCancel: () => void;
 }) {
@@ -51,6 +58,10 @@ export function NewTicketDialog({
   // Only a ticket still to be done can block the new one.
   const candidates = chosen === undefined ? [] : [...chosen.planning, ...chosen.implementation];
   const ticket: NewTicket = { map, title: title.trim(), type, question: question.trim(), blockedBy, status };
+  const action = { kind: "create", ticket } as const;
+  const input = trackerInput(action, store);
+  const args = trackerArgs(action, autoCommit, store);
+  const preview = input === null ? commandLine(args) : commandWithInput(args, input);
   const toggle = (id: string) =>
     setBlockedBy((current) =>
       current.includes(id) ? current.filter((n) => n !== id) : [...current, id].sort((a, b) => Number(a) - Number(b)),
@@ -136,7 +147,7 @@ export function NewTicketDialog({
           ))}
         </fieldset>
         <code className="command" aria-label="Command">
-          {commandLine(trackerArgs({ kind: "create", ticket }, autoCommit))}
+          {preview}
         </code>
         <div className="modal-actions">
           <button type="button" onClick={onCancel}>
@@ -163,6 +174,54 @@ export function NewScratchDialog({ onStart, onCancel }: { onStart: StartHandler;
       <div className="modal-actions">
         <button onClick={onCancel}>Cancel</button>
       </div>
+    </Dialog>
+  );
+}
+
+/**
+ * New map in a project on the state store: the effort slug, a title and the destination, with the exact
+ * `dryland map create` command it will run. The record is created at once; tickets are added with New ticket.
+ */
+export function NewStoreMapDialog({ onCreate, onCancel }: { onCreate: (map: NewMap) => void; onCancel: () => void }) {
+  const [effort, setEffort] = useState("");
+  const [title, setTitle] = useState("");
+  const [destination, setDestination] = useState("");
+  const map: NewMap = { map: effort.trim(), title: title.trim(), destination: destination.trim() };
+  const valid = MAP_NAME.test(map.map) && map.title !== "";
+  const action = { kind: "create-map", map } as const;
+  return (
+    <Dialog title="New map">
+      <form
+        className="dialog-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (valid) onCreate(map);
+        }}
+      >
+        <label>
+          Effort
+          <input autoFocus value={effort} placeholder="shop" onChange={(event) => setEffort(event.target.value)} />
+        </label>
+        <label>
+          Title
+          <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <label>
+          Destination
+          <textarea rows={3} value={destination} onChange={(event) => setDestination(event.target.value)} />
+        </label>
+        <code className="command" aria-label="Command">
+          {commandWithInput(trackerArgs(action, false, true), trackerInput(action, true) ?? "")}
+        </code>
+        <div className="modal-actions">
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="submit" className="primary" disabled={!valid}>
+            Create map
+          </button>
+        </div>
+      </form>
     </Dialog>
   );
 }

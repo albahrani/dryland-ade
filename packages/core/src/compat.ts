@@ -167,7 +167,7 @@ export function skillSetupSnapshot(
 }
 
 const RULE_DESCRIPTIONS: Record<(typeof RULE_IDS)[number], string> = {
-  "no-setup-config": "recommends /setup-matt-pocock-skills when docs/agents/issue-tracker.md is missing",
+  "no-setup-config": "recommends `dryland init` when the repo has no state store and no docs/agents/issue-tracker.md",
   "waiting-session": "flags a session that waits for input",
   "paused-was-waiting": "flags a paused session that was waiting for input",
   "stale-claim": "flags a claimed ticket no session or worktree holds",

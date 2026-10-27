@@ -45,14 +45,17 @@ function snapshot(efforts: EffortSnapshot[], tickets: Ticket[], overrides: Parti
 }
 
 describe("nextSteps rules", () => {
-  it("no setup config: recommends /setup-matt-pocock-skills for the repo", () => {
+  it("no setup config: recommends `dryland init` for the repo", () => {
     expect(nextSteps(snapshot([], [], { setupConfigPresent: false }))).toEqual([
       {
         ruleId: "no-setup-config",
-        command: "/setup-matt-pocock-skills",
+        command: "dryland init",
         target: { kind: "repo" },
-        reason: "The repo has no skill setup config, so the skills do not know its issue tracker or triage labels.",
-        evidence: [{ artifact: "docs/agents/issue-tracker.md", field: "presence", value: "missing" }],
+        reason: "The repo has no Dryland state store and no tracker doc, so there is nowhere to keep tickets and maps.",
+        evidence: [
+          { artifact: "state store", field: "presence", value: "missing" },
+          { artifact: "docs/agents/issue-tracker.md", field: "presence", value: "missing" },
+        ],
       },
     ]);
   });

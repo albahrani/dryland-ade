@@ -20,7 +20,7 @@ export interface DrylandCli {
    * never a session the app itself was started from, and no Agent CLI session it was started from is recorded in the
    * session index.
    */
-  run(args: string[], options: { cwd: string; sessionId?: string }): Promise<DrylandRun>;
+  run(args: string[], options: { cwd: string; sessionId?: string; input?: string }): Promise<DrylandRun>;
 }
 
 const WARNING = "dryland: warning: ";
@@ -43,7 +43,7 @@ function parse(exitCode: number, stderr: string): DrylandRun {
 /** The app's only way to write tracker files: the same `dryland` sessions and the user run. */
 export function createDrylandCli({ runtime, cli, env }: DrylandCliOptions): DrylandCli {
   return {
-    run(args, { cwd, sessionId }) {
+    run(args, { cwd, sessionId, input }) {
       // undefined drops a session id the app inherited; the child is spawned without it.
       const runEnv: Record<string, string | undefined> = {
         ...env,
@@ -52,7 +52,7 @@ export function createDrylandCli({ runtime, cli, env }: DrylandCliOptions): Dryl
       };
       for (const { sessionEnv } of AGENT_ADAPTERS) if (sessionEnv !== null) runEnv[sessionEnv] = undefined;
       return new Promise((resolve) => {
-        execFile(
+        const child = execFile(
           runtime,
           [cli, ...args],
           { cwd, env: runEnv, encoding: "utf8", windowsHide: true },
@@ -61,6 +61,9 @@ export function createDrylandCli({ runtime, cli, env }: DrylandCliOptions): Dryl
             resolve(parse(exitCode, error !== null && stderr === "" ? error.message : stderr));
           },
         );
+        // A command that reads a document reads all of stdin, so it must be closed even when there is none to send.
+        child.stdin?.on("error", () => undefined);
+        child.stdin?.end(input);
       });
     },
   };

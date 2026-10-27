@@ -9,7 +9,7 @@ import { findSpecsWithoutTickets, frontierOf, type MapModel, readMapFile } from 
 import { nodeProcessRunner, type ProcessRunner } from "./process-runner.ts";
 import type { Ticket } from "./ticket.ts";
 import { readTrackerKind, type TrackerKind } from "./tracker.ts";
-import { isStoreInitialised, readStoreState, toMapModel, toTicket } from "./state-store.ts";
+import { decisionsOf, isStoreInitialised, readStoreState, toMapModel, toTicket } from "./state-store.ts";
 import { readTriageVocabulary } from "./triage-labels.ts";
 
 interface LoadedTracker {
@@ -28,8 +28,8 @@ async function loadTracker(runner: ProcessRunner, mainCheckout: string): Promise
     const maps = names.map((name): MapModel => {
       const map = state.maps.find((m) => m.effort === name);
       return map === undefined
-        ? { name, title: name, destination: "", fog: [], decisions: [], sections: [] }
-        : toMapModel(map);
+        ? { name, title: name, destination: "", fog: [], decisions: decisionsOf(state.tickets, name), sections: [] }
+        : toMapModel(map, state.tickets);
     });
     return { kind: "local-markdown", tickets, maps };
   }

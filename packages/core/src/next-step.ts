@@ -14,7 +14,7 @@ export interface EffortSnapshot {
  * from the Linked worktrees; `sessions` and `skillSetup` stay `null` (unknown) until their sources are fed in.
  */
 export interface RepoSnapshot {
-  /** Whether the repo carries the setup the skills wrote, i.e. its issue-tracker doc. */
+  /** Whether the repo has somewhere to keep tickets: a Dryland state store, or the issue-tracker doc the skills wrote. */
   setupConfigPresent: boolean;
   efforts: EffortSnapshot[];
   tickets: Ticket[];
@@ -144,10 +144,14 @@ const noSetupConfig: Rule = (snapshot) =>
     : [
         {
           ruleId: "no-setup-config",
-          command: "/setup-matt-pocock-skills",
+          command: "dryland init",
           target: { kind: "repo" },
-          reason: "The repo has no skill setup config, so the skills do not know its issue tracker or triage labels.",
-          evidence: [{ artifact: "docs/agents/issue-tracker.md", field: "presence", value: "missing" }],
+          reason:
+            "The repo has no Dryland state store and no tracker doc, so there is nowhere to keep tickets and maps.",
+          evidence: [
+            { artifact: "state store", field: "presence", value: "missing" },
+            { artifact: "docs/agents/issue-tracker.md", field: "presence", value: "missing" },
+          ],
         },
       ];
 
@@ -457,7 +461,6 @@ const RULES: Rule[] = [
  * launchable by the user but is never a next step.
  */
 export const RECOMMENDED_SKILLS = [
-  "/setup-matt-pocock-skills",
   "/triage",
   "/wayfinder",
   "/to-spec",
@@ -482,7 +485,8 @@ function isDisabled(snapshot: RepoSnapshot, ruleId: string): boolean {
  */
 function recommendsMissingSkill(snapshot: RepoSnapshot, step: NextStep): boolean {
   const { skillSetup } = snapshot;
-  if (step.command === null || skillSetup === null || skillSetup.verdict !== null) return false;
+  if (step.command === null || !step.command.startsWith("/") || skillSetup === null || skillSetup.verdict !== null)
+    return false;
   if (skillSetup.setup !== "modified" || skillSetup.installed == null) return false;
   const skill = step.command.slice(1).split(" ")[0] ?? "";
   return !skillSetup.installed.includes(skill);

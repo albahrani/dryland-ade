@@ -15,7 +15,8 @@ export async function readEfforts(mainCheckout: string): Promise<EffortSnapshot[
   const dirs = (await readdir(scratch, { withFileTypes: true }).catch(() => []))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
-  const stored = (await isStoreInitialised(mainCheckout)) ? (await readStoreState(mainCheckout)).maps : null;
+  const state = (await isStoreInitialised(mainCheckout)) ? await readStoreState(mainCheckout) : null;
+  const stored = state?.maps ?? null;
   const names = [...new Set([...dirs, ...(stored?.map((m) => m.effort) ?? [])])].sort();
   const efforts: EffortSnapshot[] = [];
   for (const name of names) {
@@ -23,7 +24,12 @@ export async function readEfforts(mainCheckout: string): Promise<EffortSnapshot[
     const mapText = stored === null ? await readFile(join(scratch, name, "map.md"), "utf8").catch(() => null) : null;
     efforts.push({
       name,
-      map: record !== undefined ? toMapModel(record) : mapText === null ? null : parseMap(name, mapText),
+      map:
+        record !== undefined && state !== null
+          ? toMapModel(record, state.tickets)
+          : mapText === null
+            ? null
+            : parseMap(name, mapText),
       hasSpec: await exists(join(scratch, name, "spec.md")),
     });
   }

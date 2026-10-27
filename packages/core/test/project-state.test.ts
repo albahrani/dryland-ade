@@ -42,14 +42,14 @@ describe("readProjectState", () => {
     ]);
   });
 
-  it("reports a repo without skills or tracker doc as not set up, with /setup-matt-pocock-skills as the next step", async () => {
+  it("reports a repo without skills or tracker doc as not set up, with `dryland init` as the next step", async () => {
     const root = checkout({ "README.md": "hi\n" });
 
     const { skillSetup, snapshot } = await readProjectState(nodeProcessRunner, root);
 
     expect(skillSetup.state).toBe("not-set-up");
     expect(nextSteps(snapshot).map((s) => [s.ruleId, s.command])).toEqual([
-      ["no-setup-config", "/setup-matt-pocock-skills"],
+      ["no-setup-config", "dryland init"],
     ]);
   });
 

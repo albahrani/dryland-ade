@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   autoCommitFor,
   commandLine,
+  commandWithInput,
   CONFIRMATION_TYPES,
   isTicketAction,
   trackerArgs,
+  trackerInput,
 } from "../src/shared/tracker-actions.ts";
 
 const ticket = { map: "shop", id: "02" };
@@ -63,6 +65,63 @@ describe("trackerArgs", () => {
 
   it("tells dryland not to commit when auto-commit is off", () => {
     expect(trackerArgs({ kind: "claim", ticket }, false)).toEqual(["ticket", "claim", "shop/02", "--no-commit"]);
+  });
+});
+
+describe("creating on a state store", () => {
+  const created = {
+    map: "shop",
+    title: "Pay by card",
+    type: "grilling" as const,
+    question: "Which cards?",
+    blockedBy: ["02", "03"],
+    status: "needs-triage" as const,
+  };
+
+  it("pipes one ticket document to `ticket create` and passes no commit flag", () => {
+    const action = { kind: "create" as const, ticket: created };
+    expect(trackerArgs(action, true, true)).toEqual(["ticket", "create"]);
+    expect(JSON.parse(trackerInput(action, true) ?? "null")).toEqual({
+      effort: "shop",
+      title: "Pay by card",
+      type: "grilling",
+      report: "Which cards?",
+      blockedBy: ["shop/02", "shop/03"],
+      triageRole: "needs-triage",
+    });
+  });
+
+  it("leaves out an empty question, no blockers and no role, and sends nothing for a markdown repo", () => {
+    const action = { kind: "create" as const, ticket: { ...created, question: "", blockedBy: [], status: undefined } };
+    expect(JSON.parse(trackerInput(action, true) ?? "null")).toEqual({
+      effort: "shop",
+      title: "Pay by card",
+      type: "grilling",
+    });
+    expect(trackerInput(action, false)).toBeNull();
+    expect(trackerInput({ kind: "claim", ticket }, true)).toBeNull();
+  });
+
+  it("creates a map from a document of effort, title and destination", () => {
+    const action = {
+      kind: "create-map" as const,
+      map: { map: "shop", title: "Shop", destination: "Sell things." },
+    };
+    expect(trackerArgs(action, true, true)).toEqual(["map", "create"]);
+    expect(JSON.parse(trackerInput(action, true) ?? "null")).toEqual({
+      effort: "shop",
+      title: "Shop",
+      destination: "Sell things.",
+    });
+    expect(commandWithInput(["map", "create"], '{"effort":"shop"}')).toBe('dryland map create < {"effort":"shop"}');
+  });
+
+  it("accepts a well-formed new map only", () => {
+    const map = { map: "shop", title: "Shop", destination: "" };
+    expect(isTicketAction({ kind: "create-map", map })).toBe(true);
+    expect(isTicketAction({ kind: "create-map", map: { ...map, map: "--json" } })).toBe(false);
+    expect(isTicketAction({ kind: "create-map", map: { ...map, title: " " } })).toBe(false);
+    expect(isTicketAction({ kind: "create-map", map: { ...map, destination: 3 } })).toBe(false);
   });
 });
 
