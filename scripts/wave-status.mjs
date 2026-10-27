@@ -12,7 +12,14 @@ const trees = join(root, ".claude", "worktrees");
 const run = (cwd, command, args) => spawnSync(command, args, { cwd, encoding: "utf8" }).stdout?.trim() ?? "";
 const git = (cwd, ...args) => run(cwd, "git", args);
 
-const names = existsSync(trees) ? readdirSync(trees) : [];
+// Only registered worktrees: a removed one can leave its node_modules directory behind.
+const registered = git(root, "worktree", "list", "--porcelain")
+  .split("\n")
+  .filter((line) => line.startsWith("worktree "))
+  .map((line) => line.slice(9).replaceAll("\\", "/"));
+const names = (existsSync(trees) ? readdirSync(trees) : []).filter((name) =>
+  registered.some((path) => path.endsWith(`/.claude/worktrees/${name}`)),
+);
 if (names.length === 0) console.log("no ticket worktrees");
 for (const name of names) {
   const dir = join(trees, name);

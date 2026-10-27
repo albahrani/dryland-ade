@@ -33,7 +33,7 @@ Permission mode is accept-edits, with the shell allowlist in `.claude/settings.l
 
 ## Merge and verify
 
-Per finished branch, one at a time: read the report, check `git diff --stat main..ticket-N` matches the ticket, then merge (`--ff-only` when possible, else `git merge --no-edit`). After each merge run `pnpm install --offline`, `pnpm test`, `pnpm typecheck`, `pnpm lint` on main. After the wave's last merge run `pnpm test:linux`, and for `packages/desktop` changes both e2e suites (through `scripts/with-lock.mjs`). Remove the worktree and branch once merged.
+Per finished branch, one at a time: read the report, check `git diff --stat main..ticket-N` matches the ticket, then merge (`--ff-only` when possible, else `git merge --no-edit`). After each merge run `pnpm install --offline`, `pnpm test`, `pnpm typecheck`, `pnpm lint` on main. After the wave's last merge run `pnpm test:linux`, and for `packages/desktop` changes both e2e suites (through `scripts/with-lock.mjs`). Once merged, remove the worktree and branch, then delete the directory `git worktree remove` leaves behind (its `node_modules`).
 
 Failures on main: fix through a small `fix-N` worktree and agent, or revert the merge; never leave main red.
 
