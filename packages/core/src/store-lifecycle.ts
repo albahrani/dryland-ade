@@ -1,3 +1,5 @@
+import { checkProse } from "./content-rules.ts";
+import { WriteFailure } from "./documents.ts";
 import { DrylandError } from "./errors.ts";
 import {
   type AuthorKind,
@@ -102,12 +104,38 @@ export function releaseStoreTicket(cwd: string, reference: string, opts: StoreWr
   });
 }
 
-/** Records the answer, marks the ticket resolved and drops its claim; with `amend`, replaces the answer of a resolved one. */
+/** The gates on an agent's resolve: it holds the claim, and it has not resolved another ticket in this session. */
+function assertSessionMayResolve(ticket: StoreTicket, state: StoreState, session: string, holder: string | null): void {
+  const name = nameOf(ticket);
+  const claim = ticket.claim;
+  if (claim === null || (claim.session !== session && (holder === null || claim.holder !== holder))) {
+    throw new DrylandError(
+      claim === null
+        ? `Ticket ${name} is not claimed, so this session cannot resolve it.`
+        : `Ticket ${name} is claimed by ${claim.holder}, not by this session.`,
+      `Claim it first with \`dryland ticket claim ${name}\`, or pick one this session holds.`,
+    );
+  }
+  if (ticket.type === "research") return;
+  const earlier = state.tickets.find((t) => t.resolvedBy === session && t.type !== "research");
+  if (earlier !== undefined) {
+    throw new DrylandError(
+      `This session already resolved ${nameOf(earlier)}; a session resolves one ticket.`,
+      "Leave this ticket claimed and start a new session for it, or ask a person to resolve it.",
+    );
+  }
+}
+
+/**
+ * Records the solution summary, marks the ticket resolved and drops its claim; with `amend`, replaces the summary of a
+ * resolved one. A caller with a session id (an agent) must hold the claim and resolves one ticket per session, research
+ * excepted; a caller without one (a person) is not gated. The summary stays within its cap and passes lint.
+ */
 export function resolveStoreTicket(
   cwd: string,
   reference: string,
   answer: string,
-  opts: StoreWriteOptions & { amend?: boolean },
+  opts: StoreWriteOptions & { amend?: boolean; session?: string | null; holder?: string | null },
 ): Promise<StoreWriteResult> {
   const wanted = parseTicketReference(reference);
   const text = answer.trim();
@@ -118,8 +146,10 @@ export function resolveStoreTicket(
     cwd,
     reference,
     opts,
-    (ticket) => {
+    (ticket, state) => {
       const name = nameOf(ticket);
+      const problems = checkProse("answer", "summary", text);
+      if (problems.length > 0) throw new WriteFailure("check", problems);
       if (opts.amend === true) {
         if (ticket.status !== "resolved") {
           throw new DrylandError(
@@ -135,7 +165,9 @@ export function resolveStoreTicket(
           `Add --amend to replace its answer, add a comment, or pick another ticket with \`dryland map frontier ${ticket.effort}\`.`,
         );
       }
-      return { kind: "ticket.resolved", answer: text };
+      const session = opts.session ?? null;
+      if (session !== null) assertSessionMayResolve(ticket, state, session, opts.holder ?? null);
+      return { kind: "ticket.resolved", answer: text, session };
     },
     wanted,
   );

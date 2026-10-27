@@ -315,6 +315,10 @@ async function recordAgentSession(ticket: string): Promise<string[]> {
 const callerAuthor = (): "human" | "agent" =>
   currentAgentSession(AGENT_ADAPTERS, process.env) !== null || !!process.env["DRYLAND_SESSION_ID"] ? "agent" : "human";
 
+/** The id of the session the caller runs in, from the environment; `null` for a person at a terminal. */
+const callerSession = (): string | null =>
+  process.env["DRYLAND_SESSION_ID"] ?? currentAgentSession(AGENT_ADAPTERS, process.env)?.sessionId ?? null;
+
 /** The document on stdin for a write command. */
 const readDocument = (): Promise<string> => readStdin(5000);
 
@@ -379,8 +383,7 @@ const COMMANDS: Record<
       const holder = await branchHolder(nodeProcessRunner, process.cwd());
       const { ticket, warnings, alreadyHeld } = await claimStoreTicket(process.cwd(), target, {
         holder,
-        session:
-          process.env["DRYLAND_SESSION_ID"] ?? currentAgentSession(AGENT_ADAPTERS, process.env)?.sessionId ?? null,
+        session: callerSession(),
         author: callerAuthor(),
       });
       const name = `${ticket.map}/${ticket.id}`;
@@ -429,9 +432,12 @@ const COMMANDS: Record<
     switches: ["amend"],
     run: async (target, flags) => {
       const amend = flags.switches.has("amend");
+      const session = callerSession();
       const { ticket, warnings } = await resolveStoreTicket(process.cwd(), target, required(flags, "answer"), {
         amend,
         author: callerAuthor(),
+        session,
+        holder: session === null ? null : await branchHolder(nodeProcessRunner, process.cwd()),
       });
       const verb = amend ? "Amended the answer of" : "Resolved";
       return { value: ticket, text: `${verb} ${ticket.map}/${ticket.id}.\n`, warnings };

@@ -74,7 +74,7 @@ export function TicketActions({
           }}
         >
           <label>
-            Answer
+            Solution summary
             <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} rows={4} />
           </label>
           <button type="submit" disabled={busy || answer.trim() === ""}>

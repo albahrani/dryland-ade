@@ -87,9 +87,15 @@ test("on a store: claims, unblocks and resolves from a ticket at once, each show
   expect(show(repo, "shop/02")).toMatchObject({ status: "claimed", claim: { holder: "main" } });
 
   await actions.getByRole("button", { name: "Resolve..." }).click();
-  await actions.getByLabel("Answer").fill("Payments go through the shop's provider.");
+  // An over-cap summary is rejected with the cap stated, and the ticket stays claimed.
+  await actions.getByLabel("Solution summary").fill("Payments go through the shop's provider. ".repeat(20));
   await actions.getByRole("button", { name: "Resolve", exact: true }).click();
-  await expect(window.getByRole("region", { name: "Answer" })).toContainText("Payments go through");
+  await expect(window.getByRole("alert").filter({ hasText: "summary cap is 600" })).toBeVisible();
+  expect(show(repo, "shop/02")).toMatchObject({ status: "claimed" });
+
+  await actions.getByLabel("Solution summary").fill("Payments go through the shop's provider.");
+  await actions.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(window.getByRole("region", { name: "Solution summary" })).toContainText("Payments go through");
 
   // Started from the ticket, none of them asked, and nothing reached the repo itself.
   await expect(window.getByRole("dialog")).toHaveCount(0);
