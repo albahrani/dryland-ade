@@ -17,7 +17,7 @@ Permission mode is accept-edits, with the shell allowlist in `.claude/settings.l
 3. **Brief** each agent (fill N and the ticket path):
 
    > Implement ticket N: `<ticket path>`. Work ONLY in `<abs worktree path>` (branch ticket-N); absolute paths, `git -C`. Follow the ticket's "Read first" list, AGENTS.md, and the tdd skill.
-   > - Change files with Write and Edit; batches and regex replacements with `node scripts/edit.mjs <spec.json>` (spec in the scratchpad directory, never in the repo); deletions with `git rm`. `sed`, `awk`, heredocs and inline scripts are forbidden. `rtk vitest run <file>`, `rtk tsc`. Never run `dryland ticket|map`.
+   > - Edit files as AGENTS.md "Editing files" says. `rtk vitest run <file>`, `rtk tsc`. Never run `dryland ticket|map`.
    > - `.claude/skills/` is absent in your worktree; the skills are in `.agents/skills/<name>/SKILL.md`. Run `pnpm install --offline` first if `node_modules` is missing.
    > - Tests: run whatever verifies the point you are at, as often as needed (single files, then packages), so you know when you are done. Every run is a verification with a purpose; pick the smallest that serves it. The final full-suite run is the last line of defense for the unforeseen: run `pnpm test` at least once at the end, then the heavy suites as the final quality gate.
    > - Heavy suites run only through the lock: `node scripts/with-lock.mjs pnpm test:linux`, `node scripts/with-lock.mjs pnpm --filter @dryland/desktop test:e2e`, `node scripts/with-lock.mjs pnpm test:e2e:linux`. All other tests run lock-free in parallel.
