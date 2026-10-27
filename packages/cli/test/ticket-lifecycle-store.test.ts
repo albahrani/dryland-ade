@@ -353,6 +353,18 @@ describe("dryland ticket triage on the store", () => {
     expect(await show(repo, "shop/01")).toMatchObject({ status: "open", triageRole: "needs-info" });
   });
 
+  it("resolves the repo's own label for a role from the triage-labels doc", async () => {
+    const repo = await TempRepo.createStore(
+      [{ effort: "shop", map: { title: "Shop" }, tickets: [{ title: "Build the cart" }] }],
+      { "docs/agents/triage-labels.md": "| Role | Label |\n|---|---|\n| `needs-info` | `Need-Info` |\n" },
+    );
+
+    const result = await repo.run(["ticket", "triage", "shop/01", "--role", "need-info"]);
+
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(await show(repo, "shop/01")).toMatchObject({ triageRole: "needs-info" });
+  });
+
   it("rejects an unknown role and lists the valid ones, changing nothing", async () => {
     const repo = await shopRepo();
 

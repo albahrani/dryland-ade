@@ -1,5 +1,6 @@
 import { DrylandError } from "./errors.ts";
 import { appendComment, rewriteBlockedBy, rewriteStatus } from "./local-markdown.ts";
+import { findMainCheckout } from "./main-checkout.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 import { isStoreInitialised } from "./state-store.ts";
 import { blockStoreTicket, commentOnStoreTicket, triageStoreTicket } from "./store-lifecycle.ts";
@@ -124,7 +125,14 @@ export async function triageTicket(
 ): Promise<TicketWriteResult> {
   const wanted = parseTicketReference(reference);
   if (await isStoreInitialised(cwd)) {
-    const { ticket, warnings } = await triageStoreTicket(cwd, reference, role, { author: options.author ?? "human" });
+    const labels = await readTriageLabels(await findMainCheckout(runner, cwd));
+    const { ticket, warnings } = await triageStoreTicket(
+      cwd,
+      reference,
+      role,
+      { author: options.author ?? "human" },
+      labels,
+    );
     return { ticket, warnings };
   }
   const remote = await remoteBackend(runner, cwd);

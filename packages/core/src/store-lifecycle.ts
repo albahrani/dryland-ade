@@ -7,7 +7,7 @@ import {
   toTicket,
   writeToStore,
 } from "./state-store.ts";
-import type { Ticket } from "./ticket.ts";
+import type { Ticket, TriageRole } from "./ticket.ts";
 import { findTicket, parseTicketReference, type TicketReference } from "./tickets.ts";
 import { assertBlockChange, assertCanTriage, resolveTriageRole } from "./tracker-rules.ts";
 
@@ -234,15 +234,16 @@ export function commentOnStoreTicket(
   return change(cwd, reference, opts, () => ({ kind: "ticket.commented", text }), wanted);
 }
 
-/** Sets the triage role of an open ticket. */
+/** Sets the triage role of an open ticket; `labels` is the repo's own vocabulary (see `readTriageLabels`). */
 export function triageStoreTicket(
   cwd: string,
   reference: string,
   role: string,
   opts: StoreWriteOptions,
+  labels: ReadonlyMap<TriageRole, string> = new Map(),
 ): Promise<StoreWriteResult> {
   const wanted = parseTicketReference(reference);
-  const resolved = resolveTriageRole(new Map(), role);
+  const resolved = resolveTriageRole(labels, role);
   return change(
     cwd,
     reference,
