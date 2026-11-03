@@ -4,6 +4,8 @@
 
 A rework spec plus an ADR set for Dryland: a workflow engine that owns maps, fog, tickets and comments, with agents only running prompts under it. The ADRs supersede the parts of ADRs 0001 to 0004 (and later ones) that no longer hold, and the glossary carries the new language. Reached when every rework decision is in the spec and ADRs, ready for `/to-spec` and `/to-tickets` to slice. Nothing is built during wayfinding.
 
+**Done: the wayfinding is finished.** Every decision is in `spec.md` and ADRs 0011 to 0015, and the spec was sliced into the build tickets in `issues/` (14 onward). The map stays as the index of those tickets and as the build plan. The `Blocked by` lines and the order of work below govern the build; this map has no open decision tickets or fog. The work left is implementation, and the final sweep (ticket 35) closes the rework.
+
 ## Notes
 
 - Domain: the Dryland rework. Earlier decisions live in the closed map `.scratch/mattpocock-ade/map.md`, its ADRs in `docs/adr/`, `GLOSSARY.md` and `docs/agents/issue-tracker.md`.
