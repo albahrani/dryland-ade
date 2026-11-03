@@ -24,7 +24,17 @@ import {
   SESSION_RETENTION_ENV,
   startLiveListener,
 } from "@dryland/core";
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, powerMonitor, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  type MenuItemConstructorOptions,
+  nativeTheme,
+  powerMonitor,
+  shell,
+} from "electron";
 import {
   type AppSettings,
   type AppState,
@@ -36,6 +46,8 @@ import {
   type TicketActionResult,
   type TreeLoad,
 } from "../shared/api.ts";
+import { type AppMenuId, appMenu } from "../shared/app-menu.ts";
+import { titleBarWindowOptions } from "../shared/title-bar.ts";
 import {
   addProject,
   closeProject as closedProjects,
@@ -458,6 +470,8 @@ function createWindow(): void {
     height: 800,
     title: "Dryland ADE",
     icon: layout.icon,
+    // Windows and Linux get one custom title bar (the renderer draws the menu and project widget); macOS keeps its frame.
+    ...titleBarWindowOptions(process.platform),
     webPreferences: { preload: join(import.meta.dirname, "../preload/index.cjs"), sandbox: true },
   });
   // Closing the window quits the app, so it asks first, like any other quit, and a cancel keeps the window.
@@ -495,61 +509,58 @@ function notifyWarnings(warnings: string[]): void {
   if (warnings.length > 0) sendToWindow("notice", warnings.join(" "));
 }
 
-/** A menu item that opens one of the window's dialogs. */
-const menuCommand = (command: MenuCommand) => () => sendToWindow("menu:command", command);
+/** Runs a menu command, from the native menu or from the title bar's hamburger. */
+function runMenuItem(id: AppMenuId): void {
+  switch (id) {
+    case "new-map":
+    case "new-scratch":
+    case "new-ticket":
+    case "new-terminal":
+    case "settings":
+    case "about":
+      return sendToWindow("menu:command", id satisfies MenuCommand);
+    case "open-project":
+      return void pickProject().then(refresh);
+    case "resume-all":
+      return void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings));
+    case "quit":
+      return app.quit();
+    case "reload":
+      return window?.webContents.reload();
+    case "devtools":
+      return window?.webContents.toggleDevTools();
+  }
+}
 
+/**
+ * The application menu. On macOS it is the menu bar; on Windows and Linux the title bar's hamburger shows the same
+ * commands and this menu stays for their accelerators.
+ */
 function buildMenu(): void {
   Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      {
-        label: "File",
-        submenu: [
-          {
-            label: "New Map...",
-            accelerator: "CmdOrCtrl+Shift+M",
-            enabled: project !== null,
-            click: menuCommand("new-map"),
-          },
-          {
-            label: "New Scratch Session...",
-            enabled: project !== null,
-            click: menuCommand("new-scratch"),
-          },
-          {
-            label: "New Ticket...",
-            accelerator: "CmdOrCtrl+N",
-            enabled: project !== null,
-            click: menuCommand("new-ticket"),
-          },
-          {
-            id: "new-terminal",
-            label: "New Terminal",
-            accelerator: "Ctrl+`",
-            enabled: project !== null,
-            click: menuCommand("new-terminal"),
-          },
-          { label: "Open Project...", accelerator: "CmdOrCtrl+O", click: () => void pickProject().then(refresh) },
-          { type: "separator" },
-          { label: "Settings...", accelerator: "CmdOrCtrl+,", click: menuCommand("settings") },
-          { type: "separator" },
-          { role: "quit" },
-        ],
-      },
-      {
-        label: "Sessions",
-        submenu: [
-          {
-            label: "Resume All Paused Sessions",
-            enabled: project !== null,
-            click: () => void resumeAllPaused(null).then(({ warnings }) => notifyWarnings(warnings)),
-          },
-        ],
-      },
-      { label: "View", submenu: [{ role: "reload" }, { role: "toggleDevTools" }] },
-      { label: "Help", submenu: [{ label: "About Dryland ADE", click: menuCommand("about") }] },
-    ]),
+    Menu.buildFromTemplate(
+      appMenu(project !== null).map(({ label, entries }) => ({
+        label,
+        submenu: entries.map((entry): MenuItemConstructorOptions => {
+          if (entry === "separator") return { type: "separator" };
+          const { id, label: itemLabel, accelerator, enabled } = entry;
+          // The roles keep the platform's own accelerators and behaviour.
+          if (id === "quit") return { role: "quit" };
+          if (id === "reload") return { role: "reload" };
+          if (id === "devtools") return { role: "toggleDevTools" };
+          return { id, label: itemLabel, accelerator, enabled, click: () => runMenuItem(id) };
+        }),
+      })),
+    ),
   );
 }
+
+ipcMain.handle("menu:run", (_event, id: unknown) => {
+  const known = appMenu(project !== null)
+    .flatMap((menu) => menu.entries)
+    .find((entry) => entry !== "separator" && entry.id === id);
+  if (known !== undefined && known !== "separator" && known.enabled) runMenuItem(known.id);
+});
 
 ipcMain.handle("state:get", currentState);
 ipcMain.handle("project:open", async () => {

@@ -101,6 +101,8 @@ const api: DrylandApi = {
     ipcRenderer.on("settings:changed", listener);
     return () => ipcRenderer.removeListener("settings:changed", listener);
   },
+  runMenuItem: (id) => ipcRenderer.invoke("menu:run", id),
+  platform: process.platform,
   onMenuCommand(callback) {
     const listener = (_event: unknown, command: MenuCommand) => callback(command);
     ipcRenderer.on("menu:command", listener);
