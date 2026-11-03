@@ -42,6 +42,10 @@ describe("watchProject", () => {
     const onChange = vi.fn();
     stop = watchProject(root, onChange, 20);
 
+    // macOS can replay the directory's creation, just before the watch began, as a late event; let it land first.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    onChange.mockClear();
+
     writeFileSync(join(root, ".agents", "skills", "tdd", "SKILL.md"), "# changed\n");
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(onChange).not.toHaveBeenCalled();
