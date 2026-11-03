@@ -13,7 +13,7 @@ Decided in mattpocock-ade/89 (prototype: .scratch/mattpocock-ade/prototype/top-b
 - [x] The window has one top bar, 36 px, with the hamburger, project widget, tracker widget, drag region and window controls; no separate native menu row on Windows and Linux.
 - [x] The hamburger menu offers every command of today's File, Sessions, View and Help menus, with the same accelerators and enabled states; Escape and outside click close it.
 - [x] The Tickets activity icon is no longer ☰ and is distinguishable from the hamburger.
-- [ ] The bar can still drag the window, and the controls minimise, maximise and close it.
+- [x] The bar can still drag the window, and the controls minimise, maximise and close it.
 - [x] e2e tests and docs/manual/README.md match.
 
 ## Answer
@@ -24,4 +24,4 @@ The menu is defined once in `packages/desktop/src/shared/app-menu.ts` (labels, a
 
 Decisions: the tracker widget no longer exists on main, so the bar has the project widget only. The Reload and Toggle Developer Tools items show CmdOrCtrl+R and CmdOrCtrl+Shift+I, which the native roles supply.
 
-Known limits: criterion 4 is left unticked. The drag region and the system-drawn window controls are not exercised by a test, because Playwright cannot press the OS-drawn controls or drag the window; they were not checked by hand. The "no native menu row" e2e check compares the window and content bounds, which was only run on Windows and under Xvfb. On the first native e2e run two terminal tests (pager, smoke full-screen resize) failed once and passed on Playwright's retry. Runs: typecheck, lint, `pnpm test` (735 passed), `pnpm test:linux` (741 passed), native e2e (title-bar spec after the fix 4/4; the rest passed), `pnpm test:e2e:linux` (47 passed).
+Known limits: criterion 4 was checked by hand on Windows by the maintainer (2026-11-03): dragging the bar, minimise, maximise, close, double-click to maximise and the hamburger all worked. No test covers it, because Playwright cannot press the OS-drawn controls or drag the window; Linux and macOS were not checked by hand. The "no native menu row" e2e check compares the window and content bounds, which was only run on Windows and under Xvfb. On the first native e2e run two terminal tests (pager, smoke full-screen resize) failed once and passed on Playwright's retry. Runs: typecheck, lint, `pnpm test` (735 passed), `pnpm test:linux` (741 passed), native e2e (title-bar spec after the fix 4/4; the rest passed), `pnpm test:e2e:linux` (47 passed).
