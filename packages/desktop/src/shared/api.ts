@@ -1,3 +1,4 @@
+import type { AppMenuId } from "./app-menu.ts";
 import type { PanelFolded, PanelWidths } from "./panel-widths.ts";
 import type {
   AgentHooks,
@@ -272,6 +273,10 @@ export interface DrylandApi {
   onProjectChanged(callback: (project: ProjectView) => void): () => void;
   /** Called with the settings whenever they change, such as from the menu. Returns an unsubscribe function. */
   onSettingsChanged(callback: (settings: AppSettings) => void): () => void;
+  /** Runs a command of the application menu, as the title bar's hamburger does; the main process checks it is enabled. */
+  runMenuItem(id: AppMenuId): Promise<void>;
+  /** The operating system, as `process.platform` names it. */
+  readonly platform: string;
   /** Called when a menu item asks the window to open one of its dialogs. Returns an unsubscribe function. */
   onMenuCommand(callback: (command: MenuCommand) => void): () => void;
   /** Called with every session's state whenever one changes. Returns an unsubscribe function. */

@@ -19,9 +19,11 @@ A **project** is a git repository you open in Dryland.
 Dryland reopens the projects you had open the next time it starts. The app refreshes by itself when the store changes, whoever wrote to it, and when a spec under `.scratch/` changes. The store lives in Dryland's data directory, outside the repo, and is bound to the repo by an id in its git config.
 ## The views
 
+The window has one top bar, 36 px tall. On Windows and Linux it holds the **menu button** (☰) on the left, then the project widget, then free space you can drag the window by, and the window controls (minimise, maximise, close) at the right. The menu button opens the File, Sessions, View and Help menus; File is open first, and each command shows its shortcut. Press Escape or click outside to close it. On macOS the menus stay in the system menu bar.
+
 The activity bar on the left switches the main side panel.
 
-- **Tickets** shows every map as a group of its tickets, with a status icon for each: ready, in progress, blocked or done. Done tickets fold into one line that expands. The next step is marked with a gold bar and a star, and its tooltip explains why. The "..." menu controls what the tree shows.
+- **Tickets** (☑) shows every map as a group of its tickets, with a status icon for each: ready, in progress, blocked or done. Done tickets fold into one line that expands. The next step is marked with a gold bar and a star, and its tooltip explains why. The "..." menu controls what the tree shows.
 - **Maps** lists the maps with their progress and what is still fog (not yet specified).
 - **Sessions** lists every live and paused session across ticket and scratch worktrees, with its Agent CLI, its state (working, waiting for you, idle, ended), how long it has been in that state, and its last output line. A badge on the activity icon counts the sessions that wait for you.
 

@@ -64,6 +64,7 @@ import { ConfirmStop, type SessionHandlers, UnseenMark } from "./SessionControls
 import { stopNeedsConfirmation } from "../../shared/stop-session.ts";
 import { PausedBadge, SessionBadge } from "./status.tsx";
 import { TicketsView } from "./TicketsView.tsx";
+import { TitleBar } from "./TitleBar.tsx";
 import { type TicketSession, ticketSessions } from "../../shared/session-meta.ts";
 import {
   type ActionSource,
@@ -77,7 +78,7 @@ import {
 type ActivityView = "tickets" | "maps" | "sessions";
 
 const ACTIVITIES: { id: ActivityView; label: string; glyph: string }[] = [
-  { id: "tickets", label: "Tickets", glyph: "☰" },
+  { id: "tickets", label: "Tickets", glyph: "☑" },
   { id: "maps", label: "Maps", glyph: "◈" },
   { id: "sessions", label: "Sessions", glyph: "▶" },
 ];
@@ -615,7 +616,7 @@ export function App() {
         } as CSSProperties
       }
     >
-      <header className="menubar">
+      <TitleBar hasProject={project !== null}>
         <ProjectWidget
           current={project === null ? null : { path: project.path, name: project.name }}
           open={state.openProjects}
@@ -623,7 +624,7 @@ export function App() {
           onOpen={() => void openProject()}
           onAll={() => setDialog("all-projects")}
         />
-      </header>
+      </TitleBar>
       <nav className="activitybar" aria-label="Activity bar">
         {ACTIVITIES.map(({ id, label, glyph }) => {
           const badge = id === "sessions" && liveWaiting > 0 ? liveWaiting : null;
