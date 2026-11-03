@@ -252,6 +252,8 @@ Reopened for **paused sessions**: quitting Dryland keeps claims and sessions res
 
 - [Move New terminal into the tab strip and add File > New Terminal](issues/116-move-new-terminal-into-the-tab-strip-and-add-file.md): New terminal is now a + button in the tab strip and File > New Terminal (Ctrl+`).
 
+- [One title bar with a hamburger menu](issues/117-one-title-bar-with-a-hamburger-menu.md): Windows and Linux get one 36 px custom title bar (hamburger, project widget, drag region, system window controls) and the Tickets icon is now ☑.
+
 ## Not yet specified
 
 - Carried over from the first destination: the spec itself was reached, and `/to-tickets` ran on it.
