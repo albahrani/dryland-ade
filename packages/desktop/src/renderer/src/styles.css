@@ -544,6 +544,11 @@ ul {
   overflow-x: auto;
 }
 
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+
 .tab {
   display: flex;
   align-items: center;
@@ -558,6 +563,11 @@ ul {
 .tab button {
   padding: 6px 8px;
   white-space: nowrap;
+}
+
+.tab-new {
+  flex: none;
+  padding: 6px 10px;
 }
 
 .details {

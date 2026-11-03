@@ -1,6 +1,6 @@
 import type { TicketRef, TreeTicket } from "@dryland/core";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-import type { AppState, MenuCommand, ProjectView, ResumeMode, SessionInfo } from "../../shared/api.ts";
+import type { AppState, DialogCommand, ProjectView, ResumeMode, SessionInfo } from "../../shared/api.ts";
 import {
   mapSessionCounts,
   mapTitle,
@@ -129,7 +129,7 @@ function Sidebar({
   onOpen: (ref: ItemRef) => void;
   onRelease: (ticket: TreeTicket) => void;
   onStartWork: StartWorkHandler;
-  onDialog: (dialog: MenuCommand) => void;
+  onDialog: (dialog: DialogCommand) => void;
   /** Shows the session a Next-up marker points at, by session id. */
   onShowSession: (sessionId: string) => void;
   sessionsView: ReactNode;
@@ -228,7 +228,9 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [quitRequest, setQuitRequest] = useState<QuitRequest | null>(null);
   // The New ticket or New map dialog, while it is open.
-  const [dialog, setDialog] = useState<MenuCommand | "all-projects" | null>(null);
+  const [dialog, setDialog] = useState<DialogCommand | "all-projects" | null>(null);
+  /** The latest `newTerminal`, for the menu listener that is registered once. */
+  const newTerminalRef = useRef<() => Promise<void>>(async () => {});
   /** Counts installs and removals of the CLI hooks, so the Agent CLIs tab reads them again. */
   const [hooksRevision, setHooksRevision] = useState(0);
   // The tabs each project had when the user left it, terminals included, so coming back finds them as they were.
@@ -302,7 +304,10 @@ export function App() {
     const stopUnseen = window.dryland.onUnseenSessions((unseenSessions) =>
       setState((current) => current && { ...current, unseenSessions }),
     );
-    const stopMenu = window.dryland.onMenuCommand(setDialog);
+    const stopMenu = window.dryland.onMenuCommand((command) => {
+      if (command === "new-terminal") void newTerminalRef.current();
+      else setDialog(command);
+    });
     const stopExplorer = window.dryland.onExplorerChanged(() => setExplorerRevision((revision) => revision + 1));
     return () => {
       stopExplorer();
@@ -533,6 +538,7 @@ export function App() {
     terminalsOpened.current += 1;
     showTerminal(id, `Terminal ${terminalsOpened.current}`);
   };
+  newTerminalRef.current = newTerminal;
   /** Runs an action through `dryland` and reports its error or warnings; resolves with whether it made the change. */
   const runAction = async (action: TicketAction): Promise<boolean> => {
     setNotice(null);
@@ -617,9 +623,6 @@ export function App() {
           onOpen={() => void openProject()}
           onAll={() => setDialog("all-projects")}
         />
-        <button className="project-widget" disabled={project === null} onClick={() => void newTerminal()}>
-          New terminal
-        </button>
       </header>
       <nav className="activitybar" aria-label="Activity bar">
         {ACTIVITIES.map(({ id, label, glyph }) => {
@@ -681,8 +684,8 @@ export function App() {
         />
       </aside>
       <main className="editor">
-        {tabs.open.length > 0 && (
-          <div className="tabbar" role="tablist" aria-label="Open items">
+        <div className="tabbar">
+          <div className="tabs" role="tablist" aria-label="Open items">
             {tabs.open.map((tab) => {
               const session = tab.kind === "terminal" ? sessions.get(tab.id) : undefined;
               const paused =
@@ -709,7 +712,16 @@ export function App() {
               );
             })}
           </div>
-        )}
+          <button
+            className="tab-new"
+            aria-label="New terminal"
+            title="Open a shell in the project's main checkout. Start an agent CLI by hand here."
+            disabled={project === null}
+            onClick={() => void newTerminal()}
+          >
+            +
+          </button>
+        </div>
         {terminalError !== null && (
           <p className="notice" role="alert">
             Could not start a terminal: {terminalError}

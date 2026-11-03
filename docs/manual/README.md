@@ -28,7 +28,7 @@ The activity bar on the left switches the main side panel.
 Alongside the side panel:
 
 - **Explorer** browses the files of the worktree for the tab you are looking at, and opens files and diffs as tabs. **Source Control** shows that worktree's branch and changes, local merge and prune, and opens or links a pull or merge request through `gh` or `glab`.
-- **Tabs** in the middle hold tickets, maps, files, diffs, terminals and sessions. A **terminal** tab is a plain shell; use **New terminal** in the top bar.
+- **Tabs** in the middle hold tickets, maps, files, diffs, terminals and sessions. A **terminal** tab is a plain shell; use the **+** (New terminal) button at the end of the tab strip, or **File > New Terminal** (Ctrl+`).
 - The **status bar** summarises the sessions that need you.
 
 ## Starting work
