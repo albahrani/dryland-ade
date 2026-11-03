@@ -34,4 +34,6 @@ One risk carried from the spec is closed here:
 
 ## Comments
 
+Scheduling note: run this against the dryland-rework result (after rework ticket 35), not today's markdown-tracker model, since the rework deletes much of what this checklist exercises.
+
 Decision by the maintainer: the Agent CLI terms-of-service question has been addressed and decided, so no further read of the Anthropic article is needed for the release. The analysis is deliberately not kept in the repo, because it would go stale when a provider changes its terms. The README's Agent CLI terms note stays as the reminder. The bullet and criterion about it were removed from this ticket.

@@ -6,6 +6,8 @@ A product spec plus an ADR set for a cross-platform desktop ADE optimized for re
 
 Reopened for **paused sessions**: quitting Dryland keeps claims and sessions resumable (ADR 0010). Reached when the spec, ADRs and glossary carry the behaviour, ticket 41 is rewritten, and the behaviour is sliced into build tickets ready for an agent.
 
+**Done, superseded by [dryland-rework](../dryland-rework/map.md).** The paused-session behaviour is built. The tracker and engine model is now owned by the rework map, which drops lens mode, the best-effort tier and two-way forge edits. Tickets 97, 98, 113 and 114 were closed as wontfix for that reason. The tickets still open here are 117 (title bar, pure desktop UI), 60 and 61 (run against the rework result, not today's markdown model) and 67 (hook cost, still relevant because the session-state channel keeps synchronous hooks).
+
 ## Notes
 
 - Domain: agent development environment (ADE). Inspiration but NOT a fork: https://github.com/stablyai/orca (research input only; fresh build).
